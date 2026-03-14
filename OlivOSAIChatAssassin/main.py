@@ -32,7 +32,9 @@ configDefault = {
     'max_tokens': 512,
     'temperature': 0.7,
     'personality': '你是一个伪装成人类的自豪的新锐AI，你择机加入聊天，避免过多尬聊。别让他们发现你的真实身份！！！',
-    'enabled_groups': [],
+    'enabled_groups': [
+        'all'
+    ],
     'history_size': 10,
     'reply_probability': 1,
     'reply_keywords': [],
@@ -151,7 +153,13 @@ def unity_group_message(plugin_event, Proc, missed: bool = False):
     if not gConfig:
         return
     # 检查是否在启用群组列表中
-    if 'enabled_groups' in gConfig and group_id not in gConfig['enabled_groups']:
+    if (
+        'enabled_groups' in gConfig
+        and (
+            group_id not in gConfig['enabled_groups']
+            and 'all' not in gConfig['enabled_groups']
+        )
+    ):
         return
     # 忽略前缀消息
     message = plugin_event.data.message
