@@ -51,6 +51,7 @@
 - 修改`api_base`为你选用的`Open AI 兼容`接口
 - `enabled_groups`为支持的群组列表，字符串格式，填写`all`则在所有群开启
 - `history_size`前文消息条数，修改后需要重载插件生效
+- 修改`personality`可以修改人格设定，设计一个符合本工作流特点的性格很重要，因为本工作流会让AI自行决定插入对话的时机
 
 ### memory.json
 ```json
