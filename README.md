@@ -23,3 +23,43 @@
 这或许预示着，真正的图灵测试已经变成了一个社会学问题，而非技术问题。AI试着证明自己是人已经成为了过去式。人是否还愿意、以及能够表现得不像AI——这才是需要付出额外努力的事情。
 
 或许从此以后，一切都将改变。
+
+## 用法
+首次运行后会在`plugin/data/OlivOSAIChatAssassin`目录下释放`config.json`和`memory.json`两个文件，文件基本结构如下。
+
+### config.json
+```json
+{
+    "api_key": "",
+    "api_base": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "max_tokens": 512,
+    "temperature": 0.7,
+    "personality": "你是一个伪装成人类的自豪的新锐AI，你择机加入聊天，避免过多尬聊。别让他们发现你的真实身份！！！",
+    "enabled_groups": [
+        "all"
+    ],
+    "history_size": 10,
+    "reply_probability": 1,
+    "reply_keywords": [],
+    "mention_reply": true,
+    "ignore_prefixes": [],
+    "max_message_length": 2000
+}
+```
+- 你需要修改`api_key`为你自己的
+- 修改`api_base`为你选用的`Open AI 兼容`接口
+- `enabled_groups`为支持的群组列表，字符串格式，填写`all`则在所有群开启
+- `history_size`前文消息条数，修改后需要重载插件生效
+
+### memory.json
+```json
+{
+    "全局": {
+        "常识": [],
+        "知识搜索": {},
+        "人物关系": {}
+    }
+}
+```
+- 此文件会被插件实时更新，其中`全局`条目下的内容可以由用户自行添加，或者通过额外脚本进行定期更新。
