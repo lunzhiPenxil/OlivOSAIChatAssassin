@@ -81,7 +81,15 @@ class Event(object):
         group_id = str(plugin_event.data.group_id)
         gGroupLock.setdefault(group_id, threading.Lock())
         missed = gGroupLock[group_id].locked()
-        gGroupLock[group_id].acquire()
+        
+        # 命令检测 - 测试API
+        message = plugin_event.data.message
+        message_clean = msg_wash(message)
+        if message_clean.strip() == '测试api':
+            test_api_connection(plugin_event, group_id)
+            gGroupLock[group_id].release()
+            return
+        
         unity_group_message(plugin_event, Proc, missed)
         gGroupLock[group_id].release()
 
@@ -626,3 +634,73 @@ def msg_wash(msg: str):
 def sleep(sleep_time: float):
     log(f"WAIT - {sleep_time:.2f} s")
     time.sleep(sleep_time)
+
+
+def test_api_connection(plugin_event, group_id):
+    load_config()
+    if not gConfig or not gConfig.get('api_key'):
+        plugin_event.reply('❌ API未配置，请检查config.json中的api_key')
+        return
+    
+    start_time = time.time()
+    
+    test_messages = [
+        {
+            "role": "user",
+            "content": "回复'连接成功'即可"
+        }
+    ]
+    
+    try:
+        # 调用API
+        api_key = gConfig['api_key']
+        api_base = gConfig['api_base']
+        model = gConfig['model']
+        url = f"{api_base}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": model,
+            "messages": test_messages,
+            "max_tokens": 20,
+            "temperature": 0.5,
+            "stream": False
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        elapsed_time = time.time() - start_time
+        
+        if response.status_code == 200:
+            result = response.json()
+            reply_content = result['choices'][0]['message']['content'].strip()
+            
+            # 统计token使用
+            usage = result.get('usage', {})
+            token_info = ""
+            if usage:
+                token_info = f" | tokens: {usage.get('total_tokens', '?')}"
+            
+            plugin_event.reply(
+                f'✅ API连接正常\n'
+                f'⏱️ 耗时: {elapsed_time:.2f}秒{token_info}\n'
+                f'🤖 回复: {reply_content}'
+            )
+        else:
+            plugin_event.reply(
+                f'❌ API连接失败\n'
+                f'状态码: {response.status_code}\n'
+                f'耗时: {elapsed_time:.2f}秒\n'
+                f'错误: {response.text[:200]}'
+            )
+            
+    except requests.exceptions.Timeout:
+        elapsed_time = time.time() - start_time
+        plugin_event.reply(f'❌ API连接超时\n⏱️ 耗时: {elapsed_time:.2f}秒\n请检查网络或api_base配置')
+    except requests.exceptions.ConnectionError:
+        elapsed_time = time.time() - start_time
+        plugin_event.reply(f'❌ 无法连接到API服务器\n⏱️ 耗时: {elapsed_time:.2f}秒\n请检查api_base配置')
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        plugin_event.reply(f'❌ 测试失败: {str(e)}\n⏱️ 耗时: {elapsed_time:.2f}秒')
