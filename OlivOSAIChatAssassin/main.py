@@ -599,7 +599,7 @@ def reply(plugin_event, msg: list):
         len_i = len(i)
         if len_i > 0:
             sleep_time = sum([
-                0.75 + (random.random() * 2 - 1) * 0.5
+                0.3 + (random.random() * 2 - 1) * 0.25
                 for _ in range(len_i)
             ])
             sleep(sleep_time)
