@@ -90,11 +90,10 @@ class Event:
         group_id = str(plugin_event.data.group_id)
         gGroupLock.setdefault(group_id, FairLock())
         missed = gGroupLock[group_id].locked()
-        gGroupLock[group_id].acquire()
-        if gGroupLock[group_id].islast():
-            missed = False
-        unity_group_message(plugin_event, Proc, missed)
-        gGroupLock[group_id].release()
+        with gGroupLock[group_id]:
+            if gGroupLock[group_id].islast():
+                missed = False
+            unity_group_message(plugin_event, Proc, missed)
 
     def poke(plugin_event, Proc):
         # 戳一戳事件入口
@@ -123,6 +122,13 @@ class FairLock:
         self._serving = 0
         self._held = False  # 是否被持有
         self._count = 0
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.release()
 
     def acquire(self):
         with self._lock:
@@ -218,14 +224,13 @@ def load_memory():
 
 
 def write_memory():
-    gMemoryLock.acquire()
-    try:
-        os.makedirs(gMemoryDir, exist_ok=True)
-        with open(gMemoryPath, 'w', encoding='utf-8') as f:
-            json.dump(gMemory, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        warn(f'写入记忆失败: {e}')
-    gMemoryLock.release()
+    with gMemoryLock:
+        try:
+            os.makedirs(gMemoryDir, exist_ok=True)
+            with open(gMemoryPath, 'w', encoding='utf-8') as f:
+                json.dump(gMemory, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            warn(f'写入记忆失败: {e}')
 
 
 def unity_group_message(plugin_event, Proc, missed: bool = False):
@@ -750,7 +755,6 @@ def get_status():
     return '\n'.join(status_lines)
 
 
-# 主动发送消息示例实现（参考模板）
 def send_message_force(botHash, send_type, target_id, message):
     Proc = gProc
     if (
