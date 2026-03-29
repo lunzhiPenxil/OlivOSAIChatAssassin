@@ -141,13 +141,20 @@ class FairLock:
             self._serving += 1
             self._count -= 1
             self._cond.notify_all()
+            self._try_reset()
+
+    def _try_reset(self):
+        if 0 == self._count:
+            self._next_ticket = 0
+            self._serving = 0
 
     def locked(self):
         with self._lock:
             return self._held
 
     def islast(self):
-        return 1 == self._count
+        with self._lock:
+            return self._count == 1
 
 
 def load_config():
