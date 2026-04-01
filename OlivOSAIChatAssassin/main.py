@@ -91,7 +91,10 @@ class Event:
         gGroupLock.setdefault(group_id, FairLock())
         missed = gGroupLock[group_id].locked()
         with gGroupLock[group_id]:
-            if gGroupLock[group_id].islast():
+            if (
+                gGroupLock[group_id].isBusy()
+                and gGroupLock[group_id].isLast()
+            ):
                 missed = False
             unity_group_message(plugin_event, Proc, missed)
 
@@ -121,6 +124,8 @@ class FairLock:
         self._next_ticket = 0
         self._serving = 0
         self._held = False  # 是否被持有
+        self._busy_gate = 3
+        self._busy = False
         self._count = 0
 
     def __enter__(self):
@@ -135,6 +140,7 @@ class FairLock:
             my_ticket = self._next_ticket
             self._next_ticket += 1
             self._count += 1
+            self._try_refresh()
             while my_ticket != self._serving:
                 self._cond.wait()
             self._held = True
@@ -146,21 +152,34 @@ class FairLock:
             self._held = False
             self._serving += 1
             self._count -= 1
-            self._cond.notify_all()
             self._try_reset()
+            self._cond.notify_all()
 
     def _try_reset(self):
         if 0 == self._count:
             self._next_ticket = 0
             self._serving = 0
+            self._busy = False
 
     def locked(self):
         with self._lock:
             return self._held
 
-    def islast(self):
+    def isLast(self):
         with self._lock:
             return self._count == 1
+
+    def _try_refresh(self):
+        if self._count >= self._busy_gate:
+            self._busy = True
+
+    def setBusyGate(self, gate: int):
+        with self._lock:
+            self._busy_gate = gate
+
+    def isBusy(self, gate: int = 3):
+        with self._lock:
+            return self._busy
 
 
 def load_config():
