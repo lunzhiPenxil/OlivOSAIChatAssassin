@@ -229,17 +229,18 @@ def load_staticKnowledge():
 
 def load_memory():
     global gMemory
-    try:
-        os.makedirs(gMemoryDir, exist_ok=True)
-        if os.path.exists(gMemoryPath):
-            with open(gMemoryPath, 'r', encoding='utf-8') as f:
-                gMemory = json.load(f)
-        else:
-            gMemory = {}
-            write_memory()
-    except Exception as e:
-        warn(f'加载记忆失败: {e}')
-        gMemory = None
+    with gMemoryLock:
+        try:
+            os.makedirs(gMemoryDir, exist_ok=True)
+            if os.path.exists(gMemoryPath):
+                with open(gMemoryPath, 'r', encoding='utf-8') as f:
+                    gMemory = json.load(f)
+            else:
+                gMemory = {}
+                write_memory()
+        except Exception as e:
+            warn(f'加载记忆失败: {e}')
+            gMemory = None
 
 
 def write_memory():
@@ -393,7 +394,9 @@ def reply_to_group(plugin_event, group_id):
         messages = get_ai_context(gConfig, history, content, flagMerge=True)
         # 调用 API
         try:
-            gMemory[group_id] = call_ai(gConfig, messages, temperature_override=0.7, json_mode=False)
+            group_memory = call_ai(gConfig, messages, temperature_override=0.7, json_mode=False)
+            with gMemoryLock:
+                gMemory[group_id] = group_memory
             write_memory()
             log(f'[本群记忆]\n{gMemory[group_id]}')
         except Exception as e:
@@ -449,18 +452,19 @@ def reply_to_group(plugin_event, group_id):
                             knowledge_data.update(**knowledge_data_i)
                     except Exception:
                         pass
-            if '全局' not in gMemory:
-                gMemory['全局'] = {}
-            if '知识缓存' not in gMemory['全局']:
-                gMemory['全局']['知识缓存'] = {}
-            for k, v in knowledge_data.items():
-                flag_knowledge_update = True
-                if (
-                    type(k) is str
-                    and type(v) is str
-                ):
-                    gMemory['全局']['知识缓存'][k] = v
-                    log(f'[更新知识] - {k}\n{v}')
+            with gMemoryLock:
+                if '全局' not in gMemory:
+                    gMemory['全局'] = {}
+                if '知识缓存' not in gMemory['全局']:
+                    gMemory['全局']['知识缓存'] = {}
+                for k, v in knowledge_data.items():
+                    flag_knowledge_update = True
+                    if (
+                        type(k) is str
+                        and type(v) is str
+                    ):
+                        gMemory['全局']['知识缓存'][k] = v
+                        log(f'[更新知识] - {k}\n{v}')
             if flag_knowledge_update:
                 write_memory()
         except Exception as e:
@@ -468,13 +472,14 @@ def reply_to_group(plugin_event, group_id):
 
     # 设置任务
     thisMemoryG = {}
-    for k, v in gMemory.get('全局', {}).items():
-        if k not in (
-            '人物关系',
-            '知识缓存',
-            '知识搜索',
-        ):
-            thisMemoryG[k] = v
+    with gMemoryLock:
+        for k, v in gMemory.get('全局', {}).items():
+            if k not in (
+                '人物关系',
+                '知识缓存',
+                '知识搜索',
+            ):
+                thisMemoryG[k] = v
     key_gMemory_const = '知识搜索'
     key_staticKnowledge = '知识库'
     thisMemoryG[key_gMemory_const] = {}
