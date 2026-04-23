@@ -820,7 +820,11 @@ def warn(msg: str):
 def reply(plugin_event, msg: list):
     for i in msg:
         len_i = len(i)
-        if len_i > 0:
+        if msg == gSkipStr:
+            log('SKIP - REPLY STR')
+        elif len_i <= 0:
+            log('SKIP - REPLY NONE')
+        else:
             sleep_time = sum([
                 0.2 + (random.random() * 2 - 1) * 0.15
                 for _ in range(len_i)
