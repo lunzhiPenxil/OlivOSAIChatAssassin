@@ -33,8 +33,10 @@
     "api_key": "",
     "api_base": "https://api.deepseek.com/v1",
     "model": "deepseek-chat",
-    "max_tokens": 512,
+    "max_tokens": 2048,
     "temperature": 0.7,
+    "thinking": {"type": "disabled"},
+    "reasoning_effort": "max",
     "personality": "你是一个伪装成人类的自豪的新锐AI，你择机加入聊天，避免过多尬聊。别让他们发现你的真实身份！！！",
     "enabled_groups": [
         "all"
