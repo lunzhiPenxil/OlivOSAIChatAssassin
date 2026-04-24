@@ -593,9 +593,7 @@ def reply_to_group(plugin_event, group_id):
                 flag_needKnowledge = False
             reply_list = reply_split(reply_wash(reply_text))
             log(f'REPLY - {reply_list}')
-            for i in reply_list:
-                if len(i) > 0:
-                    add_message_to_history(group_id, i, None, None)
+            add_message_to_history(group_id, ''.join(reply_list), None, None)
             t_set_memory = threading.Thread(target=set_memory)
             t_set_memory.start()
             if flag_needKnowledge:
@@ -852,7 +850,7 @@ def warn(msg: str):
 def reply(plugin_event, msg: list):
     for i in msg:
         len_i = len(i)
-        if msg == gSkipStr:
+        if i == gSkipStr:
             log('SKIP - REPLY STR')
         elif len_i <= 0:
             log('SKIP - REPLY NONE')
