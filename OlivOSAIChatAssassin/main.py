@@ -42,9 +42,11 @@ gStaticKnowledge = {}
 configDefault = {
     'api_key': '',
     'api_base': 'https://api.deepseek.com/v1',
-    'model': 'deepseek-chat',
-    'max_tokens': 512,
+    'model': 'deepseek-v4-flash',
+    'max_tokens': 2048,
     'temperature': 0.7,
+    "thinking": {"type": "disabled"},
+    "reasoning_effort": "max",
     'personality': '你是一个伪装成人类的自豪的新锐AI，你择机加入聊天，避免过多尬聊。别让他们发现你的真实身份！！！',
     'record_knowledge': True,
     'enabled_groups': [
@@ -394,7 +396,13 @@ def reply_to_group(plugin_event, group_id):
         messages = get_ai_context(gConfig, history, content, flagMerge=True)
         # 调用 API
         try:
-            group_memory = call_ai(gConfig, messages, temperature_override=0.7, json_mode=False)
+            group_memory = call_ai(
+                gConfig, messages,
+                temperature_override=0.7,
+                json_mode=False,
+                flag_thinking_override=False,
+                reasoning_effort_override="max"
+            )
             with gMemoryLock:
                 gMemory[group_id] = group_memory
             write_memory()
@@ -426,7 +434,13 @@ def reply_to_group(plugin_event, group_id):
         )
         # 调用 API
         try:
-            knowledge_data_str = call_ai(gConfig, messages, temperature_override=0.7, json_mode=False)
+            knowledge_data_str = call_ai(
+                gConfig, messages,
+                temperature_override=0.7,
+                json_mode=False,
+                flag_thinking_override=False,
+                reasoning_effort_override="max"
+            )
             knowledge_data_str = knowledge_data_str.lstrip("```json")
             knowledge_data_str = knowledge_data_str.lstrip("```")
             knowledge_data_str = knowledge_data_str.rstrip("```")
@@ -651,7 +665,9 @@ def call_ai(
     lConfig,
     messages,
     temperature_override: 'float|None' = None,
-    json_mode: bool = True
+    json_mode: bool = True,
+    flag_thinking_override: 'bool|None' = None,
+    reasoning_effort_override: 'str|None' = None
 ):
     # 调用 API
     res = None
@@ -660,6 +676,17 @@ def call_ai(
     model = lConfig['model']
     max_tokens = lConfig.get('max_tokens', 1024)
     temperature = lConfig.get('temperature', 0.7)
+    thinking = lConfig.get('thinking', {'type': 'disabled'})
+    if not (
+        type(thinking) is dict
+        and type(thinking.get('type', None)) is str
+    ):
+        thinking = {'type': 'disabled'}
+    if flag_thinking_override is not None:
+        thinking = {'type': 'enabled' if flag_thinking_override else 'disabled'}
+    reasoning_effort = lConfig.get('reasoning_effort', 'max')
+    if reasoning_effort_override is not None:
+        reasoning_effort = reasoning_effort_override
     url = f"{api_base}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -670,8 +697,13 @@ def call_ai(
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature if temperature_override is None else temperature_override,
+        "thinking": thinking,
         "stream": False
     }
+    if thinking.get('type', 'disabled') == 'enabled':
+        payload.update({
+            'reasoning_effort': reasoning_effort
+        })
     start = time.perf_counter()
     response = requests.post(url, headers=headers, json=payload, timeout=30)
     end = time.perf_counter()
