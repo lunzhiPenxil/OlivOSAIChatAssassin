@@ -849,10 +849,12 @@ def warn(msg: str):
 
 def reply(plugin_event, msg: list):
     for i in msg:
-        len_i = len(i)
-        if i == gSkipStr:
+        if gSkipStr in i:
             log('SKIP - REPLY STR')
-        elif len_i <= 0:
+            return
+    for i in msg:
+        len_i = len(i)
+        if len_i <= 0:
             log('SKIP - REPLY NONE')
         else:
             sleep_time = sum([
