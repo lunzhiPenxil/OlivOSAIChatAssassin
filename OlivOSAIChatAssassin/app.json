@@ -4,8 +4,8 @@
     "namespace": "OlivOSAIChatAssassin",
     "info": "基于OpenAI兼容API的群聊AI助手，会收集聊天记录并择机加入群聊",
     "priority": 30000,
-    "svn": 26,
-    "version": "1.1.16",
+    "svn": 27,
+    "version": "1.1.17",
     "compatible_svn": 190,
     "message_mode": "olivos_string",
     "support": [

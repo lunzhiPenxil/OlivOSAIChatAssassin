@@ -710,7 +710,8 @@ def call_ai(
         result: dict = response.json()
         res = result['choices'][0]['message']['content'].strip()
         res = get_message(res, json_mode=json_mode)
-        log_usage(get_usage(result.get('usage', {})))
+        log_reasoning_content(get_copy_data(result.get('choices', {})))
+        log_usage(get_copy_data(result.get('usage', {})))
     else:
         warn(f'API ERR: {response.status_code} {response.text}')
     return res
@@ -760,9 +761,25 @@ def get_json_message(data_str: str):
     return res
 
 
-def get_usage(usage_data: dict):
-    res = usage_data.copy()
+def get_copy_data(data: dict):
+    res = data.copy()
     return res
+
+
+def log_reasoning_content(choices: list):
+    if type(choices) is list:
+        if (
+            len(choices) >= 1
+            and type(choices[0]) is dict
+            and 'message' in choices[0]
+            and type(choices[0]['message']) is dict
+            and 'reasoning_content' in choices[0]['message']
+            and type(choices[0]['message']['reasoning_content']) is str
+        ):
+            log(
+                "MSG - REASON - "
+                f"{choices[0]['message']['reasoning_content']}"
+            )
 
 
 def log_usage(usage_data: dict):
