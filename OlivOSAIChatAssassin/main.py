@@ -231,18 +231,18 @@ def load_staticKnowledge():
 
 def load_memory():
     global gMemory
-    with gMemoryLock:
-        try:
-            os.makedirs(gMemoryDir, exist_ok=True)
-            if os.path.exists(gMemoryPath):
+    try:
+        os.makedirs(gMemoryDir, exist_ok=True)
+        if os.path.exists(gMemoryPath):
+            with gMemoryLock:
                 with open(gMemoryPath, 'r', encoding='utf-8') as f:
                     gMemory = json.load(f)
-            else:
-                gMemory = {}
-                write_memory()
-        except Exception as e:
-            warn(f'加载记忆失败: {e}')
-            gMemory = None
+        else:
+            gMemory = {}
+            write_memory()
+    except Exception as e:
+        warn(f'加载记忆失败: {e}')
+        gMemory = None
 
 
 def write_memory():
