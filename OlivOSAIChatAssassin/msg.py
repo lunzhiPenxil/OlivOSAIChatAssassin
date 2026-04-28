@@ -27,6 +27,7 @@ def unity_group_message(plugin_event: OlivOS.API.Event, Proc, missed: bool = Fal
         return
     # 忽略前缀消息
     message = plugin_event.data.message
+    message = msg_trans(message)
     message = msg_wash(message)
     if should_ignore(message):
         OlivOSAIChatAssassin.logger.log('IGNORE')
@@ -552,11 +553,16 @@ def reply_split(msg: str):
     return res
 
 
+def msg_trans(msg: str):
+    res = msg
+    return res
+
+
 def msg_wash(msg: str):
     res = msg
-    res = re.sub(r'\[OP:image.+\]', '', res)
-    res = re.sub(r'\[OP:record.+\]', '', res)
-    res = re.sub(r'\[OP:video.+\]', '', res)
+    res = re.sub(r'\[OP:image.+\]', '[图片]', res)
+    res = re.sub(r'\[OP:record.+\]', '[语音]', res)
+    res = re.sub(r'\[OP:video.+\]', '[视频]', res)
     return res
 
 
