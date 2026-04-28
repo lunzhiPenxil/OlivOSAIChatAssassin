@@ -264,6 +264,7 @@ def reply_to_group(plugin_event, group_id):
         '知识库',
         '知识搜索',
     ):
+        start = time.perf_counter()
         thisMemoryM = OlivOSAIChatAssassin.data.gMemory.get('全局', {key_gMemory: {}}).get(key_gMemory, {})
         if key_gMemory == key_staticKnowledge:
             thisMemoryM = OlivOSAIChatAssassin.data.gStaticKnowledge
@@ -282,6 +283,8 @@ def reply_to_group(plugin_event, group_id):
                 if flagHit:
                     OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{key_gMemory}] {k} ({rank})')
                     thisMemoryG[key_gMemory_const][k] = v
+        end = time.perf_counter()
+        OlivOSAIChatAssassin.logger.log(f"CALL PEAK UP - [{key_gMemory}] - DONE {(end - start):.2f} s")
 
     key_gMemory_const = '人物关系'
     thisMemoryG[key_gMemory_const] = {}
