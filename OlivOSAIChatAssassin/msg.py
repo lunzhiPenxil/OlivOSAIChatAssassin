@@ -315,13 +315,20 @@ def reply_to_group(plugin_event, group_id):
     messages = get_ai_context(OlivOSAIChatAssassin.data.gConfig, history, content)
     # 调用 API
     reply_list = None
+    reply_count = 0
     try:
-        reply_list = get_json_message(
-            OlivOSAIChatAssassin.webTools.call_ai(
-                OlivOSAIChatAssassin.data.gConfig, messages,
-                response_format_override={"type": "json_object"}
+        while (
+            reply_list is None
+            and reply_count < 5
+        ):
+            reply_count += 1
+            OlivOSAIChatAssassin.logger.log(f"CALL AI - TRY [{reply_count}]")
+            reply_list = get_json_message(
+                OlivOSAIChatAssassin.webTools.call_ai(
+                    OlivOSAIChatAssassin.data.gConfig, messages,
+                    response_format_override={"type": "json_object"}
+                )
             )
-        )
     except Exception as e:
         OlivOSAIChatAssassin.logger.warn(f'API FATAL: {e}')
     # 发送回复
@@ -410,8 +417,9 @@ def get_json_message(data_str: str):
                 res_list.append(i)
             OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
         else:
-            OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {data_str}')
+            OlivOSAIChatAssassin.logger.warn(f'DATA TYPE ERR: {data_str}')
     except Exception:
+        res_list = None
         OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {data_str}')
     return res_list
 
