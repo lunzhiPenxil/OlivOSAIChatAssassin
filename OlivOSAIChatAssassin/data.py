@@ -11,8 +11,6 @@ gMessageHistory: 'dict[str, deque]' = {}
 gConfigDir = './plugin/data/OlivOSAIChatAssassin'
 gConfigPath = './plugin/data/OlivOSAIChatAssassin/config.json'
 
-gSkipStr = '【SKIP】'
-
 gGroupLock: 'dict[str, OlivOSAIChatAssassin.tools.FairLock]' = {}
 gGroupKnowledgeCounter: 'dict[str, int]' = {}
 gGroupKnowledgeCounterLimit: int = int(4 * 4)

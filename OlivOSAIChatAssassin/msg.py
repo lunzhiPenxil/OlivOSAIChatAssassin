@@ -133,9 +133,9 @@ def reply_to_group(plugin_event, group_id):
 - {personality}
 
 # 已知信息
-- 现在的系统时间是：{datetime.now().astimezone().replace(microsecond=0).isoformat()}
 - 你的QQ号是：{self_id}，所以你被@时是：{mention_str}
-- 本群群号是：{group_id}
+- 本群群号是：{group_id}，
+- 最后一条消息总是最新的，时间可以视为当前本地时间
 '''
 
     # 生成记忆
@@ -182,7 +182,6 @@ def reply_to_group(plugin_event, group_id):
             call_ai_res = OlivOSAIChatAssassin.webTools.call_ai(
                 OlivOSAIChatAssassin.data.gConfig, messages,
                 temperature_override=0.7,
-                json_mode=False,
                 flag_thinking_override=False,
                 reasoning_effort_override="max",
                 response_format_override={"type": "json_object"}
@@ -295,35 +294,44 @@ def reply_to_group(plugin_event, group_id):
         '全局': thisMemoryG,
         group_id: OlivOSAIChatAssassin.data.gMemory.get(group_id, OlivOSAIChatAssassin.data.gMemoryDefaultStr)
     }
+    examples_reply = {
+        'r': ['好的']
+    }
     content = f'''{contentDefault}
 # 当前记忆
 - {json.dumps(thisMemory, ensure_ascii=False)}
 
 # 当前任务
-- 当你不想参与对话时，你会回复"{OlivOSAIChatAssassin.data.gSkipStr}"，这是你必须遵守的规则，你不需要每句话都回复，你需要按照你的心情来，但是当有人找你时尽量回复
+## 将回复内容输出至r的值中
+- 即便思考也要保证Json格式输出的完整，任何时候都要保证Json格式输出的完整
+- 当你不想参与对话时，你会令r的值的列表为空，这是你必须遵守的规则，你不需要每句话都回复，你需要按照你的心情来，但是当有人找你时尽量回复
 - 判断是否应该加入聊天进行回复
-- 如果应该回复，就直接输出你的回复内容
+- 如果应该回复，将回复内容追加至r的值的列表中，多条消息需要分开
+
+# 参考输出，以严格的Json格式输出
+{json.dumps(examples_reply, ensure_ascii=False)}
 '''
     # 格式化历史为OpenAI消息格式
     messages = get_ai_context(OlivOSAIChatAssassin.data.gConfig, history, content)
     # 调用 API
-    reply_text = None
+    reply_list = None
     try:
-        reply_text = OlivOSAIChatAssassin.webTools.call_ai(OlivOSAIChatAssassin.data.gConfig, messages)
+        reply_list = get_json_message(
+            OlivOSAIChatAssassin.webTools.call_ai(
+                OlivOSAIChatAssassin.data.gConfig, messages,
+                response_format_override={"type": "json_object"}
+            )
+        )
     except Exception as e:
         OlivOSAIChatAssassin.logger.warn(f'API FATAL: {e}')
     # 发送回复
-    if reply_text is None:
+    if reply_list is None:
         OlivOSAIChatAssassin.logger.log('NONE')
     else:
-        # 限制消息长度
-        max_len = OlivOSAIChatAssassin.data.gConfig.get('max_message_length', 2000)
-        if len(reply_text) > max_len:
-            reply_text = reply_text[:max_len] + '...'
-        if reply_text == OlivOSAIChatAssassin.data.gSkipStr:
+        if len(reply_list) <= 0:
             OlivOSAIChatAssassin.logger.log('SKIP')
         else:
-            reply_list = reply_split(reply_wash(reply_text))
+            reply_list = reply_wash(reply_list)
             OlivOSAIChatAssassin.logger.log(f'REPLY - {reply_list}')
             add_message_to_history(group_id, ''.join(reply_list), None, None)
             t_set_memory = threading.Thread(
@@ -389,48 +397,23 @@ def get_ai_context(
     return messages
 
 
-def get_message(data_str: str, json_mode: bool):
-    res = data_str
-    if not json_mode:
-        OlivOSAIChatAssassin.logger.log('DATA TYPE - STR OUT')
-    elif res == OlivOSAIChatAssassin.data.gSkipStr:
-        OlivOSAIChatAssassin.logger.log('DATA TYPE - STR SKIP')
-    else:
-        res = get_json_message(res)
-    return res
-
-
 def get_json_message(data_str: str):
-    res = None
-    data_str = data_str.replace('\r', '')
-    data_list = data_str.split('\n')
     res_list = []
-    for i in data_list:
-        i_2 = i
-        i_2 = i_2.strip()
+    try:
+        data_dict = json.loads(data_str)
         if (
-            i_2.startswith('{')
-            and i_2.endswith('}')
+            type(data_dict) is dict
+            and 'r' in data_dict
+            and type(data_dict['r']) is list
         ):
-            try:
-                data_dict = json.loads(i_2)
-                if (
-                    type(data_dict) is dict
-                    and 'message' in data_dict
-                    and type(data_dict['message']) is str
-                ):
-                    res_list.append(data_dict['message'])
-                    OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
-                else:
-                    OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {i}')
-            except Exception:
-                OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {i}')
+            for i in data_dict['r']:
+                res_list.append(i)
+            OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
         else:
-            res_list.append(i)
-            OlivOSAIChatAssassin.logger.log('DATA TYPE - STR')
-    if len(res_list) > 0:
-        res = '\n'.join(res_list)
-    return res
+            OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {data_str}')
+    except Exception:
+        OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {data_str}')
+    return res_list
 
 
 def get_status():
@@ -472,10 +455,6 @@ def send_message_force(botHash, send_type, target_id, message):
 
 
 def reply(plugin_event, msg: list, total_time_past: float = 0.0):
-    for i in msg:
-        if OlivOSAIChatAssassin.data.gSkipStr in i:
-            OlivOSAIChatAssassin.logger.log('SKIP - REPLY STR')
-            return
     flag_first = True
     for i in msg:
         len_i = len(i)
@@ -496,20 +475,21 @@ def reply(plugin_event, msg: list, total_time_past: float = 0.0):
             plugin_event.reply(i)
 
 
-def reply_wash(msg: str):
-    res = msg
-    res = res.replace('\r', '')
-    res = res.strip('\n')
-    res = res.rstrip('。')
-    res = re.sub(r'\(.+\)', '', res)
-    res = re.sub(r'（.+）', '', res)
-    res = res.replace('[SKIP]', '【SKIP】')
-    return res
-
-
-def reply_split(msg: str):
-    res = msg
-    res = res.split('\n')
+def reply_wash(msg: list):
+    res = []
+    # 限制消息长度
+    max_len = OlivOSAIChatAssassin.data.gConfig.get('max_message_length', 2000)
+    for i in msg:
+        res_i = i
+        if type(res_i) is str:
+            res_i = res_i.replace('\r', '')
+            res_i = res_i.strip('\n')
+            res_i = res_i.rstrip('。')
+            res_i = re.sub(r'\(.+\)', '', res_i)
+            res_i = re.sub(r'（.+）', '', res_i)
+            if len(res_i) > max_len:
+                res_i = res_i[:max_len]
+            res.append(res_i)
     return res
 
 

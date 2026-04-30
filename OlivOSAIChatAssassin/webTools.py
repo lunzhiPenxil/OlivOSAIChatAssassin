@@ -8,7 +8,6 @@ def call_ai(
     lConfig,
     messages,
     temperature_override: 'float|None' = None,
-    json_mode: bool = True,
     flag_thinking_override: 'bool|None' = None,
     reasoning_effort_override: 'str|None' = None,
     response_format_override: 'dict|None' = None
@@ -60,7 +59,6 @@ def call_ai(
     if response.status_code == 200:
         result: dict = response.json()
         res = result['choices'][0]['message']['content'].strip()
-        res = OlivOSAIChatAssassin.msg.get_message(res, json_mode=json_mode)
         log_reasoning_content(OlivOSAIChatAssassin.tools.get_copy_data(result.get('choices', {})))
         log_usage(OlivOSAIChatAssassin.tools.get_copy_data(result.get('usage', {})))
     else:
