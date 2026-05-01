@@ -126,7 +126,9 @@ def reply_to_group(plugin_event, group_id):
     history: 'list[dict]' = list(OlivOSAIChatAssassin.data.gMessageHistory.get(group_id, []))
     if not history:
         return
-    elif len(history) <= 5:
+    elif len(history) <= OlivOSAIChatAssassin.data.gConfig.get(
+        'history_size_min', OlivOSAIChatAssassin.data.configDefault['history_size_min']
+    ):
         OlivOSAIChatAssassin.logger.log('HISTORY TOO SHORT')
         return
     self_id = plugin_event.base_info['self_id']
