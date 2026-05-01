@@ -3,7 +3,6 @@ import random
 import time
 import threading
 import re
-from collections import deque
 from datetime import datetime
 
 import OlivOS
@@ -34,9 +33,20 @@ def unity_group_message(plugin_event: OlivOS.API.Event, Proc, missed: bool = Fal
         return
     # 添加消息到历史
     if group_id not in OlivOSAIChatAssassin.data.gMessageHistory:
-        OlivOSAIChatAssassin.data.gMessageHistory[group_id] = deque(
-            maxlen=OlivOSAIChatAssassin.data.gConfig.get(
+        OlivOSAIChatAssassin.data.gMessageHistory[group_id] = OlivOSAIChatAssassin.tools.DynamicQueue(
+            keep=OlivOSAIChatAssassin.data.gConfig.get(
                 'history_size', OlivOSAIChatAssassin.data.configDefault['history_size']
+            ),
+            max_grow=(
+                OlivOSAIChatAssassin.data.gConfig.get(
+                    'history_dynamic_size', OlivOSAIChatAssassin.data.configDefault['history_dynamic_size'],
+                )
+                if OlivOSAIChatAssassin.data.gConfig.get(
+                    'history_dynamic', OlivOSAIChatAssassin.data.configDefault['history_dynamic'],
+                ) is True else
+                OlivOSAIChatAssassin.data.gConfig.get(
+                    'history_size', OlivOSAIChatAssassin.data.configDefault['history_size'],
+                )
             )
         )
     message_id = plugin_event.data.message_id
@@ -72,8 +82,8 @@ def add_message_to_history(group_id, message, user_id, nickname, message_id: 'st
         return
     timestamp = time.time()
     message_new = message
-    if len(message_new) > 100:
-        message_new = message_new[:100] + '...'
+    if len(message_new) > 200:
+        message_new = message_new[:200] + '...'
     msg_entry = {
         'timestamp': timestamp,
         'time': datetime.now().astimezone().replace(microsecond=0).isoformat(),
@@ -113,7 +123,7 @@ def reply_to_group(plugin_event, group_id):
     if not OlivOSAIChatAssassin.data.gConfig or not OlivOSAIChatAssassin.data.gConfig.get('api_key'):
         return
     # 构建对话历史
-    history: 'list[dict]' = list(OlivOSAIChatAssassin.data.gMessageHistory.get(group_id, deque()))
+    history: 'list[dict]' = list(OlivOSAIChatAssassin.data.gMessageHistory.get(group_id, []))
     if not history:
         return
     elif len(history) <= 5:
@@ -140,7 +150,7 @@ def reply_to_group(plugin_event, group_id):
 
     # 生成记忆
     def set_memory(t_thisMemory: dict):
-        history = list(OlivOSAIChatAssassin.data.gMessageHistory.get(group_id, deque()))
+        history = list(OlivOSAIChatAssassin.data.gMessageHistory.get(group_id, []))
         # 设置任务
         examples_knowledge = {
             "k": {
@@ -218,6 +228,7 @@ def reply_to_group(plugin_event, group_id):
             OlivOSAIChatAssassin.logger.warn(f'API FATAL: {e}')
 
     # 设置任务
+    thisMemoryC = {}
     thisMemoryG = {}
     with OlivOSAIChatAssassin.data.gMemoryLock:
         for k, v in OlivOSAIChatAssassin.data.gMemory.get('全局', {}).items():
@@ -226,7 +237,7 @@ def reply_to_group(plugin_event, group_id):
                 '知识缓存',
                 '知识搜索',
             ):
-                thisMemoryG[k] = v
+                thisMemoryC[k] = v
     key_gMemory_const = '知识搜索'
     key_staticKnowledge = '知识库'
     thisMemoryG[key_gMemory_const] = {}
@@ -298,8 +309,11 @@ def reply_to_group(plugin_event, group_id):
         'r': ['好的']
     }
     content = f'''{contentDefault}
-# 当前记忆
-- {json.dumps(thisMemory, ensure_ascii=False)}
+# 信息
+- 最新的消息中附带当前的记忆信息
+
+# 固定记忆
+- {json.dumps(thisMemoryC, ensure_ascii=False)}
 
 # 当前任务
 ## 将回复内容输出至r的值中
@@ -312,7 +326,22 @@ def reply_to_group(plugin_event, group_id):
 {json.dumps(examples_reply, ensure_ascii=False)}
 '''
     # 格式化历史为OpenAI消息格式
-    messages = get_ai_context(OlivOSAIChatAssassin.data.gConfig, history, content)
+    history_size_max_print = (
+        OlivOSAIChatAssassin.data.gConfig.get(
+            'history_dynamic_size', OlivOSAIChatAssassin.data.configDefault['history_dynamic_size'],
+        )
+        if OlivOSAIChatAssassin.data.gConfig.get(
+            'history_dynamic', OlivOSAIChatAssassin.data.configDefault['history_dynamic'],
+        ) is True else
+        OlivOSAIChatAssassin.data.gConfig.get(
+            'history_size', OlivOSAIChatAssassin.data.configDefault['history_size'],
+        )
+    )
+    OlivOSAIChatAssassin.logger.log(f"HISTORY - SIZE [{len(history)}/{history_size_max_print}]")
+    messages = get_ai_context(
+        OlivOSAIChatAssassin.data.gConfig, history, content,
+        patch={'当前记忆': thisMemory}
+    )
     # 调用 API
     reply_list = None
     reply_count = 0
@@ -362,7 +391,8 @@ def get_ai_context(
     history,
     content,
     flagMerge: bool = False,
-    prefix: bool = "总结如下记录："
+    prefix: bool = "总结如下记录：",
+    patch: 'dict|None' = None
 ):
     # 格式化历史为OpenAI消息格式
     messages = []
@@ -374,13 +404,13 @@ def get_ai_context(
         }
     )
     # 添加最近的历史消息，限制数量
-    max_history = lConfig.get('history_size', 20)
+    max_history_this = len(history)
     if flagMerge:
         chat_content = '\n'.join([
             f'{entry["time"]} [{entry["nickname"]}]({entry["user_id"]}) 说: "{entry["message"]}"'
             if entry['nickname'] is not None
             else f'{entry["time"]} [我]() 说: "{entry["message"]}"'
-            for entry in list(history)[-max_history:]
+            for entry in list(history)[-max_history_this:]
         ])
         messages.append(
             {
@@ -389,7 +419,9 @@ def get_ai_context(
             }
         )
     else:
-        for entry in list(history)[-max_history:]:
+        count = 0
+        for entry in list(history)[-max_history_this:]:
+            count += 1
             if entry['nickname'] is None:
                 messages.append(
                     {
@@ -398,10 +430,14 @@ def get_ai_context(
                     }
                 )
             else:
+                entry_this = {}
+                entry_this.update(entry)
+                if count == max_history_this:
+                    entry_this.update(patch)
                 messages.append(
                     {
                         "role": "user",
-                        "content": json.dumps(entry, ensure_ascii=False)
+                        "content": json.dumps(entry_this, ensure_ascii=False)
                     }
                 )
     return messages

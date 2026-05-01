@@ -1,5 +1,3 @@
-from collections import deque
-
 import OlivOSAIChatAssassin
 
 
@@ -16,14 +14,6 @@ class Event:
         OlivOSAIChatAssassin.load.load_memory()
         # 初始化消息历史
         OlivOSAIChatAssassin.data.gMessageHistory = {}
-        # 如果配置中启用了群组，初始化对应的历史队列
-        if OlivOSAIChatAssassin.data.gConfig and 'enabled_groups' in OlivOSAIChatAssassin.data.gConfig:
-            for group_id in OlivOSAIChatAssassin.data.gConfig['enabled_groups']:
-                OlivOSAIChatAssassin.data.gMessageHistory[group_id] = deque(
-                    maxlen=OlivOSAIChatAssassin.data.gConfig.get(
-                        'history_size', OlivOSAIChatAssassin.data.configDefault['history_size']
-                    )
-                )
 
     def private_message(plugin_event, Proc):
         # 私聊消息事件入口

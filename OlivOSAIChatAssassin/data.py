@@ -1,13 +1,12 @@
 import threading
-from collections import deque
 
 import OlivOS
 import OlivOSAIChatAssassin
 
 gProc: 'OlivOS.pluginAPI.shallow|None' = None
 gPluginName = '群聊刺客'
-gConfig = None
-gMessageHistory: 'dict[str, deque]' = {}
+gConfig: 'dict|None' = None
+gMessageHistory: 'dict[str, OlivOSAIChatAssassin.tools.DynamicQueue]' = {}
 gConfigDir = './plugin/data/OlivOSAIChatAssassin'
 gConfigPath = './plugin/data/OlivOSAIChatAssassin/config.json'
 
@@ -45,7 +44,10 @@ configDefault = {
     'enabled_groups': [
         'all'
     ],
+    'history_size_min': 5,
     'history_size': 8,
+    'history_dynamic': False,
+    'history_dynamic_size': 64,
     'reply_probability': 1,
     'reply_keywords': [],
     'mention_reply': True,

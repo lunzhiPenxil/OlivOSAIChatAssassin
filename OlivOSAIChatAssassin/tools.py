@@ -139,3 +139,33 @@ def get_recommendMatch(rank, gate_rank: int = 1000):
 def get_copy_data(data: dict):
     res = data.copy()
     return res
+
+
+class DynamicQueue:
+    """动态队列：增长至 max_grow，达到后的下一次追加时保留最新 keep 个元素，然后继续增长至 max_grow，如此循环。"""
+
+    def __init__(self, keep, max_grow):
+        self.max_grow = max_grow   # 最大增长长度
+        self.keep = keep           # 触发修剪后保留的元素个数
+        self.queue = []            # 用列表存储队列元素
+
+    def append(self, item):
+        """向队列追加一个元素，自动执行增长/修剪逻辑。"""
+        # 如果当前长度已经达到 max_grow，下一次追加时先修剪
+        if len(self.queue) == self.max_grow:
+            # 保留最后 keep-1 个元素（因为接下来还要追加一个新元素）
+            self.queue = self.queue[-(self.keep - 1):]
+        # 追加新元素
+        self.queue.append(item)
+
+    def __len__(self):
+        return len(self.queue)
+
+    def __repr__(self):
+        return f"DynamicQueue({self.queue})"
+
+    def __iter__(self):
+        return iter(self.queue)
+
+    def __getitem__(self, index):
+        return self.queue[index]
