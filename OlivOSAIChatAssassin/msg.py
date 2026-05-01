@@ -420,6 +420,7 @@ def get_json_message(data_str: str):
                 res_list.append(i)
             OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
         else:
+            res_list = None
             OlivOSAIChatAssassin.logger.warn(f'DATA TYPE ERR: {data_str}')
     except Exception:
         res_list = None
