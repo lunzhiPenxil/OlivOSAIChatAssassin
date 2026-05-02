@@ -30,6 +30,8 @@ gMemoryDefaultStr = "择机加入对话"
 gStaticKnowledgeDir = './plugin/data/OlivOSAIChatAssassin/Knowledge'
 gStaticKnowledge = {}
 
+gPeakUpCache: 'dict[str, dict[str, dict[str, int|list]]]' = {}
+
 configDefault = {
     'api_key': '',
     'api_base': 'https://api.deepseek.com/v1',
@@ -44,6 +46,7 @@ configDefault = {
     'enabled_groups': [
         'all'
     ],
+    'search_ageing': 900,
     'history_size_min': 5,
     'history_size': 8,
     'history_dynamic': False,

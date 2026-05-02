@@ -245,6 +245,7 @@ def reply_to_group(plugin_event, group_id):
     key_gMemory_const = '知识搜索'
     key_staticKnowledge = '知识库'
     thisMemoryG[key_gMemory_const] = {}
+    thisMemoryG_patch = {}
     for key_gMemory in (
         '知识缓存',
         '知识库',
@@ -252,26 +253,28 @@ def reply_to_group(plugin_event, group_id):
     ):
         start = time.perf_counter()
         thisMemoryM = OlivOSAIChatAssassin.data.gMemory.get('全局', {key_gMemory: {}}).get(key_gMemory, {})
+        rate_this = 0.1
+        thisMemoryG_patch = {}
         if key_gMemory == key_staticKnowledge:
             thisMemoryM = OlivOSAIChatAssassin.data.gStaticKnowledge
-        if type(thisMemoryM) is dict:
-            for k, v in thisMemoryM.items():
-                flagHit = False
-                rank = None
-                for j in history:
-                    if key_gMemory == key_staticKnowledge:
-                        rank = OlivOSAIChatAssassin.tools.get_recommendRank(k, j.get('message', ''), rate=0.15)
-                    else:
-                        rank = OlivOSAIChatAssassin.tools.get_recommendRank(k, j.get('message', ''))
-                    if OlivOSAIChatAssassin.tools.get_recommendMatch(rank):
-                        flagHit = True
-                        break
-                if flagHit:
-                    OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{key_gMemory}] {k} ({rank})')
-                    thisMemoryG[key_gMemory_const][k] = v
+            rate_this = 0.15
+        for j in history:
+            thisMemoryG_patch.update(
+                OlivOSAIChatAssassin.tools.peak_up_recommendMatch(
+                    target=j.get('message', ''),
+                    dictMap=thisMemoryM,
+                    dictName=key_gMemory,
+                    ageing=OlivOSAIChatAssassin.data.gConfig.get(
+                        'search_ageing',
+                        OlivOSAIChatAssassin.data.configDefault['search_ageing']
+                    ),
+                    rate=rate_this
+                )
+            )
+        OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{key_gMemory}] - {list(thisMemoryG_patch.keys())}')
+        thisMemoryG[key_gMemory_const].update(thisMemoryG_patch)
         end = time.perf_counter()
         OlivOSAIChatAssassin.logger.log(f"CALL PEAK UP - [{key_gMemory}] - DONE {(end - start):.2f} s")
-
     key_gMemory_const = '人物关系'
     thisMemoryG[key_gMemory_const] = {}
     for key_gMemory in (
