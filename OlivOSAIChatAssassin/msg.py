@@ -318,6 +318,7 @@ def reply_to_group(plugin_event, group_id):
     content = f'''{contentDefault}
 # 信息
 - 最新的消息中附带当前的记忆信息
+- 越新的消息越重要
 
 # 固定记忆
 - {json.dumps(thisMemoryC, ensure_ascii=False)}
@@ -327,6 +328,7 @@ def reply_to_group(plugin_event, group_id):
 - 即便思考也要保证Json格式输出的完整，任何时候都要保证Json格式输出的完整
 - 当你不想参与对话时，你会令r的值的列表为空，这是你必须遵守的规则，你不需要每句话都回复，你需要按照你的心情来，但是当有人找你时尽量回复
 - 判断是否应该加入聊天进行回复
+- 根据自己已经回复过的消息，避免重复已经回应过的话题，避免重复自己说过的话
 - 如果应该回复，将回复内容追加至r的值的列表中，多条消息需要分开
 
 # 参考输出，以严格的Json格式输出
