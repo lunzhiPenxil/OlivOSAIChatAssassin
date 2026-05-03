@@ -268,10 +268,10 @@ def reply_to_group(plugin_event, group_id):
                         'search_ageing',
                         OlivOSAIChatAssassin.data.configDefault['search_ageing']
                     ),
-                    rate=rate_this
+                    rate=rate_this,
+                    matchedList=list(thisMemoryG_patch.keys())
                 )
             )
-        OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{key_gMemory}] - {list(thisMemoryG_patch.keys())}')
         thisMemoryG[key_gMemory_const].update(thisMemoryG_patch)
         end = time.perf_counter()
         OlivOSAIChatAssassin.logger.log(f"CALL PEAK UP - [{key_gMemory}] - DONE {(end - start):.2f} s")

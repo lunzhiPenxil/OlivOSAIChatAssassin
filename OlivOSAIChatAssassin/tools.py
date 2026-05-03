@@ -136,10 +136,15 @@ def get_recommendMatch(rank, gate_rank: int = 1000):
     return res
 
 
-def peak_up_recommendMatch(target: str, dictMap: dict, dictName: str, ageing: int, rate: float = 1.0):
+def peak_up_recommendMatch(
+    target: str, dictMap: dict, dictName: str, ageing: int,
+    rate: float = 1.0,
+    matchedList: 'list|None' = None
+):
     timestamp = int(time.perf_counter())
     res = {}
     res_key_list = []
+    matchedList_this = matchedList if type(matchedList) is list else []
     if dictName not in OlivOSAIChatAssassin.data.gPeakUpCache:
         OlivOSAIChatAssassin.data.gPeakUpCache[dictName] = {}
     cache_key_list = list(OlivOSAIChatAssassin.data.gPeakUpCache[dictName].keys())
@@ -152,12 +157,16 @@ def peak_up_recommendMatch(target: str, dictMap: dict, dictName: str, ageing: in
         dictMap_key_list = list(dictMap.keys())
         if target in OlivOSAIChatAssassin.data.gPeakUpCache[dictName]:
             res_key_list = OlivOSAIChatAssassin.data.gPeakUpCache.get(dictName, {}).get(target, {}).get('keylist', None)
+            if type(res_key_list) is list:
+                for k in res_key_list:
+                    OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k} (cached)')
         else:
             for k in dictMap_key_list:
-                rank = OlivOSAIChatAssassin.tools.get_recommendRank(k, target, rate=rate)
-                if OlivOSAIChatAssassin.tools.get_recommendMatch(rank):
-                    res_key_list.append(k)
-                    OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k} ({rank})')
+                if k not in matchedList_this:
+                    rank = OlivOSAIChatAssassin.tools.get_recommendRank(k, target, rate=rate)
+                    if OlivOSAIChatAssassin.tools.get_recommendMatch(rank):
+                        res_key_list.append(k)
+                        OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k} ({rank})')
         if type(res_key_list) is not list:
             res_key_list = []
         else:
