@@ -32,21 +32,29 @@
 {
     "api_key": "",
     "api_base": "https://api.deepseek.com/v1",
-    "model": "deepseek-chat",
+    "model": "deepseek-v4-flash",
     "max_tokens": 2048,
     "temperature": 0.7,
     "thinking": {"type": "disabled"},
     "reasoning_effort": "max",
     "personality": "你是一个伪装成人类的自豪的新锐AI，你择机加入聊天，避免过多尬聊。别让他们发现你的真实身份！！！",
+    "record_knowledge": true,
+    "retry_count": 3,
     "enabled_groups": [
         "all"
     ],
-    "history_size": 10,
+    "search_ageing": 900,
+    "history_size_min": 5,
+    "history_size": 8,
+    "history_dynamic": false,
+    "history_dynamic_size": 16,
+    "slack_time": 5,
+    "slack_cooldown_time": 30,
     "reply_probability": 1,
     "reply_keywords": [],
     "mention_reply": true,
     "ignore_prefixes": [],
-    "max_message_length": 2000
+    "max_message_length": 2048
 }
 ```
 - 你需要修改`api_key`为你自己的
@@ -55,6 +63,12 @@
 - `history_size`前文消息条数，修改后需要重载插件生效
 - 修改`personality`可以修改人格设定，设计一个符合本工作流特点的性格很重要，因为本工作流会让AI自行决定插入对话的时机
 - 适当提高`temperature`可以优化它的非人感，适当的AI幻觉对于潜入群聊的目标反而是好事，推荐使用`1.0~1.3`，且`1.1`最优
+- `thinking`是针对deepseekV4深度思考适配的，当为`{"type": "enabled"}`时启用
+- `reasoning_effort`为deepseekV4深度思考模式下的思考强度，可选为`high`和`max`
+- `record_knowledge`为`true`时主动记录知识
+- `history_dynamic`控制动态上下文窗口，开启将可以有效利用稀疏注意力的缓存能力
+- `history_dynamic_size`开启动态上下文之后最大的上下文条目数量
+- `slack_time`和`slack_cooldown_time`为回复的宽松和冷却时间，可以优化对话节奏
 
 ### memory.json
 ```json
