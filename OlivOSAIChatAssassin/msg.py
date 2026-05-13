@@ -100,8 +100,12 @@ def add_message_to_history(group_id, message, user_id, nickname, message_id: 'st
         return
     timestamp = time.time()
     message_new = message
-    if len(message_new) > 200:
-        message_new = message_new[:200] + '...'
+    max_len = OlivOSAIChatAssassin.data.gConfig.get(
+        'max_message_length',
+        OlivOSAIChatAssassin.data.configDefault['max_message_length']
+    )
+    if len(message_new) > max_len:
+        message_new = message_new[:max_len] + '...'
     msg_entry = {
         'timestamp': timestamp,
         'time': datetime.now().astimezone().replace(microsecond=0).isoformat(),
@@ -277,9 +281,14 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
             thisMemoryM = OlivOSAIChatAssassin.data.gStaticKnowledge
             rate_this = 0.15
         for j in history:
+            target_str = j.get('message', '')
+            if j.get('nickname', '') is None:
+                target_str = f"我()：{j.get('message', '')}"
+            else:
+                target_str = f"{j.get('nickname', '')}({j.get('user_id', '')})：{j.get('message', '')}"
             thisMemoryG_patch.update(
                 OlivOSAIChatAssassin.tools.peak_up_recommendMatch(
-                    target=j.get('message', ''),
+                    target=target_str,
                     dictMap=thisMemoryM,
                     dictName=key_gMemory,
                     ageing=OlivOSAIChatAssassin.data.gConfig.get(
@@ -564,7 +573,10 @@ def reply(plugin_event, msg: list, total_time_past: float = 0.0):
 def reply_wash(msg: list):
     res = []
     # 限制消息长度
-    max_len = OlivOSAIChatAssassin.data.gConfig.get('max_message_length', 2000)
+    max_len = OlivOSAIChatAssassin.data.gConfig.get(
+        'max_message_length',
+        OlivOSAIChatAssassin.data.configDefault['max_message_length']
+    )
     for i in msg:
         res_i = i
         if type(res_i) is str:
