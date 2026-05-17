@@ -459,7 +459,7 @@ def get_ai_context(
     history,
     content,
     flagMerge: bool = False,
-    prefix: bool = "总结如下记录：",
+    prefix: str = "总结如下记录：",
     patch: 'dict|None' = None
 ):
     # 格式化历史为OpenAI消息格式
