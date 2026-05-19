@@ -619,7 +619,7 @@ def msg_trans(msg: str):
 
 def msg_wash(msg: str):
     res = msg
-    res = re.sub(r'\[OP:image.+\]', '[图片]', res)
-    res = re.sub(r'\[OP:record.+\]', '[语音]', res)
-    res = re.sub(r'\[OP:video.+\]', '[视频]', res)
+    res = re.sub(r'\[OP:image.+\]', '', res)
+    res = re.sub(r'\[OP:record.+\]', '', res)
+    res = re.sub(r'\[OP:video.+\]', '', res)
     return res
