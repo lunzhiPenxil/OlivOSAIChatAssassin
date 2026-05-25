@@ -203,7 +203,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                 "中国": "五千年文明古国，幅员辽阔，正全面推进民族复兴，坚持和平发展。"
             },
             "u": {
-                "123456789": "一个阳光开朗的人，推测为男孩"
+                "123456789": "小明：阳光开朗，积极乐观，乐于社交，推测为男孩"
             },
             "g": "我们刚刚聊到了中国"
         }
@@ -225,6 +225,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
 ## 对遇到的每个用户进行心理侧写，将结果输出至u键的值中
 - 分析当前聊天记录，对遇到的每个用户进行心理侧写
 - 每条心理侧写描述的键使用用户的 user_id
+- 格式参考以下参考输出，一定要附带名称
 - 每条心理侧写描述长度限制在32字以内
 '''
         content += '''
