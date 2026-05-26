@@ -322,7 +322,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
         start = time.perf_counter()
         thisMemoryM = OlivOSAIChatAssassin.data.gMemory.get('全局', {key_gMemory: {}}).get(key_gMemory, {})
         rate_this = 0.1
-        thisMemoryG_patch = {}
+        thisMemoryG_patch: dict[str, str] = {}
         if key_gMemory == key_staticKnowledge:
             thisMemoryM = OlivOSAIChatAssassin.data.gStaticKnowledge
             rate_this = 0.15
@@ -345,6 +345,28 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                     matchedList=list(thisMemoryG_patch.keys())
                 )
             )
+        for _ in range(
+            OlivOSAIChatAssassin.data.gConfig.get(
+                'search_knowledge_deepin',
+                OlivOSAIChatAssassin.data.configDefault['search_knowledge_deepin'],
+            )
+        ):
+            thisMemoryG_patch_deepin = {}
+            for mem_this_data in thisMemoryG_patch:
+                thisMemoryG_patch_deepin.update(
+                    OlivOSAIChatAssassin.tools.peak_up_recommendMatch(
+                        target=thisMemoryG_patch[mem_this_data],
+                        dictMap=thisMemoryM,
+                        dictName=key_gMemory,
+                        ageing=OlivOSAIChatAssassin.data.gConfig.get(
+                            'search_ageing',
+                            OlivOSAIChatAssassin.data.configDefault['search_ageing']
+                        ),
+                        rate=rate_this,
+                        matchedList=list(thisMemoryG_patch.keys())
+                    )
+                )
+            thisMemoryG_patch.update(thisMemoryG_patch_deepin)
         thisMemoryG[key_gMemory_const].update(thisMemoryG_patch)
         end = time.perf_counter()
         OlivOSAIChatAssassin.logger.log(f"CALL PEAK UP - [{key_gMemory}] - DONE {(end - start):.2f} s")

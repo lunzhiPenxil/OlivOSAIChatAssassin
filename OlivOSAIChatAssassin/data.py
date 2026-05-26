@@ -42,6 +42,7 @@ configDefault = {
     'reasoning_effort': 'max',
     'personality': '你是一个伪装成人类的自豪的新锐AI，你择机加入聊天，避免过多尬聊。别让他们发现你的真实身份！！！',
     'record_knowledge': True,
+    'search_knowledge_deepin': 1,
     'retry_count': 3,
     'enabled_groups': [
         'all'
