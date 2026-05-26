@@ -224,6 +224,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
         content += '''
 ## 对遇到的每个用户进行心理侧写，将结果输出至u键的值中
 - 分析当前聊天记录，对遇到的每个用户进行心理侧写
+- 根据语言习惯推断性别
 - 每条心理侧写描述的键使用用户的 user_id
 - 格式参考以下参考输出，一定要附带名称
 - 每条心理侧写描述长度限制在32字以内
@@ -363,7 +364,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                             OlivOSAIChatAssassin.data.configDefault['search_ageing']
                         ),
                         rate=rate_this,
-                        matchedList=list(thisMemoryG_patch.keys())
+                        matchedList=list(thisMemoryG_patch.keys()) + list(thisMemoryG_patch_deepin.keys())
                     )
                 )
             thisMemoryG_patch.update(thisMemoryG_patch_deepin)
