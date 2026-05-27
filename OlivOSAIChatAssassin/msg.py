@@ -364,7 +364,8 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                             OlivOSAIChatAssassin.data.configDefault['search_ageing']
                         ),
                         rate=rate_this,
-                        matchedList=list(thisMemoryG_patch.keys()) + list(thisMemoryG_patch_deepin.keys())
+                        matchedList=list(thisMemoryG_patch.keys()) + list(thisMemoryG_patch_deepin.keys()),
+                        father=mem_this_data
                     )
                 )
             thisMemoryG_patch.update(thisMemoryG_patch_deepin)

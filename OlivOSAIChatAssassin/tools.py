@@ -169,7 +169,8 @@ def get_recommendMatch(rank, gate_rank: int = 1000):
 def peak_up_recommendMatch(
     target: str, dictMap: dict, dictName: str, ageing: int,
     rate: float = 1.0,
-    matchedList: 'list|None' = None
+    matchedList: 'list|None' = None,
+    father: 'str|None' = None
 ):
     timestamp = int(time.perf_counter())
     res = {}
@@ -189,14 +190,16 @@ def peak_up_recommendMatch(
             res_key_list = OlivOSAIChatAssassin.data.gPeakUpCache.get(dictName, {}).get(target, {}).get('keylist', None)
             if type(res_key_list) is list:
                 for k in res_key_list:
-                    OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k} (cached)')
+                    k_str = k if father is None else f'{father} -> {k}'
+                    OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k_str} (cached)')
         else:
             for k in dictMap_key_list:
                 if k not in matchedList_this:
                     rank = OlivOSAIChatAssassin.tools.get_recommendRank(k, target, rate=rate)
                     if OlivOSAIChatAssassin.tools.get_recommendMatch(rank):
                         res_key_list.append(k)
-                        OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k} ({rank})')
+                        k_str = k if father is None else f'{father} -> {k}'
+                        OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k_str} ({rank})')
         if type(res_key_list) is not list:
             res_key_list = []
         else:
