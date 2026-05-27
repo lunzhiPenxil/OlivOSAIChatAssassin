@@ -1,4 +1,5 @@
 import threading
+from collections import deque
 
 import OlivOS
 import OlivOSAIChatAssassin
@@ -22,7 +23,7 @@ gMemory = {
         '知识缓存': {},
         '人物关系': {},
         '用户侧写': {},
-        '图像缓存': {}
+        '图片缓存': {}
     }
 }
 gMemoryLock = threading.Lock()
@@ -32,6 +33,7 @@ gStaticKnowledgeDir = './plugin/data/OlivOSAIChatAssassin/Knowledge'
 gStaticKnowledge = {}
 
 gImageDir = './plugin/data/OlivOSAIChatAssassin/Image'
+gImageCache: 'dict[str, deque]' = {}
 
 gPeakUpCache: 'dict[str, dict[str, dict[str, int|list]]]' = {}
 
@@ -67,6 +69,7 @@ configDefault = {
         'api_base': 'https://api.siliconflow.cn/v1/',
         'model': 'Pro/moonshotai/Kimi-K2.5',
         'mode': 'base64',
-        'enable': False
+        'enable': False,
+        "queue_size": 8
     }
 }

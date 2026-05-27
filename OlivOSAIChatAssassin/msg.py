@@ -5,6 +5,7 @@ import threading
 import re
 import os
 from datetime import datetime
+from collections import deque
 
 import OlivOS
 import OlivOSAIChatAssassin
@@ -67,7 +68,7 @@ def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc):
         return
     # 忽略前缀消息
     message = plugin_event.data.message
-    message, trans_map = msg_trans(message)
+    message = msg_trans(message, group_id)
     message = msg_wash(message)
     if should_ignore(message):
         OlivOSAIChatAssassin.logger.log('IGNORE')
@@ -101,7 +102,7 @@ def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc):
     if not should_reply(group_id, message, plugin_event):
         OlivOSAIChatAssassin.logger.log('SHOULD NOT')
     else:
-        reply_to_group(plugin_event, group_id, message, trans_map)
+        reply_to_group(plugin_event, group_id, message)
 
 
 def should_ignore(message):
@@ -161,7 +162,7 @@ def should_reply(group_id, message, plugin_event):
     return False
 
 
-def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str, trans_map: dict):
+def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
     total_start = time.perf_counter()
     if not OlivOSAIChatAssassin.data.gConfig or not OlivOSAIChatAssassin.data.gConfig.get('api_key'):
         return
@@ -311,7 +312,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str, 
                 '知识缓存',
                 '知识搜索',
                 '用户侧写',
-                '图像缓存',
+                '图片缓存',
             ):
                 thisMemoryC[k] = v
     key_gMemory_const = '知识搜索'
@@ -461,9 +462,10 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str, 
         )
     )
     OlivOSAIChatAssassin.logger.log(f"HISTORY - SIZE [{len(history)}/{history_size_max_print}]")
+    messages_patch = {'当前记忆': thisMemory, '图片缓存': dict(OlivOSAIChatAssassin.data.gImageCache.get(group_id, {}))}
     messages = get_ai_context(
         OlivOSAIChatAssassin.data.gConfig, history, content,
-        patch={'当前记忆': thisMemory, '附带资源': trans_map}
+        patch=messages_patch
     )
     # 调用 API
     reply_list = None
@@ -691,9 +693,8 @@ def reply_trans(msg: list):
     return res
 
 
-def msg_trans(msg: str):
+def msg_trans(msg: str, group_id: str):
     res = msg
-    res_map = {}
 
     def process_image(match: re.Match) -> str:
         original = match.group(0)
@@ -711,8 +712,8 @@ def msg_trans(msg: str):
             and 'url' in params
             and type(params['url']) is str
         ):
-            if params['file'] in OlivOSAIChatAssassin.data.gMemory.get('全局', {}).get('图像缓存', {}):
-                res_data = OlivOSAIChatAssassin.data.gMemory.get('全局', {}).get('图像缓存', {}).get(params['file'])
+            if params['file'] in OlivOSAIChatAssassin.data.gMemory.get('全局', {}).get('图片缓存', {}):
+                res_data = OlivOSAIChatAssassin.data.gMemory.get('全局', {}).get('图片缓存', {}).get(params['file'])
             else:
                 image_url = params['url']
                 if OlivOSAIChatAssassin.data.gConfig.get('ocr_api', {}).get('mode', 'base64'):
@@ -763,8 +764,8 @@ def msg_trans(msg: str):
                     flag_ocr_checked = False
                 if flag_ocr_checked:
                     OlivOSAIChatAssassin.data.gMemory.setdefault('全局', {})
-                    OlivOSAIChatAssassin.data.gMemory['全局'].setdefault('图像缓存', {})
-                    OlivOSAIChatAssassin.data.gMemory['全局']['图像缓存'][params['file']] = ocr_res
+                    OlivOSAIChatAssassin.data.gMemory['全局'].setdefault('图片缓存', {})
+                    OlivOSAIChatAssassin.data.gMemory['全局']['图片缓存'][params['file']] = ocr_res
                     res_data = ocr_res
                     OlivOSAIChatAssassin.load.write_memory()
         flag_res_data_checked = False
@@ -782,8 +783,19 @@ def msg_trans(msg: str):
                 'file' in params
                 and type(params['file']) is str
             ):
-                res_map.setdefault('图像缓存', {})
-                res_map['图像缓存'][params['file']] = res_data
+                OlivOSAIChatAssassin.data.gImageCache.setdefault(
+                    group_id,
+                    deque(
+                        maxlen=OlivOSAIChatAssassin.data.gConfig.get(
+                            'ocr_api',
+                            OlivOSAIChatAssassin.data.configDefault['ocr_api']
+                        ).get(
+                            'queue_size',
+                            OlivOSAIChatAssassin.data.configDefault['ocr_api']['queue_size']
+                        )
+                    )
+                )
+                OlivOSAIChatAssassin.data.gImageCache[group_id].append((params['file'], res_data))
             res = (
                 f"[图片：{res_data.get('content', '未识别成功')}"
                 f"；意图：{res_data.get('intent', '不明')}"
@@ -798,7 +810,7 @@ def msg_trans(msg: str):
         OlivOSAIChatAssassin.data.configDefault['ocr_api']['enable']
     ):
         res = re.sub(r'\[OP:image.+?\]', process_image, res)
-    return res, res_map
+    return res
 
 
 def msg_wash(msg: str):
