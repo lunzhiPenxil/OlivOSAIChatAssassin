@@ -159,6 +159,9 @@ def call_ai_ocr(
         "stream": False,
         "response_format": {
             "type": "json_object"
+        },
+        "thinking": {
+            "type": "disabled"
         }
     }
     OlivOSAIChatAssassin.logger.log("CALL AI OCR - START")
