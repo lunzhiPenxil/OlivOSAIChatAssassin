@@ -310,6 +310,8 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str, 
                 '人物关系',
                 '知识缓存',
                 '知识搜索',
+                '用户侧写',
+                '图像缓存',
             ):
                 thisMemoryC[k] = v
     key_gMemory_const = '知识搜索'
@@ -780,7 +782,8 @@ def msg_trans(msg: str):
                 'file' in params
                 and type(params['file']) is str
             ):
-                res_map[params['file']] = res_data
+                res_map.setdefault('图像缓存', {})
+                res_map['图像缓存'][params['file']] = res_data
             res = (
                 f"[图片：{res_data.get('content', '未识别成功')}"
                 f"；意图：{res_data.get('intent', '不明')}"

@@ -18,10 +18,11 @@ gMemoryDir = './plugin/data/OlivOSAIChatAssassin'
 gMemoryPath = './plugin/data/OlivOSAIChatAssassin/memory.json'
 gMemory = {
     '全局': {
-        '常识': [],
         '知识搜索': {},
         '知识缓存': {},
-        '人物关系': {}
+        '人物关系': {},
+        '用户侧写': {},
+        '图像缓存': {}
     }
 }
 gMemoryLock = threading.Lock()
