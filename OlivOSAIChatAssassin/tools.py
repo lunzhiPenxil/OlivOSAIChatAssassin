@@ -1,5 +1,6 @@
 import time
 import threading
+from typing import Optional
 
 import OlivOSAIChatAssassin
 
@@ -258,3 +259,19 @@ def opcode_parse_params(typeKey: str, markup: str) -> dict:
             k, v = part.split('=', 1)
             params[k] = v
     return params
+
+
+def imgcode_format(data: Optional[dict] = None):
+    res = '[图片：未识别成功，不应回复；意图：不明；类型：不明]'
+    if (
+        type(data) is dict
+        and 'content' in data
+        and 'intent' in data
+        and 'type' in data
+    ):
+        res = (
+            f"[图片：{data.get('content', '未识别成功')}"
+            f"；意图：{data.get('intent', '不明')}"
+            f"；类型：{data.get('type', '不明')}]"
+        )
+    return res

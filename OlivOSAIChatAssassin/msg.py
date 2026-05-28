@@ -6,7 +6,7 @@ import re
 import os
 from datetime import datetime
 from collections import deque
-from typing import Optional
+from typing import Optional, Callable, Tuple
 
 import OlivOS
 import OlivOSAIChatAssassin
@@ -480,7 +480,8 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
     messages_patch = {'当前记忆': thisMemory, '图片缓存': dict(OlivOSAIChatAssassin.data.gImageCache.get(group_id, {}))}
     messages = get_ai_context(
         OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), history, content,
-        patch=messages_patch
+        patch=messages_patch,
+        handler_list=[img_handler]
     )
     # 调用 API
     reply_list = None
@@ -532,7 +533,8 @@ def get_ai_context(
     content,
     flagMerge: bool = False,
     prefix: str = "总结如下记录：",
-    patch: 'dict|None' = None
+    patch: Optional[dict | str] = None,
+    handler_list: Optional[list[Callable]] = None
 ):
     # 格式化历史为OpenAI消息格式
     messages = []
@@ -572,6 +574,8 @@ def get_ai_context(
             else:
                 entry_this = {}
                 entry_this.update(entry)
+                for handler in handler_list:
+                    entry_this, patch = handler(entry_this, patch)
                 if count == max_history_this:
                     entry_this.update(patch)
                 messages.append(
@@ -581,6 +585,23 @@ def get_ai_context(
                     }
                 )
     return messages
+
+
+def img_handler(entry_data: dict, patch_data: dict[str, dict]) -> Tuple[dict, dict]:
+    entry_res = entry_data
+    patch_res = patch_data
+    if (
+        type(entry_data) is dict
+        and type(patch_data) is dict
+        and '图片缓存' in patch_data
+        and type(patch_data['图片缓存']) is dict
+    ):
+        for i in list(patch_data.get('图片缓存', {}).keys()):
+            if OlivOSAIChatAssassin.tools.imgcode_format(patch_data['图片缓存'][i]) in entry_data['message']:
+                entry_res.setdefault('当前图片缓存', {})
+                entry_res['当前图片缓存'][i] = patch_data['图片缓存'][i]
+                patch_res['图片缓存'].pop(i)
+    return entry_res, patch_res
 
 
 def get_json_message(data_str: str):
@@ -791,11 +812,7 @@ def msg_trans(msg: str, group_id: str, *, bot_hash: str):
                     )
                 )
                 OlivOSAIChatAssassin.data.gImageCache[group_id].append((params['file'], res_data))
-            res = (
-                f"[图片：{res_data.get('content', '未识别成功')}"
-                f"；意图：{res_data.get('intent', '不明')}"
-                f"；类型：{res_data.get('type', '不明')}]"
-            )
+            res = OlivOSAIChatAssassin.tools.imgcode_format(res_data)
         return res
     if OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get(
         'ocr_api',
@@ -810,7 +827,7 @@ def msg_trans(msg: str, group_id: str, *, bot_hash: str):
 
 def msg_wash(msg: str):
     res = msg
-    res = re.sub(r'\[OP:image.+?\]', r'[图片：未识别成功，不应回复；意图：不明；类型：不明]', res)
+    res = re.sub(r'\[OP:image.+?\]', OlivOSAIChatAssassin.tools.imgcode_format(), res)
     res = re.sub(r'\[OP:record.+?\]', r'[语音：未识别成功，不应回复；意图：不明；类型：不明]', res)
     res = re.sub(r'\[OP:video.+?\]', r'[视频：未识别成功，不应回复；意图：不明；类型：不明]', res)
     res = re.sub(r'\[OP:json.+?"prompt":"(.+?)".*?\]', r'[卡片：\1]', res)
