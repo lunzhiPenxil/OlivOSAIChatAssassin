@@ -39,6 +39,7 @@
     "reasoning_effort": "max",
     "personality": "你是一个伪装成人类的自豪的新锐AI，你择机加入聊天，避免过多尬聊。别让他们发现你的真实身份！！！",
     "record_knowledge": true,
+    "search_knowledge_deepin": 1,
     "retry_count": 3,
     "enabled_groups": [
         "all"
@@ -54,29 +55,40 @@
     "reply_keywords": [],
     "mention_reply": true,
     "ignore_prefixes": [],
-    "max_message_length": 2048
+    "max_message_length": 2048,
+    "ocr_api": {
+        "api_key": "",
+        "api_base": "https://api.siliconflow.cn/v1/",
+        "model": "Pro/moonshotai/Kimi-K2.5",
+        "mode": "base64",
+        "enable": false,
+        "queue_size": 8
+    }
 }
 ```
-- 你需要修改`api_key`为你自己的
-- 修改`api_base`为你选用的`Open AI 兼容`接口
-- `enabled_groups`为支持的群组列表，字符串格式，填写`all`则在所有群开启
-- `history_size`前文消息条数，修改后需要重载插件生效
-- 修改`personality`可以修改人格设定，设计一个符合本工作流特点的性格很重要，因为本工作流会让AI自行决定插入对话的时机
-- 适当提高`temperature`可以优化它的非人感，适当的AI幻觉对于潜入群聊的目标反而是好事，推荐使用`1.0~1.3`，且`1.1`最优
-- `thinking`是针对deepseekV4深度思考适配的，当为`{"type": "enabled"}`时启用
-- `reasoning_effort`为deepseekV4深度思考模式下的思考强度，可选为`high`和`max`
-- `record_knowledge`为`true`时主动记录知识
-- `history_dynamic`控制动态上下文窗口，开启将可以有效利用稀疏注意力的缓存能力
-- `history_dynamic_size`开启动态上下文之后最大的上下文条目数量
-- `slack_time`和`slack_cooldown_time`为回复的宽松和冷却时间，可以优化对话节奏
+- 你需要修改 `api_key` 为你自己的
+- 修改 `api_base` 为你选用的 `Open AI 兼容` 接口
+- `enabled_groups` 为支持的群组列表，字符串格式，填写 `all` 则在所有群开启
+- `history_size` 前文消息条数，修改后需要重载插件生效
+- 修改 `personality` 可以修改人格设定，设计一个符合本工作流特点的性格很重要，因为本工作流会让AI自行决定插入对话的时机
+- 适当提高 `temperature` 可以优化它的非人感，适当的AI幻觉对于潜入群聊的目标反而是好事，推荐使用 `1.0~1.3` ，且 `1.1` 最优
+- `thinking` 是针对deepseekV4深度思考适配的，当为 `{"type": "enabled"}` 时启用
+- `reasoning_effort` 为deepseekV4深度思考模式下的思考强度，可选为 `high` 和 `max`
+- `record_knowledge` 为 `true` 时主动记录知识
+- `history_dynamic` 控制动态上下文窗口，开启将可以有效利用稀疏注意力的缓存能力
+- `history_dynamic_size` 开启动态上下文之后最大的上下文条目数量
+- `slack_time` 和 `slack_cooldown_time` 为回复的宽松和冷却时间，可以优化对话节奏
+- `ocr_api` 用于配置图像识别， `ocr_api.enable` 为 `true` 时启用， `ocr_api.queue_size` 控制每个群聊最多保留多少图像
 
 ### memory.json
 ```json
 {
     "全局": {
-        "常识": [],
         "知识搜索": {},
-        "人物关系": {}
+        "知识缓存": {},
+        "人物关系": {},
+        "用户侧写": {},
+        "图片缓存": {}
     }
 }
 ```
