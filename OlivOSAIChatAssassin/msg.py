@@ -689,6 +689,8 @@ def reply_history_wash(msg: list):
     for i in msg:
         res_i = i
         if type(res_i) is str:
+            res_i = re.sub(r'\[发图片\]', '', res_i)
+            res_i = re.sub(r'\[图片.*?\]', '', res_i)
             res_i = re.sub(r'\[发图片:(.+)\]', '[发图片]', res_i)
             res.append(res_i)
     return res
@@ -700,6 +702,8 @@ def reply_trans(msg: list):
         res_i = i
         image_dir = os.path.abspath(OlivOSAIChatAssassin.data.gImageDir)
         if type(res_i) is str:
+            res_i = re.sub(r'\[发图片\]', '', res_i)
+            res_i = re.sub(r'\[图片.*?\]', '', res_i)
             res_i = re.sub(
                 r'\[发图片:(.+)\]',
                 lambda m: f'[OP:image,file=file:///{image_dir}/{m.group(1)}]',
