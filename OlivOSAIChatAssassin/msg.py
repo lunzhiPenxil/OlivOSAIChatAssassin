@@ -499,9 +499,27 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
             reply_list = get_json_message(
                 OlivOSAIChatAssassin.webTools.call_ai(
                     OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages,
-                    response_format_override={"type": "json_object"}
+                    response_format_override={"type": "json_object"},
+                    flag_thinking_override=False
                 )
             )
+            if (
+                type(reply_list) is list
+                and len(reply_list) > 0
+            ):
+                thinking = (
+                    OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+                    .get('thinking', {'type': 'disabled'})
+                    .get('type', 'disabled')
+                )
+                if thinking == 'enabled':
+                    OlivOSAIChatAssassin.logger.log('NEED THINK')
+                    reply_list = get_json_message(
+                        OlivOSAIChatAssassin.webTools.call_ai(
+                            OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages,
+                            response_format_override={"type": "json_object"}
+                        )
+                    )
     except Exception as e:
         OlivOSAIChatAssassin.logger.warn(f'API FATAL: {e}')
     # 发送回复
