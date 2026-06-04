@@ -535,7 +535,6 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                     OlivOSAIChatAssassin.logger.log('FIRST THINK SKIP')
                     reply_list = []
             if flag_need_think:
-                OlivOSAIChatAssassin.tools.set_think(bot_hash, group_id)
                 reply_list = get_json_message(
                     OlivOSAIChatAssassin.webTools.call_ai(
                         OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages,
@@ -551,6 +550,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
         if len(reply_list) <= 0:
             OlivOSAIChatAssassin.logger.log('SKIP')
         else:
+            OlivOSAIChatAssassin.tools.set_think(bot_hash, group_id)
             reply_list = reply_wash(reply_list, bot_hash=bot_hash)
             OlivOSAIChatAssassin.logger.log(f'REPLY - {reply_list}')
             add_message_to_history(group_id, ''.join(reply_history_wash(reply_list)), None, None, bot_hash=bot_hash)
