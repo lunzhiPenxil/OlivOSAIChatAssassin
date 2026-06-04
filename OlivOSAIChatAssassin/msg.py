@@ -153,7 +153,7 @@ def should_reply(group_id, message, plugin_event, bot_hash: str):
 
 
 def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
-    bot_hash = plugin_event.bot_info.hash
+    bot_hash: str = str(plugin_event.bot_info.hash)
     total_start = time.perf_counter()
     if (
         not OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
@@ -464,6 +464,16 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
 # 参考输出，以严格的Json格式输出
 {json.dumps(examples_reply, ensure_ascii=False)}
 '''
+    content_first_think = f'''{contentDefault}
+# 固定记忆
+- {json.dumps(thisMemoryC, ensure_ascii=False)}
+
+# 当前任务
+## 判断是否要回复，根据判断结果输出内容
+- 如果判断不回复，则输出 SKIP
+- 如果判断要回复，则输出 NEXT
+- 除此以外，不要尝试输出任何东西
+'''
     # 格式化历史为OpenAI消息格式
     history_size_max_print = (
         OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get(
@@ -483,6 +493,9 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
         patch=messages_patch,
         handler_list=[img_handler]
     )
+    messages_first_think = get_ai_context(
+        OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), history, content_first_think
+    )
     # 调用 API
     reply_list = None
     reply_count = 0
@@ -500,31 +513,35 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                 OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
                 .get('first_thinking', OlivOSAIChatAssassin.data.configDefault['first_thinking'])
             )
-            reply_list = get_json_message(
-                OlivOSAIChatAssassin.webTools.call_ai(
-                    OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages,
-                    response_format_override={"type": "json_object"},
-                    flag_thinking_override=False if first_thinking is True else None
-                )
-            )
+            flag_need_think = True
             if (
                 first_thinking is True
-                and type(reply_list) is list
-                and len(reply_list) > 0
+                and OlivOSAIChatAssassin.tools.get_think(bot_hash, group_id)
             ):
-                thinking = (
-                    OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
-                    .get('thinking', {'type': 'disabled'})
-                    .get('type', 'disabled')
+                flag_need_think = False
+                first_thinking_res = OlivOSAIChatAssassin.webTools.call_ai(
+                    OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages_first_think,
+                    flag_thinking_override=False
                 )
-                if thinking == 'enabled':
-                    OlivOSAIChatAssassin.logger.log('NEED THINK')
-                    reply_list = get_json_message(
-                        OlivOSAIChatAssassin.webTools.call_ai(
-                            OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages,
-                            response_format_override={"type": "json_object"}
-                        )
+                first_thinking_str = str(first_thinking_res).upper()
+                if 'NEXT' in first_thinking_str:
+                    flag_need_think = True
+                elif 'SKIP' in first_thinking_str:
+                    flag_need_think = False
+                    reply_list = []
+                if flag_need_think:
+                    OlivOSAIChatAssassin.logger.log('FIRST THINK PASS')
+                else:
+                    OlivOSAIChatAssassin.logger.log('FIRST THINK SKIP')
+                    reply_list = []
+            if flag_need_think:
+                OlivOSAIChatAssassin.tools.set_think(bot_hash, group_id)
+                reply_list = get_json_message(
+                    OlivOSAIChatAssassin.webTools.call_ai(
+                        OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages,
+                        response_format_override={"type": "json_object"}
                     )
+                )
     except Exception as e:
         OlivOSAIChatAssassin.logger.warn(f'API FATAL: {e}')
     # 发送回复
@@ -597,9 +614,16 @@ def get_ai_context(
             else:
                 entry_this = {}
                 entry_this.update(entry)
-                for handler in handler_list:
-                    entry_this, patch = handler(entry_this, patch)
-                if count == max_history_this:
+                if (
+                    type(handler_list) is list
+                    and type(patch) is dict
+                ):
+                    for handler in handler_list:
+                        entry_this, patch = handler(entry_this, patch)
+                if (
+                    count == max_history_this
+                    and type(patch) is dict
+                ):
                     entry_this.update(patch)
                 messages.append(
                     {

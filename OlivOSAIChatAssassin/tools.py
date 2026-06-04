@@ -261,7 +261,7 @@ def opcode_parse_params(typeKey: str, markup: str) -> dict:
     return params
 
 
-def imgcode_format(data: Optional[dict] = None):
+def imgcode_format(data: Optional[dict] = None) -> str:
     res = '[图片：未识别成功，不应回复；意图：不明；类型：不明]'
     if (
         type(data) is dict
@@ -274,4 +274,24 @@ def imgcode_format(data: Optional[dict] = None):
             f"；意图：{data.get('intent', '不明')}"
             f"；类型：{data.get('type', '不明')}]"
         )
+    return res
+
+
+def set_think(bot_hash: str, group_id: str) -> None:
+    OlivOSAIChatAssassin.data.gThinkTS.setdefault(bot_hash, {})
+    OlivOSAIChatAssassin.data.gThinkTS[bot_hash][group_id] = time.perf_counter()
+
+
+def get_think(bot_hash: str, group_id: str) -> bool:
+    ts_now: float = time.perf_counter()
+    ts_load: float = OlivOSAIChatAssassin.data.gThinkTS.get(bot_hash, {}).get(group_id, 0.0)
+    ts_pass = ts_now - ts_load
+    first_thinking_cooldown = float(
+        OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get(
+            'first_thinking_cooldown',
+            OlivOSAIChatAssassin.data.configDefault['first_thinking_cooldown']
+        )
+    )
+    res: bool = ts_pass > first_thinking_cooldown
+    OlivOSAIChatAssassin.logger.log(f"FIRST THINK - {str(res).upper()} [{ts_pass:.1f}/{first_thinking_cooldown:.1f}]")
     return res
