@@ -421,14 +421,18 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                 if flagHit:
                     OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{key_gMemory}] {flagHit_str}')
                     thisMemoryG[key_gMemory_const][k] = v
-    thisMemory = {
-        '全局': thisMemoryG,
-        group_id: (
-            OlivOSAIChatAssassin.data.gData
-            .getMemory(bot_hash)
-            .get(group_id, OlivOSAIChatAssassin.data.gMemoryDefaultStr)
-        )
+    thisGroupMemory = (
+        OlivOSAIChatAssassin.data.gData
+        .getMemory(bot_hash)
+        .get(group_id, OlivOSAIChatAssassin.data.gMemoryDefaultStr)
+    )
+    thisGroupMemoryDict = {
+        group_id: thisGroupMemory
     }
+    thisMemory = {
+        '全局': thisMemoryG
+    }
+    thisMemory.update(thisGroupMemoryDict)
     if not OlivOSAIChatAssassin.data.gGroupLock[group_id].slack():
         OlivOSAIChatAssassin.logger.log(
             f'NEXT - {time.perf_counter() - total_start:.2f}'
@@ -465,6 +469,10 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
 {json.dumps(examples_reply, ensure_ascii=False)}
 '''
     content_first_think = f'''{contentDefault}
+# 信息
+- 最新的消息中附带当前的记忆信息
+- 越新的消息越重要
+
 # 固定记忆
 - {json.dumps(thisMemoryC, ensure_ascii=False)}
 
@@ -472,7 +480,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
 ## 判断是否要回复，根据判断结果输出内容
 - 如果判断不回复，则输出 SKIP
 - 如果判断要回复，则输出 NEXT
-- 除此以外，不要尝试输出任何东西
+- 除此以外，不要尝试输出任何其它东西
 '''
     # 格式化历史为OpenAI消息格式
     history_size_max_print = (
@@ -493,8 +501,10 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
         patch=messages_patch,
         handler_list=[img_handler]
     )
+    messages_first_think_patch = {'当前记忆': thisMemory}
     messages_first_think = get_ai_context(
-        OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), history, content_first_think
+        OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), history, content_first_think,
+        patch=messages_first_think_patch
     )
     # 调用 API
     reply_list = None
@@ -529,10 +539,12 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                 elif 'SKIP' in first_thinking_str:
                     flag_need_think = False
                     reply_list = []
-                if flag_need_think:
-                    OlivOSAIChatAssassin.logger.log('FIRST THINK PASS')
                 else:
-                    OlivOSAIChatAssassin.logger.log('FIRST THINK SKIP')
+                    flag_need_think = True
+                if flag_need_think:
+                    OlivOSAIChatAssassin.logger.log(f"FIRST THINK - PASS - {first_thinking_res}")
+                else:
+                    OlivOSAIChatAssassin.logger.log(f"FIRST THINK - SKIP - {first_thinking_res}")
                     reply_list = []
             if flag_need_think:
                 reply_list = get_json_message(
