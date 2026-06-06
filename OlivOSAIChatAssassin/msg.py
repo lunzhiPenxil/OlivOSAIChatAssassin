@@ -478,6 +478,8 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
 
 # 当前任务
 ## 判断是否要回复，根据判断结果输出内容
+- 判断是否要回复
+- 无视人格设定中有关回复概率的部分，仅从上下文和人格设定细节判断
 - 如果判断不回复，则输出 SKIP
 - 如果判断要回复，则输出 NEXT
 - 除此以外，不要尝试输出任何其它东西
@@ -501,7 +503,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
         patch=messages_patch,
         handler_list=[img_handler]
     )
-    messages_first_think_patch = {'当前记忆': thisMemory}
+    messages_first_think_patch = {'当前记忆': thisGroupMemoryDict}
     messages_first_think = get_ai_context(
         OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), history, content_first_think,
         patch=messages_first_think_patch
