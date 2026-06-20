@@ -801,6 +801,13 @@ def msg_trans(msg: str, group_id: str, *, bot_hash: str):
                     .get('图片缓存', {})
                     .get(params['file'])
                 )
+                if not os.path.exists(os.path.join(OlivOSAIChatAssassin.data.gImageDir, params['file'])):
+                    image_url = params['url']
+                    OlivOSAIChatAssassin.webTools.download_image_to_local(
+                        url=image_url,
+                        save_dir=OlivOSAIChatAssassin.data.gImageDir,
+                        filename=params['file']
+                    )
             else:
                 image_url = params['url']
                 if OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get('ocr_api', {}).get('mode', 'base64'):
