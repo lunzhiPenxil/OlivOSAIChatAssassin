@@ -4,6 +4,7 @@ import time
 import threading
 import re
 import os
+import hashlib
 from datetime import datetime
 from collections import deque
 from typing import Optional, Callable, Tuple
@@ -787,6 +788,17 @@ def msg_trans(msg: str, group_id: str, *, bot_hash: str):
             "intent": "意图描述",
             "type": "类型描述"
         }
+        if (
+            'file' in params
+            and type(params['file']) is str
+            and 'url' not in params
+            and (
+                params['file'].startswith('http://')
+                or params['file'].startswith('https://')
+            )
+        ):
+            params['url'] = params['file']
+            params['file'] = hashlib.md5(params['file'].encode('utf-8')).hexdigest()
         if (
             'file' in params
             and type(params['file']) is str
