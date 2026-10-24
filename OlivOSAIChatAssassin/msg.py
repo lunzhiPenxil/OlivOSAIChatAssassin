@@ -863,9 +863,11 @@ def msg_trans(msg: str, group_id: str, *, bot_hash: str):
                 else:
                     flag_ocr_checked = False
                 if flag_ocr_checked:
-                    OlivOSAIChatAssassin.data.gData.getMemory(bot_hash).setdefault('全局', {})
-                    OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局'].setdefault('图片缓存', {})
-                    OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局']['图片缓存'][params['file']] = ocr_res
+                    with OlivOSAIChatAssassin.data.gMemoryLock:
+                        memory = OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)
+                        memory.setdefault('全局', {})
+                        memory['全局'].setdefault('图片缓存', {})
+                        memory['全局']['图片缓存'][params['file']] = ocr_res
                     res_data = ocr_res
                     OlivOSAIChatAssassin.load.write_memory(bot_hash=bot_hash)
         flag_res_data_checked = False

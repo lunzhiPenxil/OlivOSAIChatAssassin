@@ -15,5 +15,12 @@
             "model": "all"
         }
     ],
+    "webui_config": [
+        {
+            "title": "群聊刺客",
+            "type": "iframe",
+            "path": "webui/index.html"
+        }
+    ],
     "menu_config": []
 }

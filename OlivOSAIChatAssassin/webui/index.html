@@ -1,0 +1,1964 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>群聊刺客</title>
+    <style>
+:root {
+    color-scheme: light dark;
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-soft: #eef1f5;
+    --border: #d8dde5;
+    --text: #1f2937;
+    --muted: #667085;
+    --accent: #2563eb;
+    --accent-strong: #1d4ed8;
+    --accent-soft: #dbeafe;
+    --danger: #b42318;
+    --danger-soft: #fee4e2;
+    --warning: #b54708;
+    --warning-soft: #fef0c7;
+    --success: #067647;
+    --success-soft: #dcfae6;
+    --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    --radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #0f141b;
+        --surface: #171e28;
+        --surface-soft: #202936;
+        --border: #2e3a4a;
+        --text: #e8edf4;
+        --muted: #9aa8ba;
+        --accent: #79a8ff;
+        --accent-strong: #9dbfff;
+        --accent-soft: #1d3357;
+        --danger: #ff9f98;
+        --danger-soft: #451c1c;
+    --warning: #fec84b;
+    --warning-soft: #3b2b0a;
+        --success: #7ee2a8;
+        --success-soft: #163927;
+        --shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    min-height: 100%;
+    background: var(--bg);
+}
+
+body {
+    min-height: 100vh;
+    margin: 0;
+    color: var(--text);
+    background:
+        radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 26rem),
+        var(--bg);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+code {
+    padding: 0.1em 0.35em;
+    border-radius: 6px;
+    background: var(--surface-soft);
+    font-family: "Cascadia Code", Consolas, monospace;
+}
+
+.page-shell {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.title-block h1 {
+    margin: 0;
+    font-size: clamp(1.6rem, 2.8vw, 2.2rem);
+    line-height: 1.2;
+}
+
+.eyebrow {
+    margin-bottom: 4px;
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.small-text {
+    font-size: 0.78rem;
+}
+
+.account-tools {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    min-width: min(420px, 100%);
+}
+
+.compact-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.tabs {
+    display: flex;
+    gap: 6px;
+    margin: 20px 0;
+    padding: 6px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+}
+
+.tab-button {
+    flex: 0 0 auto;
+    padding: 8px 18px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--muted);
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tab-button:hover {
+    color: var(--text);
+    background: var(--surface-soft);
+}
+
+.tab-button.selected {
+    color: #ffffff;
+    background: var(--accent);
+}
+
+.tab-panel {
+    animation: panel-in 140ms ease-out;
+}
+
+@keyframes panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(3px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.section-heading h2 {
+    margin: 0 0 2px;
+    font-size: 1.35rem;
+}
+
+.section-heading p {
+    margin: 0;
+}
+
+.sticky-heading {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    padding: 14px 0;
+    background: linear-gradient(var(--bg) 75%, transparent);
+}
+
+.action-row {
+    display: flex;
+    gap: 8px;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.card {
+    display: flex;
+    min-height: 112px;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.card-label {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.card strong {
+    overflow-wrap: anywhere;
+    font-size: 1.15rem;
+}
+
+.notice {
+    margin-top: 16px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.notice h3 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+}
+
+.notice p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.form-section {
+    margin: 0 0 18px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.form-section legend {
+    padding: 0 8px;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.form-note {
+    margin: -2px 0 16px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.span-2 {
+    grid-column: span 2;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.field > span {
+    font-weight: 600;
+}
+
+.field small {
+    min-height: 1.2em;
+}
+
+.check-field {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 42px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
+    cursor: pointer;
+}
+
+.check-field input {
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--text);
+    background: var(--surface);
+    font: inherit;
+}
+
+textarea {
+    min-height: 78px;
+    resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+}
+
+input[aria-invalid="true"],
+textarea[aria-invalid="true"],
+select[aria-invalid="true"] {
+    border-color: var(--danger);
+}
+
+.secret-row {
+    display: flex;
+    gap: 8px;
+}
+
+.secret-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.button {
+    padding: 9px 15px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    font: inherit;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.button.primary {
+    color: #ffffff;
+    background: var(--accent);
+}
+
+.button.primary:hover:not(:disabled) {
+    background: var(--accent-strong);
+}
+
+.button.secondary {
+    border-color: var(--border);
+    color: var(--text);
+    background: var(--surface);
+}
+
+.button.secondary:hover:not(:disabled) {
+    background: var(--surface-soft);
+}
+
+.button.small {
+    padding: 6px 10px;
+    font-size: 0.82rem;
+}
+
+.button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.error-box,
+.banner {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--border));
+    border-radius: 10px;
+    color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.error-box ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+.warning-box {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--warning) 38%, var(--border));
+    border-radius: 10px;
+    color: var(--warning);
+    background: var(--warning-soft);
+}
+
+.warning-box ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+.banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.banner.success {
+    border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+    color: var(--success);
+    background: var(--success-soft);
+}
+
+.banner[hidden] {
+    display: none;
+}
+
+.memory-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 2fr);
+    gap: 16px;
+}
+
+.memory-sidebar,
+.memory-detail {
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.memory-sidebar h3 {
+    margin: 0 0 10px;
+    font-size: 0.92rem;
+}
+
+.memory-sidebar h3:not(:first-child) {
+    margin-top: 22px;
+}
+
+.memory-chip-list,
+.memory-group-list {
+    display: flex;
+    max-height: 52vh;
+    flex-direction: column;
+    gap: 7px;
+    overflow: auto;
+}
+
+.memory-chip,
+.memory-group {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--text);
+    background: var(--surface-soft);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.memory-chip:hover,
+.memory-group:hover,
+.memory-chip.selected,
+.memory-group.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.memory-chip small,
+.memory-group small {
+    display: block;
+    overflow: hidden;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.memory-detail h3 {
+    margin: 0 0 4px;
+    overflow-wrap: anywhere;
+}
+
+.memory-detail pre {
+    max-height: 48vh;
+    margin: 10px 0 0;
+    padding: 12px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.memory-entries {
+    margin: 12px 0 0;
+}
+
+.memory-entries dt {
+    margin-top: 12px;
+    color: var(--accent);
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.memory-entries dd {
+    margin: 4px 0 0;
+}
+
+.pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.empty-state {
+    padding: 18px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.toast {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 20;
+    max-width: min(420px, calc(100vw - 44px));
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.toast.error {
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+    color: var(--danger);
+}
+
+noscript {
+    display: block;
+    padding: 20px;
+    color: var(--danger);
+    text-align: center;
+}
+
+@media (max-width: 760px) {
+    .page-shell {
+        padding: 14px;
+    }
+
+    .topbar,
+    .section-heading,
+    .account-tools,
+    .memory-layout {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .topbar {
+        gap: 16px;
+        padding: 18px;
+    }
+
+    .account-tools {
+        min-width: 0;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .span-2 {
+        grid-column: auto;
+    }
+
+    .secret-row {
+        flex-direction: column;
+    }
+
+    .sticky-heading {
+        position: static;
+        background: transparent;
+    }
+
+    .memory-chip-list,
+    .memory-group-list {
+        max-height: 28vh;
+    }
+}
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <div class="title-block">
+                <div class="eyebrow">OlivOS 插件</div>
+                <h1>群聊刺客</h1>
+                <p id="pluginMeta" class="muted">正在读取插件信息…</p>
+            </div>
+            <div class="account-tools">
+                <label class="field compact-field" for="botSelect">
+                    <span>当前账号</span>
+                    <select id="botSelect" disabled>
+                        <option>正在加载…</option>
+                    </select>
+                </label>
+                <button id="refreshButton" class="button secondary" type="button" disabled>刷新</button>
+            </div>
+        </header>
+
+        <div id="banner" class="banner" role="alert" hidden>
+            <span id="bannerText"></span>
+            <button id="bannerAction" class="button small" type="button" hidden>重新加载</button>
+        </div>
+
+        <nav class="tabs" role="tablist" aria-label="页面导航">
+            <button id="tab-overview" class="tab-button selected" type="button" role="tab" data-tab="overview" aria-controls="panel-overview" aria-selected="true" tabindex="0">概览</button>
+            <button id="tab-settings" class="tab-button" type="button" role="tab" data-tab="settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">设置</button>
+            <button id="tab-memory" class="tab-button" type="button" role="tab" data-tab="memory" aria-controls="panel-memory" aria-selected="false" tabindex="-1">记忆</button>
+            <button id="tab-about" class="tab-button" type="button" role="tab" data-tab="about" aria-controls="panel-about" aria-selected="false" tabindex="-1">关于</button>
+        </nav>
+
+        <main>
+            <section id="panel-overview" class="tab-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-overview">
+                <div class="section-heading">
+                    <div>
+                        <h2>运行概览</h2>
+                        <p class="muted">查看当前账号的配置与记忆状态。</p>
+                    </div>
+                </div>
+                <div class="card-grid">
+                    <article class="card">
+                        <span class="card-label">账号</span>
+                        <strong id="overviewAccount">—</strong>
+                        <span id="overviewPlatform" class="muted small-text">—</span>
+                    </article>
+                    <article class="card">
+                        <span class="card-label">主 API Key</span>
+                        <strong id="overviewApi">—</strong>
+                    </article>
+                    <article class="card">
+                        <span class="card-label">图片识别</span>
+                        <strong id="overviewOcr">—</strong>
+                    </article>
+                    <article class="card">
+                        <span class="card-label">群记忆</span>
+                        <strong id="overviewGroups">—</strong>
+                    </article>
+                    <article class="card">
+                        <span class="card-label">知识缓存</span>
+                        <strong id="overviewKnowledge">—</strong>
+                    </article>
+                    <article class="card">
+                        <span class="card-label">配置来源</span>
+                        <strong id="overviewSource">—</strong>
+                    </article>
+                    <article class="card">
+                        <span class="card-label">配置版本</span>
+                        <strong id="overviewRevision">—</strong>
+                    </article>
+                </div>
+                <article class="notice">
+                    <h3>生效提示</h3>
+                    <p>模型、接口和行为配置通常在下一条消息生效。历史窗口、松弛时间和已存在群的图片队列长度需要重载插件后完整生效。</p>
+                </article>
+            </section>
+
+            <section id="panel-settings" class="tab-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-settings" hidden>
+                <form id="configForm" novalidate>
+                    <div class="section-heading sticky-heading">
+                        <div>
+                            <h2>插件设置</h2>
+                            <p class="muted">保存时会检查配置文件是否已被其他操作修改。</p>
+                        </div>
+                        <div class="action-row">
+                            <button id="resetButton" class="button secondary" type="button">重置</button>
+                            <button id="saveButton" class="button primary" type="button" disabled>保存设置</button>
+                        </div>
+                    </div>
+                    <div id="configErrors" class="error-box" role="alert" hidden></div>
+                    <div id="configWarnings" class="warning-box" role="status" hidden></div>
+
+                    <fieldset class="form-section">
+                        <legend>模型与接口</legend>
+                        <div class="form-grid">
+                            <label class="field span-2" for="apiKey">
+                                <span>主 API Key</span>
+                                <div class="secret-row">
+                                    <input id="apiKey" data-field="api_key" type="password" autocomplete="off" placeholder="正在加载…">
+                                    <button class="button small secondary" type="button" data-clear-secret="api_key">清除已保存密钥</button>
+                                </div>
+                                <small id="apiKeyHint" class="muted"></small>
+                            </label>
+                            <label class="field span-2" for="apiBase">
+                                <span>API Base</span>
+                                <input id="apiBase" data-field="api_base" type="url" required placeholder="https://api.example.com/v1">
+                            </label>
+                            <label class="field" for="model">
+                                <span>模型</span>
+                                <input id="model" data-field="model" type="text" required maxlength="256">
+                            </label>
+                            <label class="field" for="maxTokens">
+                                <span>最大输出 Token</span>
+                                <input id="maxTokens" data-field="max_tokens" type="number" min="1" max="1000000" step="1" required>
+                            </label>
+                            <label class="field" for="temperature">
+                                <span>Temperature</span>
+                                <input id="temperature" data-field="temperature" type="number" min="0" max="2" step="0.05" required>
+                            </label>
+                            <label class="field" for="reasoningEffort">
+                                <span>思考强度</span>
+                                <select id="reasoningEffort" data-field="reasoning_effort">
+                                    <option value="high">high</option>
+                                    <option value="max">max</option>
+                                </select>
+                            </label>
+                            <label class="check-field" for="thinkingEnabled">
+                                <input id="thinkingEnabled" data-field="thinking" type="checkbox">
+                                <span>启用深度思考</span>
+                            </label>
+                            <label class="check-field" for="firstThinking">
+                                <input id="firstThinking" data-field="first_thinking" type="checkbox">
+                                <span>启用初步判断</span>
+                            </label>
+                            <label class="field" for="firstThinkingCooldown">
+                                <span>初步判断冷却（秒）</span>
+                                <input id="firstThinkingCooldown" data-field="first_thinking_cooldown" type="number" min="0" max="86400" step="1">
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend>行为与群组</legend>
+                        <div class="form-grid">
+                            <label class="field span-2" for="personality">
+                                <span>人格设定</span>
+                                <textarea id="personality" data-field="personality" rows="7" maxlength="100000"></textarea>
+                            </label>
+                            <label class="check-field" for="recordKnowledge">
+                                <input id="recordKnowledge" data-field="record_knowledge" type="checkbox">
+                                <span>记录知识与用户侧写</span>
+                            </label>
+                            <label class="check-field" for="mentionReply">
+                                <input id="mentionReply" data-field="mention_reply" type="checkbox">
+                                <span>被 @ 时回复</span>
+                            </label>
+                            <label class="field" for="replyProbability">
+                                <span>随机回复概率</span>
+                                <input id="replyProbability" data-field="reply_probability" type="number" min="0" max="1" step="0.01">
+                            </label>
+                            <label class="field" for="retryCount">
+                                <span>回复重试次数</span>
+                                <input id="retryCount" data-field="retry_count" type="number" min="1" max="10" step="1">
+                            </label>
+                            <label class="field" for="searchKnowledgeDeepin">
+                                <span>知识检索深度</span>
+                                <input id="searchKnowledgeDeepin" data-field="search_knowledge_deepin" type="number" min="0" max="16" step="1">
+                            </label>
+                            <label class="field" for="searchAgeing">
+                                <span>检索缓存老化（秒）</span>
+                                <input id="searchAgeing" data-field="search_ageing" type="number" min="1" max="2592000" step="1">
+                            </label>
+                            <label class="field" for="maxMessageLength">
+                                <span>单条消息长度上限</span>
+                                <input id="maxMessageLength" data-field="max_message_length" type="number" min="1" max="1000000" step="1">
+                            </label>
+                            <label class="field span-2" for="enabledGroups">
+                                <span>启用群组（每行一个，或填 all）</span>
+                                <textarea id="enabledGroups" data-field="enabled_groups" rows="4" spellcheck="false"></textarea>
+                            </label>
+                            <label class="field span-2" for="replyKeywords">
+                                <span>回复关键词（每行一个）</span>
+                                <textarea id="replyKeywords" data-field="reply_keywords" rows="3"></textarea>
+                            </label>
+                            <label class="field span-2" for="ignorePrefixes">
+                                <span>忽略前缀（每行一个）</span>
+                                <textarea id="ignorePrefixes" data-field="ignore_prefixes" rows="3"></textarea>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend>上下文与节奏</legend>
+                        <p class="muted form-note">这些设置会改变已有群队列或锁的初始化条件，修改后重载插件才能完整生效。</p>
+                        <div class="form-grid">
+                            <label class="field" for="historySizeMin">
+                                <span>最少历史条数</span>
+                                <input id="historySizeMin" data-field="history_size_min" type="number" min="1" max="1000" step="1">
+                            </label>
+                            <label class="field" for="historySize">
+                                <span>历史窗口大小</span>
+                                <input id="historySize" data-field="history_size" type="number" min="1" max="1000" step="1">
+                            </label>
+                            <label class="check-field" for="historyDynamic">
+                                <input id="historyDynamic" data-field="history_dynamic" type="checkbox">
+                                <span>启用动态历史窗口</span>
+                            </label>
+                            <label class="field" for="historyDynamicSize">
+                                <span>动态窗口最大条数</span>
+                                <input id="historyDynamicSize" data-field="history_dynamic_size" type="number" min="1" max="10000" step="1">
+                            </label>
+                            <label class="field" for="slackTime">
+                                <span>松弛时间（秒）</span>
+                                <input id="slackTime" data-field="slack_time" type="number" min="0" max="300" step="0.1">
+                            </label>
+                            <label class="field" for="slackCooldown">
+                                <span>松弛冷却（秒）</span>
+                                <input id="slackCooldown" data-field="slack_cooldown_time" type="number" min="0" max="3600" step="0.1">
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend>图片识别</legend>
+                        <div class="form-grid">
+                            <label class="check-field" for="ocrEnable">
+                                <input id="ocrEnable" data-field="ocr_api.enable" type="checkbox">
+                                <span>启用图片识别</span>
+                            </label>
+                            <label class="field" for="ocrQueueSize">
+                                <span>每群图片缓存数量</span>
+                                <input id="ocrQueueSize" data-field="ocr_api.queue_size" type="number" min="1" max="128" step="1">
+                            </label>
+                            <label class="field span-2" for="ocrApiKey">
+                                <span>OCR API Key</span>
+                                <div class="secret-row">
+                                    <input id="ocrApiKey" data-field="ocr_api.api_key" type="password" autocomplete="off" placeholder="正在加载…">
+                                    <button class="button small secondary" type="button" data-clear-secret="ocr_api.api_key">清除已保存密钥</button>
+                                </div>
+                                <small id="ocrApiKeyHint" class="muted"></small>
+                            </label>
+                            <label class="field span-2" for="ocrApiBase">
+                                <span>OCR API Base</span>
+                                <input id="ocrApiBase" data-field="ocr_api.api_base" type="url">
+                            </label>
+                            <label class="field" for="ocrModel">
+                                <span>OCR 模型</span>
+                                <input id="ocrModel" data-field="ocr_api.model" type="text" maxlength="256">
+                            </label>
+                            <label class="field" for="ocrMode">
+                                <span>图片传输方式</span>
+                                <select id="ocrMode" data-field="ocr_api.mode">
+                                    <option value="base64">base64</option>
+                                </select>
+                            </label>
+                        </div>
+                    </fieldset>
+                </form>
+            </section>
+
+            <section id="panel-memory" class="tab-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-memory" hidden>
+                <div class="section-heading">
+                    <div>
+                        <h2>记忆浏览</h2>
+                        <p class="muted">当前为只读视图；AI 更新记忆后刷新即可看到最新内容。</p>
+                    </div>
+                    <button id="memoryRefreshButton" class="button secondary" type="button">刷新记忆</button>
+                </div>
+                <div class="memory-layout">
+                    <aside class="memory-sidebar">
+                        <h3>全局区块</h3>
+                        <div id="globalSectionList" class="memory-chip-list"></div>
+                        <h3>群记忆</h3>
+                        <div id="groupMemoryList" class="memory-group-list"></div>
+                    </aside>
+                    <article id="memoryDetail" class="memory-detail">
+                        <p class="muted">选择左侧区块查看内容。</p>
+                    </article>
+                </div>
+            </section>
+
+            <section id="panel-about" class="tab-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-about" hidden>
+                <div class="section-heading">
+                    <div>
+                        <h2>关于</h2>
+                        <p class="muted">页面通过 OlivOS 插件消息桥访问本地插件数据。</p>
+                    </div>
+                </div>
+                <article class="notice">
+                    <h3>安全边界</h3>
+                    <p>页面不会读取 WebUI 密码、token 或 session。API Key 只显示是否已配置，保存时留空表示保持原值。</p>
+                </article>
+                <article class="notice">
+                    <h3>协议</h3>
+                    <p>命名空间：<code>OlivOSAIChatAssassin</code><br>WebUI API 版本：<code>1</code></p>
+                </article>
+            </section>
+        </main>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <noscript>此页面需要启用 JavaScript。</noscript>
+    <script>
+(function () {
+    'use strict';
+
+    const EVENTS = {
+        bootstrap: 'OlivOSAIChatAssassin_WebUI_Bootstrap',
+        getConfig: 'OlivOSAIChatAssassin_WebUI_GetConfig',
+        saveConfig: 'OlivOSAIChatAssassin_WebUI_SaveConfig',
+        memoryOverview: 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview',
+        memorySection: 'OlivOSAIChatAssassin_WebUI_GetMemorySection',
+    };
+    const API_VERSION = 1;
+    const REQUEST_TIMEOUT = 10000;
+    const MEMORY_PAGE_SIZE = 50;
+    const MAX_REQUEST_BYTES = 1024 * 1024;
+
+    const pendingRequests = new Map();
+    const state = {
+        bots: [],
+        selectedBot: null,
+        config: null,
+        secrets: {},
+        source: 'other',
+        revision: '',
+        overview: null,
+        activeTab: 'overview',
+        ready: false,
+        visible: true,
+        dirty: false,
+        busy: false,
+        conflict: false,
+        clearSecrets: new Set(),
+        dirtyFields: new Set(),
+        memoryQuery: null,
+        requestSequence: 0,
+        requestTickets: {config: 0, overview: 0, memory: 0},
+        botEpoch: 0,
+        toastTimer: null,
+    };
+
+    const elements = {};
+
+    document.addEventListener('DOMContentLoaded', init);
+    window.addEventListener('message', handleWindowMessage);
+
+    function init() {
+        [
+            'pluginMeta', 'botSelect', 'refreshButton', 'banner', 'bannerText', 'bannerAction',
+            'overviewAccount', 'overviewPlatform', 'overviewApi', 'overviewOcr', 'overviewGroups',
+            'overviewKnowledge', 'overviewSource', 'overviewRevision', 'configForm', 'configErrors',
+            'configWarnings', 'apiKey',
+            'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'temperature', 'thinkingEnabled',
+            'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
+            'recordKnowledge', 'mentionReply', 'replyProbability', 'retryCount',
+            'searchKnowledgeDeepin', 'searchAgeing', 'maxMessageLength', 'enabledGroups',
+            'replyKeywords', 'ignorePrefixes', 'historySizeMin', 'historySize', 'historyDynamic',
+            'historyDynamicSize', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
+            'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
+            'saveButton', 'memoryRefreshButton', 'globalSectionList', 'groupMemoryList',
+            'memoryDetail', 'toast',
+        ].forEach(function (id) {
+            elements[id] = document.getElementById(id);
+        });
+
+        document.querySelectorAll('.tab-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                activateTab(button.dataset.tab);
+            });
+        });
+        document.querySelectorAll('[data-clear-secret]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                toggleSecretClear(button.dataset.clearSecret);
+            });
+        });
+        [elements.apiKey, elements.ocrApiKey].forEach(function (input) {
+            input.addEventListener('input', function () {
+                const path = input === elements.apiKey ? 'api_key' : 'ocr_api.api_key';
+                if (input.value.trim() && state.clearSecrets.has(path)) {
+                    state.clearSecrets.delete(path);
+                    updateSecretState();
+                }
+            });
+        });
+
+        elements.botSelect.addEventListener('change', function () {
+            selectBot(elements.botSelect.value);
+        });
+        elements.refreshButton.addEventListener('click', refreshCurrent);
+        elements.memoryRefreshButton.addEventListener('click', refreshMemory);
+        elements.resetButton.addEventListener('click', function () {
+            if (!state.config) {
+                return;
+            }
+            fillConfigForm();
+            showToast('已恢复为最近一次加载的设置');
+        });
+        elements.saveButton.addEventListener('click', saveConfig);
+        elements.bannerAction.addEventListener('click', function () {
+            if (state.selectedBot) {
+                loadBotData(state.selectedBot, true);
+            }
+        });
+        elements.configForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+        });
+        elements.configForm.addEventListener('input', markDirty);
+        elements.configForm.addEventListener('change', markDirty);
+
+        window.setInterval(function () {
+            if (!state.visible || document.hidden || state.busy || state.dirty || !state.selectedBot) {
+                return;
+            }
+            if (state.activeTab !== 'overview' && state.activeTab !== 'memory') {
+                return;
+            }
+            loadOverview(state.selectedBot).catch(function () {
+                return undefined;
+            });
+        }, 30000);
+
+        state.ready = true;
+        loadBootstrap();
+    }
+
+    function handleWindowMessage(event) {
+        if (event.source !== window.parent) {
+            return;
+        }
+        const message = event.data;
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+        if (message.type === 'olivos:plugin_visibility') {
+            if (!state.ready) {
+                return;
+            }
+            state.visible = message.visible === true;
+            if (state.visible && state.selectedBot && !state.dirty && !state.busy) {
+                loadOverview(state.selectedBot).catch(function () {
+                    return undefined;
+                });
+            }
+            return;
+        }
+        if (message.type !== 'olivos:plugin_reply') {
+            return;
+        }
+        const pending = pendingRequests.get(message.request_id);
+        if (!pending) {
+            return;
+        }
+        window.clearTimeout(pending.timer);
+        pendingRequests.delete(message.request_id);
+        if (typeof message.error === 'string') {
+            pending.reject(new Error(message.error));
+            return;
+        }
+        if (!message.payload || typeof message.payload !== 'object') {
+            pending.reject(new Error('插件返回了无效的回包'));
+            return;
+        }
+        pending.resolve(message.payload);
+    }
+
+    function requestBridge(eventName, payload) {
+        return new Promise(function (resolve, reject) {
+            if (window.parent === window) {
+                reject(new Error('请从 OlivOS WebUI 侧栏的插件页面打开'));
+                return;
+            }
+            state.requestSequence += 1;
+            const requestId = Date.now() + '-' + state.requestSequence;
+            const requestMessage = {
+                type: 'olivos:plugin_event',
+                event: eventName,
+                request_id: requestId,
+                payload: payload,
+            };
+            let requestSize = 0;
+            try {
+                requestSize = new Blob([JSON.stringify(requestMessage)]).size;
+            } catch (error) {
+                reject(new Error('请求内容无法序列化'));
+                return;
+            }
+            if (requestSize > MAX_REQUEST_BYTES) {
+                reject(new Error('请求内容过大，请缩短文本后重试'));
+                return;
+            }
+            const timer = window.setTimeout(function () {
+                pendingRequests.delete(requestId);
+                reject(new Error('请求超时，请稍后重试'));
+            }, REQUEST_TIMEOUT);
+            pendingRequests.set(requestId, {
+                resolve: resolve,
+                reject: reject,
+                timer: timer,
+            });
+            try {
+                window.parent.postMessage(requestMessage, '*');
+            } catch (error) {
+                window.clearTimeout(timer);
+                pendingRequests.delete(requestId);
+                reject(error);
+            }
+        });
+    }
+
+    async function callApi(eventName, payload) {
+        const response = await requestBridge(eventName, Object.assign({
+            api_version: API_VERSION,
+        }, payload || {}));
+        if (!response || response.ok !== true) {
+            const errorData = response && typeof response.error === 'object' ? response.error : {};
+            const error = new Error(errorData.message || '插件请求失败');
+            error.code = errorData.code || 'request_failed';
+            error.fields = errorData.fields || null;
+            throw error;
+        }
+        return response;
+    }
+
+    async function loadBootstrap() {
+        setBusy(true);
+        try {
+            const response = await callApi(EVENTS.bootstrap, {});
+            const data = response.data || {};
+            const plugin = data.plugin || {};
+            state.bots = Array.isArray(data.bots) ? data.bots : [];
+            elements.pluginMeta.textContent = [
+                plugin.namespace || 'OlivOSAIChatAssassin',
+                plugin.version ? 'v' + plugin.version : '',
+            ].filter(Boolean).join(' · ');
+            renderBotOptions();
+            if (state.bots.length === 0) {
+                showBanner('当前没有已加载的 bot 账号。请先在 OlivOS 中配置并启用账号。', false);
+                return;
+            }
+            await loadBotData(state.bots[0].hash, true);
+        } catch (error) {
+            elements.pluginMeta.textContent = '无法读取插件状态';
+            showBanner(errorMessage(error), false);
+            showToast(errorMessage(error), true);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    function renderBotOptions() {
+        elements.botSelect.replaceChildren();
+        if (state.bots.length === 0) {
+            elements.botSelect.add(new Option('没有可用账号', ''));
+            return;
+        }
+        state.bots.forEach(function (bot) {
+            const platform = bot.platform || {};
+            const platformText = [platform.platform || platform.sdk, platform.model]
+                .filter(Boolean)
+                .join(' / ');
+            const label = String(bot.id || bot.hash) + (platformText ? ' · ' + platformText : '') +
+                (bot.enable === false ? ' · 未启用' : '');
+            elements.botSelect.add(new Option(label, bot.hash));
+        });
+    }
+
+    async function selectBot(botHash) {
+        if (!botHash || botHash === state.selectedBot) {
+            return;
+        }
+        if (state.dirty && !window.confirm('当前设置尚未保存，确定切换账号吗？')) {
+            elements.botSelect.value = state.selectedBot || '';
+            return;
+        }
+        await loadBotData(botHash, true);
+    }
+
+    async function loadBotData(botHash, force) {
+        if (!botHash) {
+            return;
+        }
+        if (!force && state.dirty && !window.confirm('当前设置尚未保存，确定重新加载吗？')) {
+            return;
+        }
+        const epoch = state.botEpoch + 1;
+        state.botEpoch = epoch;
+        state.selectedBot = botHash;
+        elements.botSelect.value = botHash;
+        state.config = null;
+        state.overview = null;
+        state.revision = '';
+        state.secrets = {};
+        state.source = 'other';
+        state.clearSecrets.clear();
+        state.dirtyFields.clear();
+        state.conflict = false;
+        state.memoryQuery = null;
+        state.requestTickets.memory += 1;
+        state.dirty = false;
+        hideBanner();
+        clearFieldErrors();
+        renderConfigWarnings([]);
+        elements.memoryDetail.replaceChildren();
+        const empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = '选择左侧区块查看内容。';
+        elements.memoryDetail.appendChild(empty);
+        setBusy(true);
+        try {
+            await Promise.all([
+                loadConfig(botHash, epoch),
+                loadOverview(botHash),
+            ]);
+        } catch (error) {
+            if (epoch !== state.botEpoch) {
+                return;
+            }
+            showBanner(errorMessage(error), false);
+            showToast(errorMessage(error), true);
+        } finally {
+            if (epoch !== state.botEpoch) {
+                return;
+            }
+            setBusy(false);
+            renderOverview();
+        }
+    }
+
+    async function loadConfig(botHash, epoch) {
+        const ticket = state.requestTickets.config + 1;
+        state.requestTickets.config = ticket;
+        const response = await callApi(EVENTS.getConfig, {bot_hash: botHash});
+        if (
+            ticket !== state.requestTickets.config ||
+            botHash !== state.selectedBot ||
+            epoch !== state.botEpoch
+        ) {
+            return false;
+        }
+        state.config = response.data && response.data.config ? response.data.config : {};
+        state.secrets = response.data && response.data.secrets ? response.data.secrets : {};
+        state.source = response.data && typeof response.data.source === 'string' ? response.data.source : 'other';
+        state.revision = typeof response.revision === 'string' ? response.revision : '';
+        renderConfigWarnings(response.data && response.data.warnings);
+        fillConfigForm();
+        renderOverview();
+        return true;
+    }
+
+    async function loadOverview(botHash) {
+        const ticket = state.requestTickets.overview + 1;
+        state.requestTickets.overview = ticket;
+        const response = await callApi(EVENTS.memoryOverview, {bot_hash: botHash});
+        if (ticket !== state.requestTickets.overview || botHash !== state.selectedBot) {
+            return false;
+        }
+        state.overview = response.data || {};
+        renderOverview();
+        renderMemoryOverview();
+        return true;
+    }
+
+    function fillConfigForm() {
+        const config = state.config || {};
+        const ocrConfig = config.ocr_api && typeof config.ocr_api === 'object' ? config.ocr_api : {};
+        const thinking = config.thinking && typeof config.thinking === 'object' ? config.thinking : {};
+
+        setValue('apiBase', config.api_base);
+        setValue('model', config.model);
+        setValue('maxTokens', config.max_tokens);
+        setValue('temperature', config.temperature);
+        elements.thinkingEnabled.checked = thinking.type === 'enabled';
+        setSelectValue('reasoningEffort', config.reasoning_effort, 'max');
+        elements.firstThinking.checked = config.first_thinking === true;
+        setValue('firstThinkingCooldown', config.first_thinking_cooldown);
+        elements.personality.value = typeof config.personality === 'string' ? config.personality : '';
+        elements.recordKnowledge.checked = config.record_knowledge === true;
+        elements.mentionReply.checked = config.mention_reply === true;
+        setValue('replyProbability', config.reply_probability);
+        setValue('retryCount', config.retry_count);
+        setValue('searchKnowledgeDeepin', config.search_knowledge_deepin);
+        setValue('searchAgeing', config.search_ageing);
+        setValue('maxMessageLength', config.max_message_length);
+        elements.enabledGroups.value = listToText(config.enabled_groups);
+        elements.replyKeywords.value = listToText(config.reply_keywords);
+        elements.ignorePrefixes.value = listToText(config.ignore_prefixes);
+        setValue('historySizeMin', config.history_size_min);
+        setValue('historySize', config.history_size);
+        elements.historyDynamic.checked = config.history_dynamic === true;
+        setValue('historyDynamicSize', config.history_dynamic_size);
+        setValue('slackTime', config.slack_time);
+        setValue('slackCooldown', config.slack_cooldown_time);
+        elements.ocrEnable.checked = ocrConfig.enable === true;
+        setValue('ocrApiBase', ocrConfig.api_base);
+        setValue('ocrModel', ocrConfig.model);
+        setSelectValue('ocrMode', ocrConfig.mode, 'base64');
+        setValue('ocrQueueSize', ocrConfig.queue_size);
+
+        elements.apiKey.value = '';
+        elements.ocrApiKey.value = '';
+        state.clearSecrets.clear();
+        state.dirtyFields.clear();
+        updateSecretState();
+        clearFieldErrors();
+        setDirty(false);
+    }
+
+    function setValue(id, value) {
+        const element = elements[id];
+        if (!element) {
+            return;
+        }
+        element.value = value === null || typeof value === 'undefined' ? '' : String(value);
+    }
+
+    function setSelectValue(id, value, fallback) {
+        const element = elements[id];
+        if (!element) {
+            return;
+        }
+        const target = typeof value === 'string' ? value : fallback;
+        const hasOption = Array.from(element.options).some(function (option) {
+            return option.value === target;
+        });
+        element.value = hasOption ? target : fallback;
+    }
+
+    function listToText(value) {
+        return Array.isArray(value) ? value.join('\n') : '';
+    }
+
+    function updateSecretState() {
+        updateOneSecret('api_key', elements.apiKey, elements.apiKeyHint);
+        updateOneSecret('ocr_api.api_key', elements.ocrApiKey, elements.ocrApiKeyHint);
+        document.querySelectorAll('[data-clear-secret]').forEach(function (button) {
+            const path = button.dataset.clearSecret;
+            const configured = Boolean(state.secrets[path] && state.secrets[path].configured);
+            const clearing = state.clearSecrets.has(path);
+            button.disabled = !configured;
+            button.textContent = clearing ? '取消清除' : '清除已保存密钥';
+        });
+    }
+
+    function updateOneSecret(path, input, hint) {
+        const configured = Boolean(state.secrets[path] && state.secrets[path].configured);
+        const clearing = state.clearSecrets.has(path);
+        if (clearing) {
+            input.placeholder = '保存后清除';
+            hint.textContent = '保存设置后将清除该密钥。';
+        } else if (configured) {
+            input.placeholder = '已配置，留空保持原值';
+            hint.textContent = '当前已保存密钥；留空不会修改。';
+        } else {
+            input.placeholder = '未配置';
+            hint.textContent = '尚未配置该密钥。';
+        }
+    }
+
+    function toggleSecretClear(path) {
+        const configured = Boolean(state.secrets[path] && state.secrets[path].configured);
+        if (!configured) {
+            return;
+        }
+        if (state.clearSecrets.has(path)) {
+            state.clearSecrets.delete(path);
+        } else {
+            state.clearSecrets.add(path);
+            if (path === 'api_key') {
+                elements.apiKey.value = '';
+            } else if (path === 'ocr_api.api_key') {
+                elements.ocrApiKey.value = '';
+            }
+        }
+        updateSecretState();
+        setDirty(true);
+    }
+
+    function markDirty(event) {
+        if (!state.config) {
+            return;
+        }
+        const target = event && event.target;
+        const field = target && target.closest ? target.closest('[data-field]') : null;
+        if (field && field.dataset.field) {
+            state.dirtyFields.add(field.dataset.field);
+        }
+        setDirty(true);
+    }
+
+    function setDirty(value) {
+        state.dirty = Boolean(value);
+        updateSaveState();
+    }
+
+    function setBusy(value) {
+        state.busy = Boolean(value);
+        elements.botSelect.disabled = state.busy || state.bots.length === 0;
+        elements.refreshButton.disabled = state.busy || !state.selectedBot;
+        elements.memoryRefreshButton.disabled = state.busy || !state.selectedBot;
+        updateSaveState();
+    }
+
+    function updateSaveState() {
+        elements.saveButton.disabled = state.busy || !state.dirty || !state.config || state.conflict;
+        elements.resetButton.disabled = state.busy || !state.config;
+    }
+
+    function collectConfigPatch() {
+        const clearSecrets = Array.from(state.clearSecrets);
+        const readers = {
+            api_base: function () { return elements.apiBase.value.trim(); },
+            model: function () { return elements.model.value.trim(); },
+            max_tokens: function () { return readInteger('maxTokens'); },
+            temperature: function () { return readNumber('temperature'); },
+            thinking: function () {
+                return {type: elements.thinkingEnabled.checked ? 'enabled' : 'disabled'};
+            },
+            reasoning_effort: function () { return elements.reasoningEffort.value; },
+            first_thinking: function () { return elements.firstThinking.checked; },
+            first_thinking_cooldown: function () { return readNumber('firstThinkingCooldown'); },
+            personality: function () { return elements.personality.value; },
+            record_knowledge: function () { return elements.recordKnowledge.checked; },
+            mention_reply: function () { return elements.mentionReply.checked; },
+            reply_probability: function () { return readNumber('replyProbability'); },
+            retry_count: function () { return readInteger('retryCount'); },
+            search_knowledge_deepin: function () { return readInteger('searchKnowledgeDeepin'); },
+            search_ageing: function () { return readNumber('searchAgeing'); },
+            max_message_length: function () { return readInteger('maxMessageLength'); },
+            enabled_groups: function () { return readLines('enabledGroups'); },
+            reply_keywords: function () { return readLines('replyKeywords'); },
+            ignore_prefixes: function () { return readLines('ignorePrefixes'); },
+            history_size_min: function () { return readInteger('historySizeMin'); },
+            history_size: function () { return readInteger('historySize'); },
+            history_dynamic: function () { return elements.historyDynamic.checked; },
+            history_dynamic_size: function () { return readInteger('historyDynamicSize'); },
+            slack_time: function () { return readNumber('slackTime'); },
+            slack_cooldown_time: function () { return readNumber('slackCooldown'); },
+        };
+        const patch = {};
+        Object.keys(readers).forEach(function (field) {
+            if (state.dirtyFields.has(field)) {
+                patch[field] = readers[field]();
+            }
+        });
+        const ocrReaders = {
+            'ocr_api.api_base': function () { return elements.ocrApiBase.value.trim(); },
+            'ocr_api.model': function () { return elements.ocrModel.value.trim(); },
+            'ocr_api.mode': function () { return elements.ocrMode.value; },
+            'ocr_api.enable': function () { return elements.ocrEnable.checked; },
+            'ocr_api.queue_size': function () { return readInteger('ocrQueueSize'); },
+        };
+        const ocrPatch = {};
+        Object.keys(ocrReaders).forEach(function (field) {
+            if (state.dirtyFields.has(field)) {
+                ocrPatch[field.slice('ocr_api.'.length)] = ocrReaders[field]();
+            }
+        });
+        if (state.dirtyFields.has('api_key') && elements.apiKey.value.trim()) {
+            patch.api_key = elements.apiKey.value.trim();
+        }
+        if (state.dirtyFields.has('ocr_api.api_key') && elements.ocrApiKey.value.trim()) {
+            ocrPatch.api_key = elements.ocrApiKey.value.trim();
+        }
+        if (Object.keys(ocrPatch).length > 0) {
+            patch.ocr_api = ocrPatch;
+        }
+        return {
+            patch: patch,
+            clear_secrets: clearSecrets,
+        };
+    }
+
+    function readInteger(id) {
+        const raw = elements[id].value.trim();
+        if (!raw) {
+            return NaN;
+        }
+        const value = Number(raw);
+        return Number.isFinite(value) ? Math.trunc(value) : NaN;
+    }
+
+    function readNumber(id) {
+        const raw = elements[id].value.trim();
+        if (!raw) {
+            return NaN;
+        }
+        const value = Number(raw);
+        return Number.isFinite(value) ? value : NaN;
+    }
+
+    function readLines(id) {
+        return elements[id].value
+            .split(/\r?\n/)
+            .map(function (line) {
+                return line.trim();
+            })
+            .filter(Boolean);
+    }
+
+    async function saveConfig() {
+        if (!state.selectedBot || !state.config || !state.revision || state.conflict) {
+            return;
+        }
+        clearFieldErrors();
+        if (!elements.configForm.reportValidity()) {
+            showToast('请先修正表单中的必填项或范围错误', true);
+            return;
+        }
+        const requestData = collectConfigPatch();
+        setBusy(true);
+        try {
+            const response = await callApi(EVENTS.saveConfig, {
+                bot_hash: state.selectedBot,
+                expected_revision: state.revision,
+                patch: requestData.patch,
+                clear_secrets: requestData.clear_secrets,
+            });
+            state.config = response.data && response.data.config ? response.data.config : {};
+            state.secrets = response.data && response.data.secrets ? response.data.secrets : {};
+            state.source = response.data && typeof response.data.source === 'string' ? response.data.source : 'other';
+            state.revision = typeof response.revision === 'string' ? response.revision : '';
+            state.conflict = false;
+            renderConfigWarnings(response.data && response.data.warnings);
+            fillConfigForm();
+            renderOverview();
+            hideBanner();
+            showToast('设置已保存；需要重载的字段会在插件重载后完整生效');
+        } catch (error) {
+            if (error.code === 'conflict') {
+                clearFieldErrors();
+                state.conflict = true;
+                showBanner(errorMessage(error), false);
+                elements.bannerAction.hidden = false;
+            } else {
+                showFieldErrors(error);
+                showToast(errorMessage(error), true);
+            }
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    function showFieldErrors(error) {
+        if (!error || !error.fields || typeof error.fields !== 'object') {
+            showToast(errorMessage(error), true);
+            return;
+        }
+        const fields = Object.entries(error.fields);
+        fields.forEach(function (entry) {
+            const input = Array.from(document.querySelectorAll('[data-field]')).find(function (element) {
+                return element.dataset.field === entry[0];
+            });
+            if (input) {
+                input.setAttribute('aria-invalid', 'true');
+            }
+        });
+        elements.configErrors.replaceChildren();
+        const title = document.createElement('strong');
+        title.textContent = '配置未保存，请检查以下字段：';
+        const list = document.createElement('ul');
+        fields.forEach(function (entry) {
+            const item = document.createElement('li');
+            item.textContent = entry[0] + '：' + entry[1];
+            list.appendChild(item);
+        });
+        elements.configErrors.append(title, list);
+        elements.configErrors.hidden = false;
+    }
+
+    function clearFieldErrors() {
+        elements.configErrors.hidden = true;
+        elements.configErrors.replaceChildren();
+        document.querySelectorAll('[data-field][aria-invalid]').forEach(function (input) {
+            input.removeAttribute('aria-invalid');
+        });
+    }
+
+    function renderConfigWarnings(warnings) {
+        const messages = Array.isArray(warnings)
+            ? warnings.filter(function (item) {
+                return typeof item === 'string' && item.trim();
+            })
+            : [];
+        elements.configWarnings.replaceChildren();
+        elements.configWarnings.hidden = messages.length === 0;
+        if (messages.length === 0) {
+            return;
+        }
+        const title = document.createElement('strong');
+        title.textContent = '配置结构提示：';
+        const list = document.createElement('ul');
+        messages.forEach(function (text) {
+            const item = document.createElement('li');
+            item.textContent = text;
+            list.appendChild(item);
+        });
+        elements.configWarnings.append(title, list);
+    }
+
+    function renderOverview() {
+        const bot = state.bots.find(function (item) {
+            return item.hash === state.selectedBot;
+        });
+        if (bot) {
+            elements.overviewAccount.textContent = String(bot.id || bot.hash);
+            const platform = bot.platform || {};
+            elements.overviewPlatform.textContent = [platform.sdk, platform.platform, platform.model]
+                .filter(Boolean)
+                .join(' / ');
+        } else {
+            elements.overviewAccount.textContent = '—';
+            elements.overviewPlatform.textContent = '—';
+        }
+
+        const apiConfigured = Boolean(state.secrets.api_key && state.secrets.api_key.configured);
+        elements.overviewApi.textContent = state.config
+            ? (apiConfigured ? '已配置' : '未配置')
+            : '—';
+
+        const ocrConfig = state.config && state.config.ocr_api ? state.config.ocr_api : {};
+        if (!state.config) {
+            elements.overviewOcr.textContent = '—';
+        } else if (!ocrConfig.enable) {
+            elements.overviewOcr.textContent = '未启用';
+        } else if (state.secrets['ocr_api.api_key'] && state.secrets['ocr_api.api_key'].configured) {
+            elements.overviewOcr.textContent = '已启用';
+        } else {
+            elements.overviewOcr.textContent = '已启用，缺少 Key';
+        }
+
+        elements.overviewGroups.textContent = state.overview
+            ? String(state.overview.group_count || 0) + ' 个'
+            : '—';
+
+        let knowledgeCount = 0;
+        const sections = state.overview && Array.isArray(state.overview.global_sections)
+            ? state.overview.global_sections
+            : [];
+        const knowledgeSection = sections.find(function (section) {
+            return section.name === '知识缓存';
+        });
+        if (knowledgeSection) {
+            knowledgeCount = knowledgeSection.count || 0;
+        }
+        elements.overviewKnowledge.textContent = state.overview
+            ? String(knowledgeCount) + ' 条'
+            : '—';
+        const sourceLabels = {
+            bot: '专属 bot 配置',
+            shared: '共用 config.json',
+            other: '其他配置文件',
+        };
+        elements.overviewSource.textContent = state.config
+            ? (sourceLabels[state.source] || sourceLabels.other)
+            : '—';
+        elements.overviewRevision.textContent = state.revision
+            ? state.revision.slice(0, 18)
+            : '—';
+    }
+
+    function renderMemoryOverview() {
+        elements.globalSectionList.replaceChildren();
+        elements.groupMemoryList.replaceChildren();
+        if (!state.overview) {
+            return;
+        }
+        const sections = Array.isArray(state.overview.global_sections)
+            ? state.overview.global_sections
+            : [];
+        if (sections.length === 0) {
+            appendEmpty(elements.globalSectionList, '没有全局记忆区块');
+        }
+        sections.forEach(function (section) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'memory-chip';
+            button.textContent = section.name;
+            const detail = document.createElement('small');
+            detail.textContent = section.kind === 'dict'
+                ? '字典 · ' + String(section.count || 0) + ' 项'
+                : '文本 · ' + String(section.count || 0) + ' 字';
+            button.appendChild(detail);
+            button.addEventListener('click', function () {
+                loadMemorySection('global', section.name, 0);
+            });
+            elements.globalSectionList.appendChild(button);
+        });
+
+        const groups = Array.isArray(state.overview.groups) ? state.overview.groups : [];
+        if (groups.length === 0) {
+            appendEmpty(elements.groupMemoryList, '没有群记忆');
+        }
+        groups.forEach(function (group) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'memory-group';
+            button.textContent = group.group_id;
+            const detail = document.createElement('small');
+            detail.textContent = group.preview || '（空）';
+            button.appendChild(detail);
+            button.addEventListener('click', function () {
+                loadMemorySection('group', null, 0, group.group_id);
+            });
+            elements.groupMemoryList.appendChild(button);
+        });
+        if (state.overview.groups_truncated) {
+            appendEmpty(elements.groupMemoryList, '群数量较多，仅显示前 ' + groups.length + ' 个');
+        }
+    }
+
+    function appendEmpty(parent, text) {
+        const empty = document.createElement('p');
+        empty.className = 'empty-state';
+        empty.textContent = text;
+        parent.appendChild(empty);
+    }
+
+    async function loadMemorySection(scope, section, offset, groupId) {
+        if (!state.selectedBot) {
+            return;
+        }
+        const ticket = state.requestTickets.memory + 1;
+        state.requestTickets.memory = ticket;
+        const payload = {
+            bot_hash: state.selectedBot,
+            scope: scope,
+            offset: offset || 0,
+            limit: MEMORY_PAGE_SIZE,
+        };
+        if (scope === 'global') {
+            payload.section = section;
+        } else {
+            payload.group_id = groupId;
+        }
+        state.memoryQuery = payload;
+        elements.memoryDetail.replaceChildren();
+        const loading = document.createElement('p');
+        loading.className = 'muted';
+        loading.textContent = '正在读取记忆…';
+        elements.memoryDetail.appendChild(loading);
+        try {
+            const response = await callApi(EVENTS.memorySection, payload);
+            if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
+                return;
+            }
+            renderMemorySection(response.data || {}, payload);
+        } catch (error) {
+            if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
+                return;
+            }
+            elements.memoryDetail.replaceChildren();
+            appendEmpty(elements.memoryDetail, errorMessage(error));
+        }
+    }
+
+    function renderMemorySection(data, query) {
+        elements.memoryDetail.replaceChildren();
+        const heading = document.createElement('h3');
+        heading.textContent = query.scope === 'group'
+            ? '群 ' + query.group_id
+            : '全局 · ' + query.section;
+        elements.memoryDetail.appendChild(heading);
+
+        if (data.metadata_only && data.kind === 'metadata') {
+            const pre = document.createElement('pre');
+            pre.textContent = memoryMetadataText(data.metadata || {});
+            elements.memoryDetail.appendChild(pre);
+            appendEmpty(elements.memoryDetail, '图片缓存仅显示元数据，不向页面发送缓存内容。');
+            return;
+        }
+
+        if (data.scope === 'group' || data.kind === 'text') {
+            const text = typeof data.value === 'string' ? data.value : '';
+            const pre = document.createElement('pre');
+            pre.textContent = text || '（空）';
+            elements.memoryDetail.appendChild(pre);
+            if (data.truncated) {
+                appendEmpty(elements.memoryDetail, '内容过长，已截断显示');
+            }
+            return;
+        }
+
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        if (entries.length === 0) {
+            appendEmpty(elements.memoryDetail, '该区块为空');
+        } else {
+            const list = document.createElement('dl');
+            list.className = 'memory-entries';
+            entries.forEach(function (entry) {
+                const term = document.createElement('dt');
+                term.textContent = entry.key;
+                const description = document.createElement('dd');
+                const pre = document.createElement('pre');
+                pre.textContent = data.metadata_only
+                    ? memoryMetadataText(entry)
+                    : (entry.value || '（空）');
+                description.appendChild(pre);
+                if (entry.truncated) {
+                    const note = document.createElement('small');
+                    note.className = 'muted';
+                    note.textContent = '内容过长，已截断显示';
+                    description.appendChild(note);
+                }
+                list.append(term, description);
+            });
+            elements.memoryDetail.appendChild(list);
+            if (data.metadata_only) {
+                appendEmpty(elements.memoryDetail, '图片缓存仅显示元数据，不向页面发送缓存内容。');
+            }
+        }
+
+        if (typeof data.total === 'number' && data.total > 0) {
+            const pager = document.createElement('div');
+            pager.className = 'pager';
+            const previous = document.createElement('button');
+            previous.type = 'button';
+            previous.className = 'button small secondary';
+            previous.textContent = '上一页';
+            previous.disabled = !(data.offset > 0);
+            previous.addEventListener('click', function () {
+                loadMemorySection('global', query.section, Math.max(0, (data.offset || 0) - MEMORY_PAGE_SIZE));
+            });
+            const status = document.createElement('span');
+            status.className = 'muted';
+            status.textContent = String((data.offset || 0) + entries.length) + ' / ' + String(data.total);
+            const next = document.createElement('button');
+            next.type = 'button';
+            next.className = 'button small secondary';
+            next.textContent = '下一页';
+            next.disabled = !data.has_more;
+            next.addEventListener('click', function () {
+                loadMemorySection('global', query.section, data.next_offset || 0);
+            });
+            pager.append(previous, status, next);
+            elements.memoryDetail.appendChild(pager);
+        }
+    }
+
+    function memoryMetadataText(entry) {
+        if (entry.kind === 'str') {
+            return '文本 · ' + String(entry.length || 0) + ' 字符';
+        }
+        if (entry.kind === 'dict') {
+            return '字典 · ' + String(entry.count || 0) + ' 项';
+        }
+        if (entry.kind === 'list') {
+            return '列表 · ' + String(entry.count || 0) + ' 项';
+        }
+        return '类型 · ' + String(entry.kind || '未知');
+    }
+
+    async function refreshCurrent() {
+        if (!state.selectedBot) {
+            return;
+        }
+        await loadBotData(state.selectedBot, false);
+    }
+
+    async function refreshMemory() {
+        if (!state.selectedBot || state.busy) {
+            return;
+        }
+        setBusy(true);
+        try {
+            await loadOverview(state.selectedBot);
+        } catch (error) {
+            showToast(errorMessage(error), true);
+            return;
+        } finally {
+            setBusy(false);
+        }
+        if (state.memoryQuery) {
+            await loadMemorySection(
+                state.memoryQuery.scope,
+                state.memoryQuery.section,
+                state.memoryQuery.offset || 0,
+                state.memoryQuery.group_id
+            );
+        }
+        showToast('记忆已刷新');
+    }
+
+    function activateTab(tabName) {
+        state.activeTab = tabName;
+        document.querySelectorAll('.tab-button').forEach(function (button) {
+            const selected = button.dataset.tab === tabName;
+            button.classList.toggle('selected', selected);
+            button.setAttribute('aria-selected', selected ? 'true' : 'false');
+            button.tabIndex = selected ? 0 : -1;
+        });
+        document.querySelectorAll('.tab-panel').forEach(function (panel) {
+            panel.hidden = panel.id !== 'panel-' + tabName;
+        });
+        if (tabName === 'memory' && state.selectedBot && !state.overview) {
+            loadOverview(state.selectedBot).catch(function (error) {
+                showToast(errorMessage(error), true);
+            });
+        }
+    }
+
+    function showBanner(message, success) {
+        elements.bannerText.textContent = message;
+        elements.banner.hidden = false;
+        elements.banner.classList.toggle('success', Boolean(success));
+        elements.bannerAction.hidden = true;
+    }
+
+    function hideBanner() {
+        elements.banner.hidden = true;
+        elements.bannerAction.hidden = true;
+    }
+
+    function showToast(message, isError) {
+        elements.toast.textContent = message;
+        elements.toast.classList.toggle('error', Boolean(isError));
+        elements.toast.hidden = false;
+        if (state.toastTimer) {
+            window.clearTimeout(state.toastTimer);
+        }
+        state.toastTimer = window.setTimeout(function () {
+            elements.toast.hidden = true;
+        }, 4200);
+    }
+
+    function errorMessage(error) {
+        if (error && typeof error.message === 'string' && error.message) {
+            return error.message;
+        }
+        return '发生未知错误';
+    }
+})();
+    </script>
+</body>
+</html>
