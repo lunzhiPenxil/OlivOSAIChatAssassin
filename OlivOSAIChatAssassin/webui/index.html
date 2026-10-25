@@ -80,7 +80,7 @@ code {
 }
 
 .page-shell {
-    width: min(1180px, 100%);
+    width: min(1360px, 100%);
     margin: 0 auto;
     padding: 24px;
 }
@@ -448,7 +448,8 @@ select[aria-invalid="true"] {
 
 .memory-layout {
     display: grid;
-    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 2fr);
+    grid-template-columns: minmax(300px, 0.65fr) minmax(0, 2.35fr);
+    align-items: start;
     gap: 16px;
 }
 
@@ -458,6 +459,11 @@ select[aria-invalid="true"] {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
+}
+
+.memory-detail {
+    position: sticky;
+    top: 18px;
 }
 
 .memory-sidebar h3 {
@@ -472,10 +478,9 @@ select[aria-invalid="true"] {
 .memory-chip-list,
 .memory-group-list {
     display: flex;
-    max-height: 52vh;
     flex-direction: column;
     gap: 7px;
-    overflow: auto;
+    overflow: visible;
 }
 
 .memory-chip,
@@ -514,10 +519,9 @@ select[aria-invalid="true"] {
 }
 
 .memory-detail pre {
-    max-height: 48vh;
     margin: 10px 0 0;
     padding: 12px;
-    overflow: auto;
+    overflow: visible;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface-soft);
@@ -622,9 +626,8 @@ noscript {
         background: transparent;
     }
 
-    .memory-chip-list,
-    .memory-group-list {
-        max-height: 28vh;
+    .memory-detail {
+        position: static;
     }
 }
     </style>
@@ -944,8 +947,11 @@ noscript {
     const REQUEST_TIMEOUT = 10000;
     const MEMORY_PAGE_SIZE = 50;
     const MAX_REQUEST_BYTES = 1024 * 1024;
+    const AUTO_GROW_MAX_HEIGHT = 720;
+    const AUTO_GROW_VIEWPORT_RATIO = 0.72;
 
     const pendingRequests = new Map();
+    let textareaResizeTimer = 0;
     const state = {
         bots: [],
         selectedBot: null,
@@ -1036,6 +1042,12 @@ noscript {
         });
         elements.configForm.addEventListener('input', markDirty);
         elements.configForm.addEventListener('change', markDirty);
+        document.querySelectorAll('textarea').forEach(function (textarea) {
+            textarea.addEventListener('input', function () {
+                resizeTextarea(textarea);
+            });
+        });
+        window.addEventListener('resize', scheduleTextareaResize);
 
         window.setInterval(function () {
             if (!state.visible || document.hidden || state.busy || state.dirty || !state.selectedBot) {
@@ -1333,6 +1345,7 @@ noscript {
         updateSecretState();
         clearFieldErrors();
         setDirty(false);
+        scheduleTextareaResize();
     }
 
     function setValue(id, value) {
@@ -1341,6 +1354,32 @@ noscript {
             return;
         }
         element.value = value === null || typeof value === 'undefined' ? '' : String(value);
+    }
+
+    function scheduleTextareaResize() {
+        if (textareaResizeTimer) {
+            return;
+        }
+        textareaResizeTimer = window.setTimeout(function () {
+            textareaResizeTimer = 0;
+            document.querySelectorAll('textarea').forEach(resizeTextarea);
+        }, 0);
+    }
+
+    function resizeTextarea(element) {
+        if (!element || element.getClientRects().length === 0) {
+            return;
+        }
+        element.style.height = 'auto';
+        const computed = window.getComputedStyle(element);
+        const minimum = Number.parseFloat(computed.minHeight) || 0;
+        const maximum = Math.max(
+            minimum,
+            Math.min(window.innerHeight * AUTO_GROW_VIEWPORT_RATIO, AUTO_GROW_MAX_HEIGHT)
+        );
+        const target = Math.min(Math.max(element.scrollHeight + 2, minimum), maximum);
+        element.style.height = target + 'px';
+        element.style.overflowY = element.scrollHeight > target + 1 ? 'auto' : 'hidden';
     }
 
     function setSelectValue(id, value, fallback) {
@@ -1921,6 +1960,9 @@ noscript {
         document.querySelectorAll('.tab-panel').forEach(function (panel) {
             panel.hidden = panel.id !== 'panel-' + tabName;
         });
+        if (tabName === 'settings') {
+            scheduleTextareaResize();
+        }
         if (tabName === 'memory' && state.selectedBot && !state.overview) {
             loadOverview(state.selectedBot).catch(function (error) {
                 showToast(errorMessage(error), true);
