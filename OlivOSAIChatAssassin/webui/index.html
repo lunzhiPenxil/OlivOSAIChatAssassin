@@ -520,6 +520,74 @@ select[aria-invalid="true"] {
     margin: 0;
 }
 
+.memory-list-controls {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) repeat(auto-fit, minmax(130px, 1fr));
+    align-items: end;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-soft);
+}
+
+.memory-list-control {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.memory-list-control > span {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.memory-list-control input,
+.memory-list-control select {
+    min-height: 36px;
+    padding: 7px 9px;
+}
+
+.memory-search-row {
+    display: flex;
+    min-width: 0;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.memory-search-row input {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.memory-search-row .button {
+    flex: none;
+    white-space: nowrap;
+}
+
+.memory-list-control.check-field {
+    min-height: 36px;
+    flex-direction: row;
+    align-items: center;
+    padding: 7px 10px;
+    border-radius: 9px;
+}
+
+.memory-list-control.check-field > span {
+    color: var(--text);
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.memory-list-summary {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 0.8rem;
+}
+
 .memory-group-index {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -610,7 +678,10 @@ select[aria-invalid="true"] {
 .memory-value-card.editable:focus-within .memory-edit-button,
 .memory-value-card.editable.selected .memory-edit-button,
 .memory-entry:hover .memory-edit-button,
-.memory-entry:focus-within .memory-edit-button {
+.memory-entry:focus-within .memory-edit-button,
+.memory-image-entry:hover .memory-edit-button,
+.memory-image-entry:focus-within .memory-edit-button,
+.memory-image-entry.selected .memory-edit-button {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0);
@@ -653,6 +724,124 @@ select[aria-invalid="true"] {
 .memory-entry-note {
     display: block;
     margin-top: 8px;
+}
+
+.memory-image-entry {
+    position: relative;
+}
+
+.memory-image-entry .memory-entry-header {
+    padding-right: 88px;
+}
+
+.memory-image-entry.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.memory-image-layout {
+    display: grid;
+    grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.memory-image-preview {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.memory-image-thumb {
+    display: grid;
+    width: 100%;
+    min-height: 140px;
+    place-items: center;
+    padding: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    color: var(--muted);
+    background: var(--surface-soft);
+    cursor: zoom-in;
+}
+
+.memory-image-thumb:hover,
+.memory-image-thumb:focus-visible {
+    border-color: var(--accent);
+}
+
+.memory-image-thumb img {
+    display: block;
+    max-width: 100%;
+    max-height: 180px;
+    border-radius: 8px;
+    object-fit: contain;
+}
+
+.memory-image-thumb img[hidden] {
+    display: none;
+}
+
+.memory-image-missing {
+    display: grid;
+    width: 100%;
+    min-height: 140px;
+    place-items: center;
+    padding: 14px;
+    border: 1px dashed color-mix(in srgb, var(--muted) 55%, var(--border));
+    border-radius: 11px;
+    color: var(--muted);
+    background: var(--surface-soft);
+    text-align: center;
+}
+
+.memory-image-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.78rem;
+}
+
+.memory-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--surface-soft);
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.memory-badge.warning {
+    border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+    color: var(--danger);
+}
+
+.memory-image-fields-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 7px 12px;
+    margin: 0;
+}
+
+.memory-image-fields-list dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.memory-image-fields-list dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.memory-image-fields-list dd.empty {
+    color: var(--muted);
 }
 
 .pager {
@@ -790,6 +979,35 @@ body.memory-modal-open {
     line-height: 1.6;
 }
 
+.memory-modal-editor[hidden],
+.memory-image-fields[hidden] {
+    display: none;
+}
+
+.memory-image-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.memory-image-fields textarea {
+    min-height: 82px;
+    resize: vertical;
+}
+
+.memory-image-file-state {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
+    font-size: 0.84rem;
+}
+
+.memory-image-file-state.warning {
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+    color: var(--danger);
+}
+
 .memory-modal-hint {
     margin: 0;
     font-size: 0.82rem;
@@ -801,6 +1019,50 @@ body.memory-modal-open {
     gap: 10px;
     padding: 16px 22px 20px;
     border-top: 1px solid var(--border);
+}
+
+.image-viewer-card {
+    width: min(1180px, 100%);
+    max-height: min(94vh, 1100px);
+}
+
+.image-viewer-body {
+    display: grid;
+    min-height: min(52vh, 620px);
+    flex: 1;
+    place-items: center;
+    overflow: auto;
+    padding: 18px 22px;
+    background:
+        linear-gradient(45deg, rgba(127, 127, 127, 0.08) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(127, 127, 127, 0.08) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(127, 127, 127, 0.08) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(127, 127, 127, 0.08) 75%);
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    background-size: 16px 16px;
+}
+
+.image-viewer-body img {
+    display: block;
+    max-width: 100%;
+    max-height: 72vh;
+    border-radius: 10px;
+    object-fit: contain;
+}
+
+.image-viewer-body img[hidden] {
+    display: none;
+}
+
+.image-viewer-status {
+    max-width: 540px;
+    margin: 0;
+    color: var(--muted);
+    text-align: center;
+}
+
+.image-viewer-status.warning {
+    color: var(--danger);
 }
 
 @media (hover: none) {
@@ -826,7 +1088,8 @@ noscript {
     .topbar,
     .section-heading,
     .account-tools,
-    .memory-layout {
+    .memory-layout,
+    .memory-image-layout {
         display: flex;
         flex-direction: column;
         align-items: stretch;
@@ -860,6 +1123,10 @@ noscript {
 
     .memory-detail {
         position: static;
+    }
+
+    .memory-list-controls {
+        grid-template-columns: 1fr;
     }
 
     .memory-modal-layer {
@@ -996,15 +1263,15 @@ noscript {
                             </label>
                             <label class="field" for="model">
                                 <span>模型</span>
-                                <input id="model" data-field="model" type="text" required maxlength="256">
+                                <input id="model" data-field="model" type="text" required>
                             </label>
                             <label class="field" for="maxTokens">
                                 <span>最大输出 Token</span>
-                                <input id="maxTokens" data-field="max_tokens" type="number" min="1" max="1000000" step="1" required>
+                                <input id="maxTokens" data-field="max_tokens" type="number" min="1" step="1" required>
                             </label>
                             <label class="field" for="temperature">
                                 <span>Temperature</span>
-                                <input id="temperature" data-field="temperature" type="number" min="0" max="2" step="0.05" required>
+                                <input id="temperature" data-field="temperature" type="number" min="0" step="0.05" required>
                             </label>
                             <label class="field" for="reasoningEffort">
                                 <span>思考强度</span>
@@ -1023,7 +1290,7 @@ noscript {
                             </label>
                             <label class="field" for="firstThinkingCooldown">
                                 <span>初步判断冷却（秒）</span>
-                                <input id="firstThinkingCooldown" data-field="first_thinking_cooldown" type="number" min="0" max="86400" step="1">
+                                <input id="firstThinkingCooldown" data-field="first_thinking_cooldown" type="number" min="0" step="1">
                             </label>
                         </div>
                     </fieldset>
@@ -1033,7 +1300,7 @@ noscript {
                         <div class="form-grid">
                             <label class="field span-2" for="personality">
                                 <span>人格设定</span>
-                                <textarea id="personality" data-field="personality" rows="7" maxlength="100000"></textarea>
+                                <textarea id="personality" data-field="personality" rows="7"></textarea>
                             </label>
                             <label class="check-field" for="recordKnowledge">
                                 <input id="recordKnowledge" data-field="record_knowledge" type="checkbox">
@@ -1045,23 +1312,23 @@ noscript {
                             </label>
                             <label class="field" for="replyProbability">
                                 <span>随机回复概率</span>
-                                <input id="replyProbability" data-field="reply_probability" type="number" min="0" max="1" step="0.01">
+                                <input id="replyProbability" data-field="reply_probability" type="number" min="0" step="0.01">
                             </label>
                             <label class="field" for="retryCount">
                                 <span>回复重试次数</span>
-                                <input id="retryCount" data-field="retry_count" type="number" min="1" max="10" step="1">
+                                <input id="retryCount" data-field="retry_count" type="number" min="1" step="1">
                             </label>
                             <label class="field" for="searchKnowledgeDeepin">
                                 <span>知识检索深度</span>
-                                <input id="searchKnowledgeDeepin" data-field="search_knowledge_deepin" type="number" min="0" max="16" step="1">
+                                <input id="searchKnowledgeDeepin" data-field="search_knowledge_deepin" type="number" min="0" step="1">
                             </label>
                             <label class="field" for="searchAgeing">
                                 <span>检索缓存老化（秒）</span>
-                                <input id="searchAgeing" data-field="search_ageing" type="number" min="1" max="2592000" step="1">
+                                <input id="searchAgeing" data-field="search_ageing" type="number" min="1" step="1">
                             </label>
                             <label class="field" for="maxMessageLength">
                                 <span>单条消息长度上限</span>
-                                <input id="maxMessageLength" data-field="max_message_length" type="number" min="1" max="1000000" step="1">
+                                <input id="maxMessageLength" data-field="max_message_length" type="number" min="1" step="1">
                             </label>
                             <label class="field span-2" for="enabledGroups">
                                 <span>启用群组（每行一个，或填 all）</span>
@@ -1084,11 +1351,11 @@ noscript {
                         <div class="form-grid">
                             <label class="field" for="historySizeMin">
                                 <span>最少历史条数</span>
-                                <input id="historySizeMin" data-field="history_size_min" type="number" min="1" max="1000" step="1">
+                                <input id="historySizeMin" data-field="history_size_min" type="number" min="1" step="1">
                             </label>
                             <label class="field" for="historySize">
                                 <span>历史窗口大小</span>
-                                <input id="historySize" data-field="history_size" type="number" min="1" max="1000" step="1">
+                                <input id="historySize" data-field="history_size" type="number" min="1" step="1">
                             </label>
                             <label class="check-field" for="historyDynamic">
                                 <input id="historyDynamic" data-field="history_dynamic" type="checkbox">
@@ -1096,15 +1363,15 @@ noscript {
                             </label>
                             <label class="field" for="historyDynamicSize">
                                 <span>动态窗口最大条数</span>
-                                <input id="historyDynamicSize" data-field="history_dynamic_size" type="number" min="1" max="10000" step="1">
+                                <input id="historyDynamicSize" data-field="history_dynamic_size" type="number" min="1" step="1">
                             </label>
                             <label class="field" for="slackTime">
                                 <span>松弛时间（秒）</span>
-                                <input id="slackTime" data-field="slack_time" type="number" min="0" max="300" step="0.1">
+                                <input id="slackTime" data-field="slack_time" type="number" min="0" step="0.1">
                             </label>
                             <label class="field" for="slackCooldown">
                                 <span>松弛冷却（秒）</span>
-                                <input id="slackCooldown" data-field="slack_cooldown_time" type="number" min="0" max="3600" step="0.1">
+                                <input id="slackCooldown" data-field="slack_cooldown_time" type="number" min="0" step="0.1">
                             </label>
                         </div>
                     </fieldset>
@@ -1118,7 +1385,7 @@ noscript {
                             </label>
                             <label class="field" for="ocrQueueSize">
                                 <span>每群图片缓存数量</span>
-                                <input id="ocrQueueSize" data-field="ocr_api.queue_size" type="number" min="1" max="128" step="1">
+                                <input id="ocrQueueSize" data-field="ocr_api.queue_size" type="number" min="1" step="1">
                             </label>
                             <label class="field span-2" for="ocrApiKey">
                                 <span>OCR API Key</span>
@@ -1134,7 +1401,7 @@ noscript {
                             </label>
                             <label class="field" for="ocrModel">
                                 <span>OCR 模型</span>
-                                <input id="ocrModel" data-field="ocr_api.model" type="text" maxlength="256">
+                                <input id="ocrModel" data-field="ocr_api.model" type="text">
                             </label>
                             <label class="field" for="ocrMode">
                                 <span>图片传输方式</span>
@@ -1151,7 +1418,7 @@ noscript {
                 <div class="section-heading">
                     <div>
                         <h2>记忆浏览与编辑</h2>
-                        <p class="muted">悬停或单击内容后，使用右侧“编辑”按钮在弹窗中单独修改；图片缓存仍只显示元数据。</p>
+                        <p class="muted">悬停或单击内容后使用右侧“编辑”按钮单独修改；图片缓存支持缩略图、大图预览和固定字段编辑。</p>
                     </div>
                     <button id="memoryRefreshButton" class="button secondary" type="button">刷新记忆</button>
                 </div>
@@ -1197,11 +1464,47 @@ noscript {
             <div class="memory-modal-body">
                 <div id="memoryModalMeta" class="memory-modal-meta"></div>
                 <textarea id="memoryModalEditor" class="memory-modal-editor" spellcheck="false" aria-label="记忆内容"></textarea>
+                <div id="memoryImageFields" class="memory-image-fields" hidden>
+                    <div id="memoryImageFileState" class="memory-image-file-state"></div>
+                    <label class="field" for="memoryImageContent">
+                        <span>内容描述 content</span>
+                        <textarea id="memoryImageContent" rows="3" maxlength="4096" spellcheck="false"></textarea>
+                    </label>
+                    <label class="field" for="memoryImageIntent">
+                        <span>意图 intent</span>
+                        <textarea id="memoryImageIntent" rows="3" maxlength="4096" spellcheck="false"></textarea>
+                    </label>
+                    <label class="field" for="memoryImageType">
+                        <span>类型 type</span>
+                        <input id="memoryImageType" type="text" maxlength="4096" spellcheck="false">
+                    </label>
+                </div>
                 <p id="memoryModalHint" class="muted memory-modal-hint"></p>
             </div>
             <footer class="memory-modal-actions">
                 <button id="memoryModalCancel" class="button secondary" type="button">取消</button>
                 <button id="memoryModalSave" class="button primary" type="button">保存</button>
+            </footer>
+        </section>
+    </div>
+    <div id="imageViewer" class="memory-modal-layer image-viewer-layer" role="dialog" aria-modal="true" aria-labelledby="imageViewerTitle" aria-describedby="imageViewerStatus" hidden>
+        <div class="memory-modal-backdrop" data-image-viewer-close aria-hidden="true"></div>
+        <section class="memory-modal-card image-viewer-card">
+            <header class="memory-modal-header">
+                <div>
+                    <p class="eyebrow">图片缓存预览</p>
+                    <h3 id="imageViewerTitle">查看大图</h3>
+                    <p id="imageViewerMeta" class="memory-modal-meta"></p>
+                </div>
+                <button id="imageViewerHeaderClose" class="memory-modal-close" type="button" aria-label="关闭图片预览">×</button>
+            </header>
+            <div class="image-viewer-body">
+                <p id="imageViewerStatus" class="image-viewer-status">正在读取缓存图片…</p>
+                <img id="imageViewerImage" alt="" hidden>
+            </div>
+            <footer class="memory-modal-actions">
+                <button id="imageViewerEdit" class="button secondary" type="button">编辑缓存信息</button>
+                <button id="imageViewerClose" class="button primary" type="button">关闭</button>
             </footer>
         </section>
     </div>
@@ -1217,16 +1520,21 @@ noscript {
         saveConfig: 'OlivOSAIChatAssassin_WebUI_SaveConfig',
         memoryOverview: 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview',
         memorySection: 'OlivOSAIChatAssassin_WebUI_GetMemorySection',
+        memoryImage: 'OlivOSAIChatAssassin_WebUI_GetMemoryImage',
         saveMemory: 'OlivOSAIChatAssassin_WebUI_SaveMemory',
     };
     const API_VERSION = 1;
     const REQUEST_TIMEOUT = 10000;
     const MEMORY_PAGE_SIZE = 50;
+    const MEMORY_SEARCH_LIMIT = 200;
+    const MEMORY_IMAGE_CACHE_LIMIT = 80;
+    const IMAGE_CACHE_SECTION = '图片缓存';
     const MAX_REQUEST_BYTES = 1024 * 1024;
     const AUTO_GROW_MAX_HEIGHT = 720;
     const AUTO_GROW_VIEWPORT_RATIO = 0.72;
 
     const pendingRequests = new Map();
+    const memoryImageLoaders = new WeakMap();
     let textareaResizeTimer = 0;
     const state = {
         bots: [],
@@ -1249,6 +1557,10 @@ noscript {
         memoryDirty: false,
         memoryEditorOpen: false,
         memoryEditorContext: null,
+        memoryImageViewerOpen: false,
+        memoryImageViewerContext: null,
+        memoryImagePreviewCache: new Map(),
+        memoryImageObserver: null,
         requestSequence: 0,
         requestTickets: {config: 0, overview: 0, memory: 0},
         botEpoch: 0,
@@ -1276,7 +1588,11 @@ noscript {
             'saveButton', 'memoryRefreshButton', 'memorySectionList',
             'memoryDetail', 'memoryModal', 'memoryModalTitle', 'memoryModalMeta',
             'memoryModalEditor', 'memoryModalHint', 'memoryModalClose',
-            'memoryModalCancel', 'memoryModalSave', 'toast',
+            'memoryModalCancel', 'memoryModalSave', 'memoryImageFields',
+            'memoryImageFileState', 'memoryImageContent', 'memoryImageIntent',
+            'memoryImageType', 'imageViewer', 'imageViewerTitle', 'imageViewerMeta',
+            'imageViewerStatus', 'imageViewerImage', 'imageViewerHeaderClose',
+            'imageViewerEdit', 'imageViewerClose', 'toast',
         ].forEach(function (id) {
             elements[id] = document.getElementById(id);
         });
@@ -1319,12 +1635,31 @@ noscript {
         });
         elements.memoryModalSave.addEventListener('click', saveMemoryEditor);
         elements.memoryModalEditor.addEventListener('input', handleMemoryEditorInput);
+        elements.memoryImageFields.addEventListener('input', handleMemoryEditorInput);
         elements.memoryModal.addEventListener('keydown', handleMemoryModalKeydown);
         document.querySelectorAll('[data-memory-modal-close]').forEach(function (control) {
             control.addEventListener('click', function () {
                 closeMemoryEditor(false);
             });
         });
+        elements.imageViewerHeaderClose.addEventListener('click', function () {
+            closeImageViewer();
+        });
+        elements.imageViewerClose.addEventListener('click', function () {
+            closeImageViewer();
+        });
+        elements.imageViewerEdit.addEventListener('click', editImageFromViewer);
+        elements.imageViewer.addEventListener('keydown', handleImageViewerKeydown);
+        document.querySelectorAll('[data-image-viewer-close]').forEach(function (control) {
+            control.addEventListener('click', function () {
+                closeImageViewer();
+            });
+        });
+        if ('IntersectionObserver' in window) {
+            state.memoryImageObserver = new IntersectionObserver(handleMemoryImageIntersections, {
+                rootMargin: '200px 0px',
+            });
+        }
         elements.resetButton.addEventListener('click', function () {
             if (!state.config) {
                 return;
@@ -1412,7 +1747,7 @@ noscript {
         pending.resolve(message.payload);
     }
 
-    function requestBridge(eventName, payload) {
+    function requestBridge(eventName, payload, timeoutMs) {
         return new Promise(function (resolve, reject) {
             if (window.parent === window) {
                 reject(new Error('请从 OlivOS WebUI 侧栏的插件页面打开'));
@@ -1437,10 +1772,13 @@ noscript {
                 reject(new Error('请求内容过大，请缩短文本后重试'));
                 return;
             }
+            const effectiveTimeout = typeof timeoutMs === 'number' && timeoutMs > 0
+                ? timeoutMs
+                : REQUEST_TIMEOUT;
             const timer = window.setTimeout(function () {
                 pendingRequests.delete(requestId);
                 reject(new Error('请求超时，请稍后重试'));
-            }, REQUEST_TIMEOUT);
+            }, effectiveTimeout);
             pendingRequests.set(requestId, {
                 resolve: resolve,
                 reject: reject,
@@ -1456,10 +1794,11 @@ noscript {
         });
     }
 
-    async function callApi(eventName, payload) {
+    async function callApi(eventName, payload, options) {
+        const timeoutMs = options && typeof options.timeout === 'number' ? options.timeout : 0;
         const response = await requestBridge(eventName, Object.assign({
             api_version: API_VERSION,
-        }, payload || {}));
+        }, payload || {}), timeoutMs);
         if (!response || response.ok !== true) {
             const errorData = response && typeof response.error === 'object' ? response.error : {};
             const error = new Error(errorData.message || '插件请求失败');
@@ -1533,6 +1872,11 @@ noscript {
         }
         const epoch = state.botEpoch + 1;
         state.botEpoch = epoch;
+        closeImageViewer();
+        clearMemoryImageObservers();
+        if (state.memoryEditorOpen) {
+            closeMemoryEditor(true);
+        }
         state.selectedBot = botHash;
         elements.botSelect.value = botHash;
         state.config = null;
@@ -2052,19 +2396,26 @@ noscript {
             ? state.overview.global_sections
             : [];
         sections.forEach(function (section) {
+            const sectionName = String(section.name);
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'memory-chip';
             button.dataset.memoryScope = 'global';
-            button.dataset.memorySection = String(section.name);
-            button.textContent = section.name;
+            button.dataset.memorySection = sectionName;
+            button.textContent = sectionName;
             const detail = document.createElement('small');
             detail.textContent = section.kind === 'dict'
                 ? '字典 · ' + String(section.count || 0) + ' 项'
                 : '文本 · ' + String(section.count || 0) + ' 字';
             button.appendChild(detail);
             button.addEventListener('click', function () {
-                loadMemorySection('global', section.name, 0);
+                const sameSection = state.memoryQuery &&
+                    state.memoryQuery.scope === 'global' &&
+                    state.memoryQuery.section === sectionName;
+                const options = sameSection
+                    ? memoryListOptionsFromQuery(state.memoryQuery, sectionName === IMAGE_CACHE_SECTION)
+                    : undefined;
+                loadMemorySection('global', sectionName, 0, null, options);
             });
             elements.memorySectionList.appendChild(button);
         });
@@ -2104,6 +2455,8 @@ noscript {
         if (!confirmDiscardMemoryEdits()) {
             return;
         }
+        closeImageViewer();
+        clearMemoryImageObservers();
         state.memoryDirty = false;
         state.memoryEditorOpen = false;
         state.requestTickets.memory += 1;
@@ -2188,9 +2541,443 @@ noscript {
         return '该内容按 ' + memoryKindText(kind) + ' 编辑，保存前会校验 JSON 格式。';
     }
 
+    function formatBytes(bytes) {
+        const size = Number(bytes);
+        if (!Number.isFinite(size) || size < 0) {
+            return '—';
+        }
+        if (size < 1024) {
+            return String(size) + ' B';
+        }
+        const units = ['KiB', 'MiB', 'GiB'];
+        let value = size;
+        let index = -1;
+        do {
+            value /= 1024;
+            index += 1;
+        } while (value >= 1024 && index < units.length - 1);
+        return value.toFixed(value >= 10 ? 0 : 1) + ' ' + units[index];
+    }
+
+    function memoryImageStatus(entry) {
+        const status = entry && entry.image ? entry.image.status : '';
+        if (status === 'available') {
+            return {label: '缓存可用', warning: false};
+        }
+        if (status === 'missing') {
+            return {label: '缓存已删除', warning: true};
+        }
+        if (status === 'unavailable') {
+            return {label: '缓存不可读', warning: true};
+        }
+        if (status === 'invalid') {
+            return {label: '缓存路径无效', warning: true};
+        }
+        return {label: '缓存状态未知', warning: true};
+    }
+
+    function memoryImageErrorText(error) {
+        if (error && error.code === 'image_missing') {
+            return '缓存图片文件已删除，无法查看大图；缓存档案仍可正常编辑。';
+        }
+        if (error && error.code === 'image_too_large') {
+            return '缓存图片过大，当前无法在页面内预览；缓存档案仍可正常编辑。';
+        }
+        return '缓存图片读取失败：' + errorMessage(error);
+    }
+
+    function memoryImageCacheKey(entry) {
+        const size = entry && entry.image ? entry.image.size || 0 : 0;
+        return [state.selectedBot || '', entry.key, size].join('|');
+    }
+
+    function cacheMemoryImagePreview(key, dataUrl) {
+        state.memoryImagePreviewCache.delete(key);
+        state.memoryImagePreviewCache.set(key, dataUrl);
+        while (state.memoryImagePreviewCache.size > MEMORY_IMAGE_CACHE_LIMIT) {
+            const oldest = state.memoryImagePreviewCache.keys().next();
+            if (oldest.done) {
+                break;
+            }
+            state.memoryImagePreviewCache.delete(oldest.value);
+        }
+    }
+
+    async function requestMemoryImage(filename, variant) {
+        const botHash = state.selectedBot;
+        const response = await callApi(EVENTS.memoryImage, {
+            bot_hash: botHash,
+            filename: filename,
+            variant: variant,
+        }, {timeout: 30000});
+        if (botHash !== state.selectedBot) {
+            throw new Error('账号已切换，请重新预览');
+        }
+        return response.data || {};
+    }
+
+    function handleMemoryImageIntersections(observations) {
+        observations.forEach(function (observation) {
+            if (!observation.isIntersecting || !state.memoryImageObserver) {
+                return;
+            }
+            state.memoryImageObserver.unobserve(observation.target);
+            const loader = memoryImageLoaders.get(observation.target);
+            memoryImageLoaders.delete(observation.target);
+            if (loader) {
+                loader();
+            }
+        });
+    }
+
+    function clearMemoryImageObservers() {
+        if (state.memoryImageObserver) {
+            state.memoryImageObserver.disconnect();
+        }
+    }
+
+    function observeMemoryImagePreview(target, loader) {
+        if (!state.memoryImageObserver) {
+            loader();
+            return;
+        }
+        memoryImageLoaders.set(target, loader);
+        state.memoryImageObserver.observe(target);
+    }
+
+    function loadMemoryImageThumbnail(entry, button, image, loading, statusBadge) {
+        const cacheKey = memoryImageCacheKey(entry);
+        const cached = state.memoryImagePreviewCache.get(cacheKey);
+        if (cached) {
+            image.addEventListener('load', function () {
+                loading.hidden = true;
+                image.hidden = false;
+            }, {once: true});
+            image.src = cached;
+            return;
+        }
+        requestMemoryImage(entry.key, 'thumbnail').then(function (data) {
+            if (!button.isConnected || !data.data_url) {
+                return;
+            }
+            cacheMemoryImagePreview(cacheKey, data.data_url);
+            image.addEventListener('load', function () {
+                loading.hidden = true;
+                image.hidden = false;
+            }, {once: true});
+            image.src = data.data_url;
+        }).catch(function (error) {
+            if (!button.isConnected) {
+                return;
+            }
+            if (error && error.code === 'image_missing') {
+                entry.image = Object.assign({}, entry.image || {}, {status: 'missing', size: 0});
+                statusBadge.textContent = '缓存已删除';
+                statusBadge.classList.add('warning');
+                loading.textContent = '缓存已删除';
+            } else {
+                loading.textContent = memoryImageErrorText(error);
+            }
+        });
+    }
+
+    function createImageCacheEntry(entry, query) {
+        const row = document.createElement('article');
+        row.className = 'memory-entry memory-image-entry';
+        const status = memoryImageStatus(entry);
+        const fields = entry.fields && typeof entry.fields === 'object' ? entry.fields : {};
+        const header = document.createElement('div');
+        header.className = 'memory-entry-header';
+        const term = document.createElement('strong');
+        term.className = 'memory-entry-key';
+        term.textContent = entry.key;
+        const kind = document.createElement('small');
+        kind.className = 'memory-entry-kind';
+        kind.textContent = '图片缓存 · 固定三字段';
+        header.append(term, kind);
+        row.appendChild(header);
+
+        const layout = document.createElement('div');
+        layout.className = 'memory-image-layout';
+        const preview = document.createElement('div');
+        preview.className = 'memory-image-preview';
+        let statusBadge = null;
+        if (status.label) {
+            statusBadge = document.createElement('span');
+            statusBadge.className = 'memory-badge' + (status.warning ? ' warning' : '');
+            statusBadge.textContent = status.label;
+        }
+        if (entry.image && entry.image.status === 'available') {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'memory-image-thumb';
+            button.setAttribute('aria-label', '查看 ' + entry.key + ' 大图');
+            const image = document.createElement('img');
+            image.alt = fields.content ? '缓存图片：' + fields.content : '缓存图片 ' + entry.key;
+            image.hidden = true;
+            const loading = document.createElement('span');
+            loading.textContent = '加载缩略图…';
+            button.append(image, loading);
+            button.addEventListener('click', function (event) {
+                event.stopPropagation();
+                toggleMemoryValueCard(row);
+                openImageViewer(entry, button);
+            });
+            preview.appendChild(button);
+            observeMemoryImagePreview(button, function () {
+                loadMemoryImageThumbnail(entry, button, image, loading, statusBadge);
+            });
+        } else {
+            const missing = document.createElement('div');
+            missing.className = 'memory-image-missing';
+            const missingTitle = document.createElement('strong');
+            missingTitle.textContent = status.label;
+            const missingNote = document.createElement('small');
+            missingNote.textContent = '档案仍可浏览和编辑';
+            missing.append(missingTitle, missingNote);
+            preview.appendChild(missing);
+        }
+        if (statusBadge) {
+            const statusLine = document.createElement('div');
+            statusLine.className = 'memory-image-status';
+            statusLine.appendChild(statusBadge);
+            if (entry.image && entry.image.status === 'available') {
+                const size = document.createElement('span');
+                size.textContent = formatBytes(entry.image.size);
+                statusLine.appendChild(size);
+            }
+            if (entry.legacy) {
+                const legacy = document.createElement('span');
+                legacy.className = 'memory-badge';
+                legacy.textContent = entry.extra_fields ? '兼容旧格式 · 保留附加字段' : '兼容旧格式';
+                statusLine.appendChild(legacy);
+            }
+            preview.appendChild(statusLine);
+        }
+
+        const details = document.createElement('div');
+        details.className = 'memory-image-details';
+        const fieldsList = document.createElement('dl');
+        fieldsList.className = 'memory-image-fields-list';
+        [
+            ['内容', 'content'],
+            ['意图', 'intent'],
+            ['类型', 'type'],
+        ].forEach(function (item) {
+            const label = document.createElement('dt');
+            label.textContent = item[0];
+            const value = document.createElement('dd');
+            const text = typeof fields[item[1]] === 'string' ? fields[item[1]] : '';
+            value.textContent = text || '（空）';
+            if (!text) {
+                value.classList.add('empty');
+            }
+            fieldsList.append(label, value);
+        });
+        details.appendChild(fieldsList);
+        layout.append(preview, details);
+        row.appendChild(layout);
+
+        if (entry.editable !== false) {
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'button small secondary memory-edit-button';
+            edit.textContent = '编辑';
+            edit.setAttribute('aria-label', '编辑图片缓存档案 ' + entry.key);
+            edit.addEventListener('click', function (event) {
+                event.stopPropagation();
+                openImageEditor(entry, edit);
+            });
+            row.appendChild(edit);
+        } else {
+            const note = document.createElement('small');
+            note.className = 'muted memory-entry-note';
+            note.textContent = '字段过长，已截断显示；为避免覆盖完整内容，当前不可编辑。';
+            row.appendChild(note);
+        }
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('button, input, textarea, a')) {
+                return;
+            }
+            toggleMemoryValueCard(row);
+        });
+        return row;
+    }
+
+    function openImageEditor(entry, trigger) {
+        if (state.busy || state.memoryEditorOpen || state.memoryImageViewerOpen) {
+            return;
+        }
+        const status = memoryImageStatus(entry);
+        const fields = entry.fields && typeof entry.fields === 'object' ? entry.fields : {};
+        const metaParts = [entry.key, status.label, formatBytes(entry.image ? entry.image.size : 0)];
+        if (entry.legacy) {
+            metaParts.push('兼容旧格式');
+        }
+        openMemoryEditor({
+            mode: 'image',
+            fields: fields,
+            kind: 'image',
+            label: '图片缓存档案',
+            title: '编辑图片缓存 · ' + entry.key,
+            meta: metaParts.join(' · '),
+            hint: '按固定三字段保存；当前条目中的未知附加字段会原样保留。缓存文件被删除不影响档案编辑。',
+            fileState: status.label + (status.warning ? '，无法在页面内查看大图。' : '，可由缩略图打开原图。'),
+            fileStateWarning: status.warning,
+            trigger: trigger,
+            buildRequest: function (imageFields) {
+                return {
+                    scope: 'global',
+                    section: '图片缓存',
+                    entries: [{key: entry.key, value: imageFields}],
+                };
+            },
+            successMessage: '图片缓存档案已保存',
+        });
+    }
+
+    async function openImageViewer(entry, trigger) {
+        if (state.busy || state.memoryEditorOpen || state.memoryImageViewerOpen) {
+            return;
+        }
+        const status = memoryImageStatus(entry);
+        const context = {
+            entry: entry,
+            trigger: trigger || document.activeElement,
+        };
+        state.memoryImageViewerOpen = true;
+        state.memoryImageViewerContext = context;
+        elements.imageViewerTitle.textContent = '缓存图片 · ' + entry.key;
+        elements.imageViewerMeta.textContent = [
+            status.label,
+            formatBytes(entry.image ? entry.image.size : 0),
+            entry.fields && entry.fields.content ? entry.fields.content : '',
+        ].filter(Boolean).join(' · ');
+        elements.imageViewerImage.hidden = true;
+        elements.imageViewerImage.removeAttribute('src');
+        elements.imageViewerImage.alt = entry.fields && entry.fields.content
+            ? '缓存图片：' + entry.fields.content
+            : '缓存图片 ' + entry.key;
+        elements.imageViewerStatus.hidden = false;
+        elements.imageViewerStatus.classList.toggle('warning', status.warning);
+        elements.imageViewerEdit.disabled = entry.editable === false;
+        elements.imageViewer.hidden = false;
+        document.body.classList.add('memory-modal-open');
+        window.requestAnimationFrame(function () {
+            elements.imageViewerHeaderClose.focus();
+        });
+        if (entry.image && entry.image.status !== 'available') {
+            elements.imageViewerStatus.textContent = status.label + '：无法查看大图，缓存档案仍可正常浏览和编辑。';
+            return;
+        }
+        elements.imageViewerStatus.textContent = '正在读取原图…';
+        try {
+            const data = await requestMemoryImage(entry.key, 'original');
+            if (!state.memoryImageViewerOpen || state.memoryImageViewerContext !== context) {
+                return;
+            }
+            if (!data.data_url) {
+                throw new Error('插件没有返回图片内容');
+            }
+            elements.imageViewerImage.addEventListener('load', function () {
+                if (state.memoryImageViewerContext !== context) {
+                    return;
+                }
+                elements.imageViewerStatus.hidden = true;
+                elements.imageViewerImage.hidden = false;
+            }, {once: true});
+            elements.imageViewerImage.addEventListener('error', function () {
+                if (state.memoryImageViewerContext !== context) {
+                    return;
+                }
+                elements.imageViewerImage.hidden = true;
+                elements.imageViewerStatus.hidden = false;
+                elements.imageViewerStatus.textContent = '缓存文件不是浏览器可识别的图片，无法查看大图。';
+                elements.imageViewerStatus.classList.add('warning');
+            }, {once: true});
+            elements.imageViewerImage.src = data.data_url;
+        } catch (error) {
+            if (!state.memoryImageViewerOpen || state.memoryImageViewerContext !== context) {
+                return;
+            }
+            if (error && error.code === 'image_missing') {
+                entry.image = Object.assign({}, entry.image || {}, {status: 'missing', size: 0});
+            }
+            elements.imageViewerImage.hidden = true;
+            elements.imageViewerStatus.hidden = false;
+            elements.imageViewerStatus.textContent = memoryImageErrorText(error);
+            elements.imageViewerStatus.classList.add('warning');
+        }
+    }
+
+    function closeImageViewer() {
+        if (!state.memoryImageViewerOpen) {
+            return true;
+        }
+        const trigger = state.memoryImageViewerContext
+            ? state.memoryImageViewerContext.trigger
+            : null;
+        state.memoryImageViewerOpen = false;
+        state.memoryImageViewerContext = null;
+        elements.imageViewer.hidden = true;
+        elements.imageViewerImage.hidden = true;
+        elements.imageViewerImage.removeAttribute('src');
+        elements.imageViewerStatus.hidden = false;
+        elements.imageViewerStatus.classList.remove('warning');
+        elements.imageViewerStatus.textContent = '正在读取缓存图片…';
+        if (!state.memoryEditorOpen) {
+            document.body.classList.remove('memory-modal-open');
+        }
+        if (trigger && trigger.isConnected) {
+            window.requestAnimationFrame(function () {
+                trigger.focus();
+            });
+        }
+        return true;
+    }
+
+    function handleImageViewerKeydown(event) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeImageViewer();
+            return;
+        }
+        if (event.key !== 'Tab') {
+            return;
+        }
+        const controls = Array.from(
+            elements.imageViewer.querySelectorAll('button:not(:disabled)')
+        );
+        if (controls.length === 0) {
+            return;
+        }
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    function editImageFromViewer() {
+        const context = state.memoryImageViewerContext;
+        if (!context || !context.entry || context.entry.editable === false) {
+            return;
+        }
+        const entry = context.entry;
+        const trigger = context.trigger;
+        closeImageViewer();
+        openImageEditor(entry, trigger);
+    }
+
     function toggleMemoryValueCard(card) {
         const wasSelected = card.classList.contains('selected');
-        elements.memoryDetail.querySelectorAll('.memory-value-card.selected').forEach(function (item) {
+        elements.memoryDetail.querySelectorAll(
+            '.memory-value-card.selected, .memory-image-entry.selected'
+        ).forEach(function (item) {
             item.classList.remove('selected');
         });
         if (!wasSelected) {
@@ -2234,12 +3021,20 @@ noscript {
         if (state.busy || state.memoryEditorOpen || !options || typeof options.buildRequest !== 'function') {
             return;
         }
+        const mode = options.mode === 'image' ? 'image' : 'text';
         const value = typeof options.value === 'string' ? options.value : '';
         const kind = options.kind || 'str';
+        const imageFields = {
+            content: options.fields && typeof options.fields.content === 'string' ? options.fields.content : '',
+            intent: options.fields && typeof options.fields.intent === 'string' ? options.fields.intent : '',
+            type: options.fields && typeof options.fields.type === 'string' ? options.fields.type : '',
+        };
         state.memoryEditorContext = Object.assign({}, options, {
+            mode: mode,
             kind: kind,
             label: options.label || '记忆内容',
             originalValue: value,
+            originalImageFields: Object.assign({}, imageFields),
             trigger: options.trigger || document.activeElement,
         });
         state.memoryDirty = false;
@@ -2247,21 +3042,53 @@ noscript {
         elements.memoryModalTitle.textContent = options.title || ('编辑' + state.memoryEditorContext.label);
         elements.memoryModalMeta.textContent = options.meta || memoryKindText(kind);
         elements.memoryModalHint.textContent = options.hint || memoryKindHint(kind);
-        elements.memoryModalEditor.value = value;
+        elements.memoryModalEditor.hidden = mode === 'image';
+        elements.memoryModalEditor.value = mode === 'image' ? '' : value;
         elements.memoryModalEditor.removeAttribute('aria-invalid');
+        elements.memoryImageFields.hidden = mode !== 'image';
+        elements.memoryImageFileState.hidden = mode !== 'image' || !options.fileState;
+        elements.memoryImageFileState.textContent = options.fileState || '';
+        elements.memoryImageFileState.classList.toggle('warning', mode === 'image' && !!options.fileStateWarning);
+        elements.memoryImageContent.value = imageFields.content;
+        elements.memoryImageIntent.value = imageFields.intent;
+        elements.memoryImageType.value = imageFields.type;
         elements.memoryModalSave.textContent = '保存';
         elements.memoryModalSave.disabled = false;
         elements.memoryModal.hidden = false;
         document.body.classList.add('memory-modal-open');
         window.requestAnimationFrame(function () {
-            elements.memoryModalEditor.focus();
-            elements.memoryModalEditor.setSelectionRange(value.length, value.length);
+            if (mode === 'image') {
+                elements.memoryImageContent.focus();
+                elements.memoryImageContent.setSelectionRange(0, 0);
+            } else {
+                elements.memoryModalEditor.focus();
+                elements.memoryModalEditor.setSelectionRange(value.length, value.length);
+            }
         });
+    }
+
+    function collectImageEditorFields() {
+        return {
+            content: elements.memoryImageContent.value,
+            intent: elements.memoryImageIntent.value,
+            type: elements.memoryImageType.value,
+        };
+    }
+
+    function imageEditorFieldsChanged(originalFields) {
+        const current = collectImageEditorFields();
+        return current.content !== originalFields.content ||
+            current.intent !== originalFields.intent ||
+            current.type !== originalFields.type;
     }
 
     function handleMemoryEditorInput() {
         const context = state.memoryEditorContext;
         if (!context) {
+            return;
+        }
+        if (context.mode === 'image') {
+            state.memoryDirty = imageEditorFieldsChanged(context.originalImageFields);
             return;
         }
         elements.memoryModalEditor.removeAttribute('aria-invalid');
@@ -2285,8 +3112,17 @@ noscript {
         elements.memoryModal.hidden = true;
         elements.memoryModalEditor.value = '';
         elements.memoryModalEditor.removeAttribute('aria-invalid');
+        elements.memoryModalEditor.hidden = false;
+        elements.memoryImageFields.hidden = true;
+        elements.memoryImageFileState.textContent = '';
+        elements.memoryImageFileState.classList.remove('warning');
+        elements.memoryImageContent.value = '';
+        elements.memoryImageIntent.value = '';
+        elements.memoryImageType.value = '';
         elements.memoryModalSave.textContent = '保存';
-        document.body.classList.remove('memory-modal-open');
+        if (!state.memoryImageViewerOpen) {
+            document.body.classList.remove('memory-modal-open');
+        }
         if (trigger && trigger.isConnected) {
             window.requestAnimationFrame(function () {
                 trigger.focus();
@@ -2310,8 +3146,12 @@ noscript {
             return;
         }
         const controls = Array.from(
-            elements.memoryModal.querySelectorAll('button:not(:disabled), textarea:not(:disabled)')
-        );
+            elements.memoryModal.querySelectorAll(
+                'button:not(:disabled), textarea:not(:disabled), input:not(:disabled)'
+            )
+        ).filter(function (control) {
+            return !control.closest('[hidden]');
+        });
         if (controls.length === 0) {
             return;
         }
@@ -2333,7 +3173,9 @@ noscript {
         }
         let value = null;
         try {
-            value = parseMemoryEditorValue(elements.memoryModalEditor, context.kind, context.label);
+            value = context.mode === 'image'
+                ? collectImageEditorFields()
+                : parseMemoryEditorValue(elements.memoryModalEditor, context.kind, context.label);
         } catch (error) {
             showToast(error.message, true);
             return;
@@ -2360,17 +3202,215 @@ noscript {
         return window.confirm('当前记忆有未保存的修改，确定放弃吗？');
     }
 
-    async function loadMemorySection(scope, section, offset, groupId) {
+    function isImageCacheSection(scope, section) {
+        return scope === 'global' && section === IMAGE_CACHE_SECTION;
+    }
+
+    function isImageCacheQuery(query) {
+        return Boolean(query && isImageCacheSection(query.scope, query.section));
+    }
+
+    function defaultMemoryListOptions(imageCache) {
+        return {
+            sort: 'default',
+            order: 'asc',
+            search: '',
+            cached_first: imageCache === true,
+        };
+    }
+
+    function memoryListOptionsFromQuery(query, imageCache) {
+        const defaults = defaultMemoryListOptions(imageCache);
+        if (!query || query.scope !== 'global') {
+            return defaults;
+        }
+        return {
+            sort: query.sort === 'name' ? 'name' : 'default',
+            order: query.order === 'desc' ? 'desc' : 'asc',
+            search: typeof query.search === 'string' ? query.search : '',
+            cached_first: typeof query.cached_first === 'boolean'
+                ? query.cached_first
+                : defaults.cached_first,
+        };
+    }
+
+    function focusMemorySearch(selection) {
+        const search = elements.memoryDetail.querySelector('[data-memory-search]');
+        if (!search) {
+            return;
+        }
+        search.focus({preventScroll: true});
+        if (!selection || typeof search.setSelectionRange !== 'function') {
+            return;
+        }
+        const start = Math.max(0, Math.min(Number(selection.start) || 0, search.value.length));
+        const end = Math.max(0, Math.min(Number(selection.end) || 0, search.value.length));
+        search.setSelectionRange(start, end);
+    }
+
+    function createMemoryListControls(data, query) {
+        const imageCache = data.image_cache === true;
+        const listOptions = memoryListOptionsFromQuery(query, imageCache);
+        const controls = document.createElement('div');
+        controls.className = 'memory-list-controls';
+        controls.dataset.memoryListControls = '1';
+
+        const searchField = document.createElement('div');
+        searchField.className = 'memory-list-control memory-list-search';
+        const searchLabel = document.createElement('span');
+        searchLabel.textContent = '搜索';
+        const searchRow = document.createElement('div');
+        searchRow.className = 'memory-search-row';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'search';
+        searchInput.value = typeof data.search === 'string' ? data.search : listOptions.search;
+        searchInput.maxLength = MEMORY_SEARCH_LIMIT;
+        searchInput.placeholder = imageCache
+            ? '搜索文件名、内容、意图或类型'
+            : '搜索名称或内容';
+        searchInput.dataset.memorySearch = '1';
+        searchInput.setAttribute('aria-label', searchInput.placeholder);
+        const searchButton = document.createElement('button');
+        searchButton.type = 'button';
+        searchButton.className = 'button small secondary';
+        searchButton.textContent = '搜索';
+        searchButton.dataset.memorySearchSubmit = '1';
+        searchButton.setAttribute('aria-label', '执行记忆搜索');
+        searchRow.append(searchInput, searchButton);
+        searchField.append(searchLabel, searchRow);
+        controls.appendChild(searchField);
+
+        const sortField = document.createElement('label');
+        sortField.className = 'memory-list-control';
+        const sortLabel = document.createElement('span');
+        sortLabel.textContent = '排序';
+        const sortSelect = document.createElement('select');
+        sortSelect.dataset.memorySort = '1';
+        [
+            ['default', '默认顺序'],
+            ['name', '按名称'],
+        ].forEach(function (option) {
+            const item = document.createElement('option');
+            item.value = option[0];
+            item.textContent = option[1];
+            sortSelect.appendChild(item);
+        });
+        sortSelect.value = listOptions.sort;
+        sortField.append(sortLabel, sortSelect);
+        controls.appendChild(sortField);
+
+        const orderField = document.createElement('label');
+        orderField.className = 'memory-list-control';
+        const orderLabel = document.createElement('span');
+        orderLabel.textContent = '顺序';
+        const orderSelect = document.createElement('select');
+        orderSelect.dataset.memoryOrder = '1';
+        [
+            ['asc', '升序'],
+            ['desc', '降序'],
+        ].forEach(function (option) {
+            const item = document.createElement('option');
+            item.value = option[0];
+            item.textContent = option[1];
+            orderSelect.appendChild(item);
+        });
+        orderSelect.value = listOptions.order;
+        orderField.append(orderLabel, orderSelect);
+        controls.appendChild(orderField);
+
+        let cacheFirst = null;
+        if (imageCache) {
+            const cacheField = document.createElement('label');
+            cacheField.className = 'check-field memory-list-control memory-cache-first';
+            cacheFirst = document.createElement('input');
+            cacheFirst.type = 'checkbox';
+            cacheFirst.checked = listOptions.cached_first;
+            cacheFirst.dataset.memoryCachedFirst = '1';
+            const cacheLabel = document.createElement('span');
+            cacheLabel.textContent = '缓存命中优先';
+            cacheField.append(cacheFirst, cacheLabel);
+            controls.appendChild(cacheField);
+        }
+
+        const total = typeof data.total === 'number' ? data.total : 0;
+        const unfilteredTotal = typeof data.unfiltered_total === 'number'
+            ? data.unfiltered_total
+            : total;
+        const cacheHitTotal = typeof data.cache_hit_total === 'number'
+            ? data.cache_hit_total
+            : null;
+        const summary = document.createElement('p');
+        summary.className = 'muted memory-list-summary';
+        if (data.filtered) {
+            summary.textContent = '搜索“' + (data.search || '') + '”，匹配 ' +
+                String(total) + ' / 共 ' + String(unfilteredTotal) + ' 项。';
+        } else {
+            summary.textContent = '共 ' + String(total) + ' 项。';
+        }
+        if (imageCache && cacheHitTotal !== null) {
+            summary.textContent += ' 缓存命中 ' + String(cacheHitTotal) + ' 项。';
+        }
+        if (imageCache && data.cached_first) {
+            summary.textContent += cacheHitTotal > 0
+                ? ' 已启用缓存命中优先。'
+                : ' 已启用缓存命中优先，但当前结果没有对应缓存文件。';
+        }
+        controls.appendChild(summary);
+
+        function currentOptions(extra) {
+            return Object.assign({
+                sort: sortSelect.value,
+                order: orderSelect.value,
+                search: searchInput.value,
+                cached_first: cacheFirst ? cacheFirst.checked : false,
+            }, extra || {});
+        }
+
+        function reloadWithControls() {
+            loadMemorySection('global', query.section, 0, null, currentOptions());
+        }
+
+        function runSearch() {
+            const selection = {
+                start: searchInput.selectionStart,
+                end: searchInput.selectionEnd,
+            };
+            loadMemorySection('global', query.section, 0, null, currentOptions({
+                focusSearch: true,
+                searchSelection: selection,
+            }));
+        }
+
+        searchButton.addEventListener('click', runSearch);
+        searchInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                runSearch();
+            }
+        });
+        sortSelect.addEventListener('change', reloadWithControls);
+        orderSelect.addEventListener('change', reloadWithControls);
+        if (cacheFirst) {
+            cacheFirst.addEventListener('change', reloadWithControls);
+        }
+        return controls;
+    }
+
+    async function loadMemorySection(scope, section, offset, groupId, listOptions) {
         if (!state.selectedBot) {
             return false;
         }
         if (!confirmDiscardMemoryEdits()) {
             return false;
         }
+        closeImageViewer();
+        clearMemoryImageObservers();
         state.memoryDirty = false;
         state.memoryEditorOpen = false;
         const ticket = state.requestTickets.memory + 1;
         state.requestTickets.memory = ticket;
+        const imageCache = isImageCacheSection(scope, section);
+        const requestedOptions = Object.assign(defaultMemoryListOptions(imageCache), listOptions || {});
         const payload = {
             bot_hash: state.selectedBot,
             scope: scope,
@@ -2379,6 +3419,10 @@ noscript {
         };
         if (scope === 'global') {
             payload.section = section;
+            payload.sort = requestedOptions.sort;
+            payload.order = requestedOptions.order;
+            payload.search = requestedOptions.search;
+            payload.cached_first = requestedOptions.cached_first === true;
         } else {
             payload.group_id = groupId;
         }
@@ -2396,6 +3440,9 @@ noscript {
             }
             state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
             renderMemorySection(response.data || {}, payload);
+            if (requestedOptions.focusSearch) {
+                focusMemorySearch(requestedOptions.searchSelection);
+            }
         } catch (error) {
             if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
                 return;
@@ -2424,11 +3471,11 @@ noscript {
         }
         elements.memoryDetail.appendChild(headingRow);
 
-        if (data.metadata_only && data.kind === 'metadata') {
-            const pre = document.createElement('pre');
-            pre.textContent = memoryMetadataText(data.metadata || {});
-            elements.memoryDetail.appendChild(pre);
-            appendEmpty(elements.memoryDetail, '图片缓存仅显示元数据，不向页面发送缓存内容。');
+        if (data.image_cache && data.kind === 'invalid') {
+            appendEmpty(
+                elements.memoryDetail,
+                data.warning || '图片缓存档案结构异常，当前无法逐条浏览。'
+            );
             return;
         }
 
@@ -2467,21 +3514,32 @@ noscript {
         }
 
         const entries = Array.isArray(data.entries) ? data.entries : [];
+        elements.memoryDetail.appendChild(createMemoryListControls(data, query));
         if (entries.length === 0) {
-            appendEmpty(elements.memoryDetail, '该区块为空');
+            const search = typeof data.search === 'string' ? data.search : '';
+            appendEmpty(
+                elements.memoryDetail,
+                search ? '没有匹配“' + search + '”的记忆条目' : '该区块为空'
+            );
         } else {
-            const hasEditable = !data.metadata_only && entries.some(function (entry) {
+            const hasEditable = entries.some(function (entry) {
                 return entry.editable !== false && !entry.truncated;
             });
             if (hasEditable) {
                 const hint = document.createElement('p');
                 hint.className = 'muted memory-edit-hint';
-                hint.textContent = '悬停或单击内容后，点击右侧“编辑”按钮，逐条修改并保存。';
+                hint.textContent = data.image_cache
+                    ? '缩略图会在进入可视区域后按需加载；点击缩略图查看大图，缓存文件缺失时档案仍可编辑。'
+                    : '悬停或单击内容后，点击右侧“编辑”按钮，逐条修改并保存。';
                 elements.memoryDetail.appendChild(hint);
             }
             const list = document.createElement('div');
             list.className = 'memory-entry-list';
             entries.forEach(function (entry) {
+                if (data.image_cache) {
+                    list.appendChild(createImageCacheEntry(entry, query));
+                    return;
+                }
                 const row = document.createElement('article');
                 row.className = 'memory-entry';
                 const header = document.createElement('div');
@@ -2491,14 +3549,11 @@ noscript {
                 term.textContent = entry.key;
                 const kind = document.createElement('small');
                 kind.className = 'memory-entry-kind';
-                kind.textContent = data.metadata_only ? '只读元数据' : memoryKindText(entry.kind || 'str');
+                kind.textContent = memoryKindText(entry.kind || 'str');
                 header.append(term, kind);
                 row.appendChild(header);
-                const editable = !data.metadata_only && entry.editable !== false && !entry.truncated;
-                const previewText = data.metadata_only
-                    ? memoryMetadataText(entry)
-                    : (entry.value || '');
-                const card = createMemoryValueCard(previewText, {
+                const editable = entry.editable !== false && !entry.truncated;
+                const card = createMemoryValueCard(entry.value || '', {
                     editable: editable,
                     kind: entry.kind || 'str',
                     label: '记忆条目 ' + entry.key,
@@ -2520,7 +3575,7 @@ noscript {
                     }
                     toggleMemoryValueCard(card);
                 });
-                if (entry.truncated && !data.metadata_only) {
+                if (entry.truncated) {
                     const note = document.createElement('small');
                     note.className = 'muted memory-entry-note';
                     note.textContent = '内容过长，已截断显示；为避免覆盖完整内容，当前不可编辑。';
@@ -2529,12 +3584,10 @@ noscript {
                 list.appendChild(row);
             });
             elements.memoryDetail.appendChild(list);
-            if (data.metadata_only) {
-                appendEmpty(elements.memoryDetail, '图片缓存仅显示元数据，不向页面发送缓存内容。');
-            }
         }
 
         if (typeof data.total === 'number' && data.total > 0) {
+            const pagerOptions = memoryListOptionsFromQuery(query, data.image_cache === true);
             const pager = document.createElement('div');
             pager.className = 'pager';
             const previous = document.createElement('button');
@@ -2543,18 +3596,27 @@ noscript {
             previous.textContent = '上一页';
             previous.disabled = !(data.offset > 0);
             previous.addEventListener('click', function () {
-                loadMemorySection('global', query.section, Math.max(0, (data.offset || 0) - MEMORY_PAGE_SIZE));
+                loadMemorySection(
+                    'global',
+                    query.section,
+                    Math.max(0, (data.offset || 0) - MEMORY_PAGE_SIZE),
+                    null,
+                    pagerOptions
+                );
             });
             const status = document.createElement('span');
             status.className = 'muted';
             status.textContent = String((data.offset || 0) + entries.length) + ' / ' + String(data.total);
+            if (data.filtered && data.unfiltered_total !== data.total) {
+                status.textContent += '（共 ' + String(data.unfiltered_total) + ' 项）';
+            }
             const next = document.createElement('button');
             next.type = 'button';
             next.className = 'button small secondary';
             next.textContent = '下一页';
             next.disabled = !data.has_more;
             next.addEventListener('click', function () {
-                loadMemorySection('global', query.section, data.next_offset || 0);
+                loadMemorySection('global', query.section, data.next_offset || 0, null, pagerOptions);
             });
             pager.append(previous, status, next);
             elements.memoryDetail.appendChild(pager);
@@ -2592,10 +3654,13 @@ noscript {
         elements.memorySectionList.querySelectorAll('button').forEach(function (control) {
             lockMemoryControl(control, locked);
         });
-        elements.memoryDetail.querySelectorAll('textarea, button').forEach(function (control) {
+        elements.memoryDetail.querySelectorAll('textarea, input, select, button').forEach(function (control) {
             lockMemoryControl(control, locked);
         });
-        elements.memoryModal.querySelectorAll('textarea, button').forEach(function (control) {
+        elements.memoryModal.querySelectorAll('textarea, input, button').forEach(function (control) {
+            lockMemoryControl(control, locked);
+        });
+        elements.imageViewer.querySelectorAll('button').forEach(function (control) {
             lockMemoryControl(control, locked);
         });
     }
@@ -2625,7 +3690,8 @@ noscript {
                         state.memoryQuery.scope,
                         state.memoryQuery.section,
                         state.memoryQuery.offset || 0,
-                        state.memoryQuery.group_id
+                        state.memoryQuery.group_id,
+                        memoryListOptionsFromQuery(state.memoryQuery, isImageCacheQuery(state.memoryQuery))
                     );
                 }
                 setMemoryControlsLocked(true);
@@ -2644,19 +3710,6 @@ noscript {
         }
     }
 
-    function memoryMetadataText(entry) {
-        if (entry.kind === 'str') {
-            return '文本 · ' + String(entry.length || 0) + ' 字符';
-        }
-        if (entry.kind === 'dict') {
-            return '字典 · ' + String(entry.count || 0) + ' 项';
-        }
-        if (entry.kind === 'list') {
-            return '列表 · ' + String(entry.count || 0) + ' 项';
-        }
-        return '类型 · ' + String(entry.kind || '未知');
-    }
-
     async function refreshCurrent() {
         if (!state.selectedBot) {
             return;
@@ -2670,6 +3723,11 @@ noscript {
         }
         if (!confirmDiscardMemoryEdits()) {
             return;
+        }
+        closeImageViewer();
+        clearMemoryImageObservers();
+        if (state.memoryEditorOpen) {
+            closeMemoryEditor(true);
         }
         state.memoryDirty = false;
         state.memoryEditorOpen = false;
@@ -2687,7 +3745,8 @@ noscript {
                 state.memoryQuery.scope,
                 state.memoryQuery.section,
                 state.memoryQuery.offset || 0,
-                state.memoryQuery.group_id
+                state.memoryQuery.group_id,
+                memoryListOptionsFromQuery(state.memoryQuery, isImageCacheQuery(state.memoryQuery))
             );
         }
         showToast('记忆已刷新');

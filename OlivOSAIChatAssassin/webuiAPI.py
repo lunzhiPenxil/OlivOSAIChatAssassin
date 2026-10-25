@@ -1,7 +1,10 @@
+import base64
 import copy
+import io
 import json
 import math
 import os
+import unicodedata
 from urllib.parse import urlsplit
 
 import OlivOSAIChatAssassin
@@ -15,6 +18,7 @@ EVENT_GET_CONFIG = 'OlivOSAIChatAssassin_WebUI_GetConfig'
 EVENT_SAVE_CONFIG = 'OlivOSAIChatAssassin_WebUI_SaveConfig'
 EVENT_MEMORY_OVERVIEW = 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview'
 EVENT_MEMORY_SECTION = 'OlivOSAIChatAssassin_WebUI_GetMemorySection'
+EVENT_MEMORY_IMAGE = 'OlivOSAIChatAssassin_WebUI_GetMemoryImage'
 EVENT_SAVE_MEMORY = 'OlivOSAIChatAssassin_WebUI_SaveMemory'
 
 SECRET_PATHS = ('api_key', 'ocr_api.api_key')
@@ -26,7 +30,16 @@ MEMORY_VALUE_LIMIT = 20000
 MEMORY_WRITE_BYTES_LIMIT = 512 * 1024
 MEMORY_WRITE_VALUE_LIMIT = 256 * 1024
 MEMORY_NAME_LIMIT = 256
-MEMORY_METADATA_ONLY_SECTIONS = frozenset(('图片缓存',))
+MEMORY_SEARCH_LIMIT = 200
+MEMORY_SORT_DEFAULT = 'default'
+MEMORY_SORT_NAME = 'name'
+MEMORY_ORDER_ASC = 'asc'
+MEMORY_ORDER_DESC = 'desc'
+IMAGE_CACHE_SECTION = '图片缓存'
+IMAGE_CACHE_FIELDS = ('content', 'intent', 'type')
+IMAGE_CACHE_FIELD_LIMIT = 4096
+IMAGE_THUMBNAIL_MAX_SIZE = (480, 360)
+MAX_IMAGE_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_REQUEST_BYTES = 1024 * 1024
 WEBUI_ASSET_FILES = ('webui/index.html',)
 
@@ -263,14 +276,14 @@ def _add_field_error(errors, field, message):
     errors[field] = message
 
 
-def _validate_string(value, field, errors, allow_empty=False, max_length=100000, url=False):
+def _validate_string(value, field, errors, allow_empty=False, max_length=None, url=False):
     if not isinstance(value, str):
         _add_field_error(errors, field, '必须是字符串')
         return None
     if not allow_empty and not value.strip():
         _add_field_error(errors, field, '不能为空')
         return None
-    if len(value) > max_length:
+    if max_length is not None and len(value) > max_length:
         _add_field_error(errors, field, f'不能超过 {max_length} 个字符')
         return None
     if url:
@@ -281,7 +294,7 @@ def _validate_string(value, field, errors, allow_empty=False, max_length=100000,
     return value
 
 
-def _validate_number(value, field, errors, minimum, maximum, integer=False):
+def _validate_number(value, field, errors, minimum, maximum=None, integer=False):
     if integer:
         if type(value) is not int:
             _add_field_error(errors, field, '必须是整数')
@@ -292,8 +305,11 @@ def _validate_number(value, field, errors, minimum, maximum, integer=False):
     if isinstance(value, float) and not math.isfinite(value):
         _add_field_error(errors, field, '必须是有限数字')
         return None
-    if value < minimum or value > maximum:
-        _add_field_error(errors, field, f'必须在 {minimum} 到 {maximum} 之间')
+    if value < minimum:
+        _add_field_error(errors, field, f'不能小于 {minimum}')
+        return None
+    if maximum is not None and value > maximum:
+        _add_field_error(errors, field, f'不能大于 {maximum}')
         return None
     return value
 
@@ -306,13 +322,13 @@ def _validate_bool(value, field, errors):
 
 
 def _validate_string_list(value, field, errors):
-    if not isinstance(value, list) or len(value) > 1000:
-        _add_field_error(errors, field, '必须是最多 1000 项的字符串列表')
+    if not isinstance(value, list):
+        _add_field_error(errors, field, '必须是字符串列表')
         return None
     result = []
     for index, item in enumerate(value):
-        if not isinstance(item, str) or not item.strip() or len(item) > 256:
-            _add_field_error(errors, f'{field}.{index}', '必须是非空字符串且不超过 256 字符')
+        if not isinstance(item, str) or not item.strip():
+            _add_field_error(errors, f'{field}.{index}', '必须是非空字符串')
             return None
         result.append(item)
     return result
@@ -329,15 +345,15 @@ def _validate_ocr_patch(value, errors):
         if key not in allowed:
             _add_field_error(errors, field, '不支持的 OCR 配置项')
         elif key == 'api_key':
-            checked = _validate_string(item, field, errors, allow_empty=True, max_length=4096)
+            checked = _validate_string(item, field, errors, allow_empty=True)
             if checked is not None and checked:
                 result[key] = checked
         elif key == 'api_base':
-            checked = _validate_string(item, field, errors, max_length=2048, url=True)
+            checked = _validate_string(item, field, errors, url=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'model':
-            checked = _validate_string(item, field, errors, max_length=256)
+            checked = _validate_string(item, field, errors)
             if checked is not None:
                 result[key] = checked
         elif key == 'mode':
@@ -350,7 +366,7 @@ def _validate_ocr_patch(value, errors):
             if checked is not None:
                 result[key] = checked
         elif key == 'queue_size':
-            checked = _validate_number(item, field, errors, 1, 128, integer=True)
+            checked = _validate_number(item, field, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
     return result
@@ -381,23 +397,23 @@ def _validate_config_patch(patch: dict):
             _add_field_error(errors, key, '不支持的配置项')
             continue
         if key == 'api_key':
-            checked = _validate_string(value, key, errors, allow_empty=True, max_length=4096)
+            checked = _validate_string(value, key, errors, allow_empty=True)
             if checked is not None and checked:
                 result[key] = checked
         elif key == 'api_base':
-            checked = _validate_string(value, key, errors, max_length=2048, url=True)
+            checked = _validate_string(value, key, errors, url=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'model':
-            checked = _validate_string(value, key, errors, max_length=256)
+            checked = _validate_string(value, key, errors)
             if checked is not None:
                 result[key] = checked
         elif key == 'max_tokens':
-            checked = _validate_number(value, key, errors, 1, 1000000, integer=True)
+            checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'temperature':
-            checked = _validate_number(value, key, errors, 0, 2)
+            checked = _validate_number(value, key, errors, 0)
             if checked is not None:
                 result[key] = checked
         elif key == 'thinking':
@@ -414,11 +430,11 @@ def _validate_config_patch(patch: dict):
             if checked is not None:
                 result[key] = checked
         elif key == 'first_thinking_cooldown':
-            checked = _validate_number(value, key, errors, 0, 86400)
+            checked = _validate_number(value, key, errors, 0)
             if checked is not None:
                 result[key] = checked
         elif key == 'personality':
-            checked = _validate_string(value, key, errors, allow_empty=True, max_length=100000)
+            checked = _validate_string(value, key, errors, allow_empty=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'record_knowledge':
@@ -426,11 +442,11 @@ def _validate_config_patch(patch: dict):
             if checked is not None:
                 result[key] = checked
         elif key == 'search_knowledge_deepin':
-            checked = _validate_number(value, key, errors, 0, 16, integer=True)
+            checked = _validate_number(value, key, errors, 0, integer=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'retry_count':
-            checked = _validate_number(value, key, errors, 1, 10, integer=True)
+            checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'enabled_groups':
@@ -438,15 +454,15 @@ def _validate_config_patch(patch: dict):
             if checked is not None:
                 result[key] = checked
         elif key == 'search_ageing':
-            checked = _validate_number(value, key, errors, 1, 2592000)
+            checked = _validate_number(value, key, errors, 1)
             if checked is not None:
                 result[key] = checked
         elif key == 'history_size_min':
-            checked = _validate_number(value, key, errors, 1, 1000, integer=True)
+            checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'history_size':
-            checked = _validate_number(value, key, errors, 1, 1000, integer=True)
+            checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'history_dynamic':
@@ -454,19 +470,19 @@ def _validate_config_patch(patch: dict):
             if checked is not None:
                 result[key] = checked
         elif key == 'history_dynamic_size':
-            checked = _validate_number(value, key, errors, 1, 10000, integer=True)
+            checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'slack_time':
-            checked = _validate_number(value, key, errors, 0, 300)
+            checked = _validate_number(value, key, errors, 0)
             if checked is not None:
                 result[key] = checked
         elif key == 'slack_cooldown_time':
-            checked = _validate_number(value, key, errors, 0, 3600)
+            checked = _validate_number(value, key, errors, 0)
             if checked is not None:
                 result[key] = checked
         elif key == 'reply_probability':
-            checked = _validate_number(value, key, errors, 0, 1)
+            checked = _validate_number(value, key, errors, 0)
             if checked is not None:
                 result[key] = checked
         elif key == 'reply_keywords':
@@ -482,7 +498,7 @@ def _validate_config_patch(patch: dict):
             if checked is not None:
                 result[key] = checked
         elif key == 'max_message_length':
-            checked = _validate_number(value, key, errors, 1, 1000000, integer=True)
+            checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
         elif key == 'ocr_api':
@@ -541,6 +557,265 @@ def _display_memory_value(value, limit=MEMORY_VALUE_LIMIT):
     except Exception:
         text = str(value)
         return text[:limit], len(text) > limit
+
+
+def _is_safe_image_cache_name(filename):
+    return not (
+        not isinstance(filename, str)
+        or not filename
+        or len(filename) > MEMORY_NAME_LIMIT
+        or filename in ('.', '..')
+        or '\x00' in filename
+        or '/' in filename
+        or '\\' in filename
+        or ':' in filename
+        or os.path.basename(filename) != filename
+    )
+
+
+def _safe_image_cache_path(filename):
+    if not _is_safe_image_cache_name(filename):
+        return None
+    image_dir = os.path.abspath(OlivOSAIChatAssassin.data.gImageDir)
+    candidate = os.path.abspath(os.path.join(image_dir, filename))
+    try:
+        real_dir = os.path.realpath(image_dir)
+        real_candidate = os.path.realpath(candidate)
+        if os.path.commonpath((real_dir, real_candidate)) != real_dir:
+            return None
+    except (OSError, ValueError):
+        return None
+    return real_candidate
+
+
+def _image_cache_name_key(filename):
+    return unicodedata.normalize('NFC', filename).casefold()
+
+
+def _image_cache_directory_index():
+    image_dir = os.path.abspath(OlivOSAIChatAssassin.data.gImageDir)
+    try:
+        names = os.listdir(image_dir)
+    except OSError:
+        return {}
+    index = {}
+    for name in names:
+        path = _safe_image_cache_path(name)
+        if path is None:
+            continue
+        try:
+            if not os.path.isfile(path):
+                continue
+        except OSError:
+            continue
+        index.setdefault(_image_cache_name_key(name), path)
+    return index
+
+
+def _image_cache_file_info(filename, directory_index=None):
+    if directory_index is not None:
+        if not _is_safe_image_cache_name(filename):
+            return {'status': 'invalid', 'size': 0}, None
+        path = directory_index.get(_image_cache_name_key(filename))
+        if path is None:
+            return {'status': 'missing', 'size': 0}, _safe_image_cache_path(filename)
+    else:
+        path = _safe_image_cache_path(filename)
+        if path is None:
+            return {'status': 'invalid', 'size': 0}, None
+    try:
+        if not os.path.isfile(path):
+            return {'status': 'missing', 'size': 0}, path
+        return {'status': 'available', 'size': os.path.getsize(path)}, path
+    except OSError:
+        return {'status': 'unavailable', 'size': 0}, path
+
+
+def _image_cache_fields(value):
+    fields = {}
+    truncated = False
+    extra_count = 0
+    legacy = not isinstance(value, dict)
+    if isinstance(value, dict):
+        extra_count = len([key for key in value if key not in IMAGE_CACHE_FIELDS])
+        legacy = legacy or extra_count > 0
+        for field in IMAGE_CACHE_FIELDS:
+            if field not in value:
+                fields[field] = ''
+                legacy = True
+                continue
+            raw_value = value[field]
+            if isinstance(raw_value, str):
+                text = raw_value
+            else:
+                text, field_truncated = _display_memory_value(raw_value, limit=IMAGE_CACHE_FIELD_LIMIT)
+                truncated = truncated or field_truncated
+                legacy = True
+            if len(text) > IMAGE_CACHE_FIELD_LIMIT:
+                text = text[:IMAGE_CACHE_FIELD_LIMIT]
+                truncated = True
+            fields[field] = text
+    else:
+        text, truncated = _display_memory_value(value, limit=IMAGE_CACHE_FIELD_LIMIT)
+        fields['content'] = text
+        fields['intent'] = ''
+        fields['type'] = ''
+    return fields, legacy, truncated, extra_count
+
+
+def _image_cache_records(items, directory_index=None):
+    records = []
+    for index, (key, value) in enumerate(items):
+        key_text = str(key)
+        fields, legacy, truncated, extra_count = _image_cache_fields(value)
+        file_info, _path = _image_cache_file_info(key_text, directory_index)
+        entry = {
+            'key': key_text,
+            'kind': type(value).__name__,
+            'editable': not truncated,
+            'truncated': truncated,
+            'legacy': legacy,
+            'extra_fields': extra_count,
+            'fields': fields,
+            'image': file_info,
+        }
+        records.append({
+            'index': index,
+            'key': key_text,
+            'entry': entry,
+            'search_text': '\n'.join([key_text] + [fields[field] for field in IMAGE_CACHE_FIELDS]).casefold(),
+            'image_status': file_info['status'],
+            'cache_hit': file_info['status'] in ('available', 'unavailable'),
+        })
+    return records
+
+
+def _dict_memory_records(items):
+    records = []
+    for index, (key, value) in enumerate(items):
+        key_text = str(key)
+        text, truncated = _display_memory_value(value)
+        entry = {
+            'key': key_text,
+            'kind': type(value).__name__,
+            'value': text,
+            'truncated': truncated,
+            'editable': not truncated,
+        }
+        records.append({
+            'index': index,
+            'key': key_text,
+            'entry': entry,
+            'search_text': (key_text + '\n' + text).casefold(),
+        })
+    return records
+
+
+def _prepare_memory_records(records, options, image_cache=False):
+    search = options['search'].casefold()
+    if search:
+        records = [record for record in records if search in record['search_text']]
+    if options['sort'] == MEMORY_SORT_NAME:
+        records.sort(key=lambda record: (record['key'].casefold(), record['index']))
+    if options['order'] == MEMORY_ORDER_DESC:
+        records.reverse()
+    if image_cache and options['cached_first']:
+        records.sort(key=lambda record: 0 if record['cache_hit'] else 1)
+    return records
+
+
+def _slice_memory_records(records, offset, limit):
+    entries = []
+    used_bytes = 0
+    for record in records[offset:]:
+        if len(entries) >= limit:
+            break
+        entry = record['entry']
+        entry_size = len(json.dumps(entry, ensure_ascii=False).encode('utf-8'))
+        if entries and used_bytes + entry_size > MEMORY_BYTES_LIMIT:
+            break
+        entries.append(entry)
+        used_bytes += entry_size
+    return entries
+
+
+def _memory_dict_page(records, unfiltered_total, offset, limit, options, image_cache=False):
+    total = len(records)
+    entries = _slice_memory_records(records, offset, limit)
+    next_offset = offset + len(entries)
+    result = {
+        'kind': 'dict',
+        'entries': entries,
+        'total': total,
+        'unfiltered_total': unfiltered_total,
+        'filtered': bool(options['search']),
+        'search': options['search'],
+        'sort': options['sort'],
+        'order': options['order'],
+        'cached_first': bool(image_cache and options['cached_first']),
+        'offset': offset,
+        'next_offset': next_offset,
+        'has_more': next_offset < total,
+    }
+    if image_cache:
+        result['cache_hit_total'] = sum(1 for record in records if record['cache_hit'])
+    return result
+
+
+def _image_mime_type(data):
+    if data.startswith(b'\xff\xd8\xff'):
+        return 'image/jpeg'
+    if data.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'image/png'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    if len(data) >= 12 and data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'image/webp'
+    if data.startswith(b'BM'):
+        return 'image/bmp'
+    return None
+
+
+def _make_image_thumbnail(path):
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        return None
+    try:
+        with Image.open(path) as opened:
+            opened.seek(0)
+            image = ImageOps.exif_transpose(opened)
+            if image.mode not in ('RGB', 'RGBA'):
+                image = image.convert('RGBA')
+            image.thumbnail(IMAGE_THUMBNAIL_MAX_SIZE, Image.Resampling.LANCZOS)
+            output = io.BytesIO()
+            if image.mode == 'RGBA':
+                image.save(output, format='PNG', optimize=True)
+                mime = 'image/png'
+            else:
+                image.convert('RGB').save(output, format='JPEG', quality=82, optimize=True)
+                mime = 'image/jpeg'
+            return output.getvalue(), mime, image.size
+    except Exception:
+        return None
+
+
+def _read_image_cache_file(path, source_size):
+    if source_size > MAX_IMAGE_SOURCE_BYTES:
+        raise WebUIError('image_too_large', '缓存图片过大，无法读取')
+    try:
+        with open(path, 'rb') as file_obj:
+            data = file_obj.read(MAX_IMAGE_SOURCE_BYTES + 1)
+    except FileNotFoundError:
+        raise WebUIError('image_missing', '缓存图片文件已删除')
+    except OSError:
+        raise WebUIError('image_unreadable', '缓存图片文件无法读取')
+    if len(data) > MAX_IMAGE_SOURCE_BYTES:
+        raise WebUIError('image_too_large', '缓存图片过大，无法读取')
+    mime = _image_mime_type(data)
+    if mime is None:
+        raise WebUIError('image_invalid', '缓存文件不是可识别的图片')
+    return data, mime
 
 
 def _page_number(value, default, minimum, maximum):
@@ -665,30 +940,31 @@ def _memory_metadata(value):
     return result
 
 
-def _slice_entries(items, offset, limit, metadata_only=False):
-    entries = []
-    used_bytes = 0
-    for key, value in items[offset:]:
-        if len(entries) >= limit:
-            break
-        if metadata_only:
-            entry = {'key': str(key), 'editable': False}
-            entry.update(_memory_metadata(value))
-        else:
-            text, truncated = _display_memory_value(value)
-            entry = {
-                'key': str(key),
-                'kind': type(value).__name__,
-                'value': text,
-                'truncated': truncated,
-                'editable': not truncated,
-            }
-        entry_size = len(json.dumps(entry, ensure_ascii=False).encode('utf-8'))
-        if entries and used_bytes + entry_size > MEMORY_BYTES_LIMIT:
-            break
-        entries.append(entry)
-        used_bytes += entry_size
-    return entries
+def _memory_list_options(payload, image_cache=False):
+    sort = payload.get('sort', MEMORY_SORT_DEFAULT)
+    if sort not in (MEMORY_SORT_DEFAULT, MEMORY_SORT_NAME):
+        raise WebUIError('validation_error', '排序方式无效', {'sort': '必须是 default 或 name'})
+    order = payload.get('order', MEMORY_ORDER_ASC)
+    if order not in (MEMORY_ORDER_ASC, MEMORY_ORDER_DESC):
+        raise WebUIError('validation_error', '排序方向无效', {'order': '必须是 asc 或 desc'})
+    search = payload.get('search', '')
+    if search is None:
+        search = ''
+    if not isinstance(search, str) or len(search) > MEMORY_SEARCH_LIMIT:
+        raise WebUIError(
+            'validation_error',
+            '搜索内容无效',
+            {'search': f'不能超过 {MEMORY_SEARCH_LIMIT} 个字符'},
+        )
+    cached_first = payload.get('cached_first', bool(image_cache))
+    if type(cached_first) is not bool:
+        raise WebUIError('validation_error', '缓存优先级无效', {'cached_first': '必须是布尔值'})
+    return {
+        'sort': sort,
+        'order': order,
+        'search': search.strip(),
+        'cached_first': cached_first,
+    }
 
 
 def _handle_memory_section(payload, Proc):
@@ -725,43 +1001,46 @@ def _handle_memory_section(payload, Proc):
     if not isinstance(global_memory, dict) or section_name not in global_memory:
         raise WebUIError('not_found', '该全局记忆区块不存在')
     value = global_memory[section_name]
-    metadata_only = section_name in MEMORY_METADATA_ONLY_SECTIONS
-    if isinstance(value, dict):
-        keys = sorted(value.keys(), key=str)
-        entries = _slice_entries(
-            [(key, value[key]) for key in keys],
-            offset,
-            limit,
-            metadata_only=metadata_only,
+    if section_name == IMAGE_CACHE_SECTION:
+        if not isinstance(value, dict):
+            return _ok({
+                'scope': 'global',
+                'section': section_name,
+                'kind': 'invalid',
+                'image_cache': True,
+                'editable': False,
+                'warning': '图片缓存档案结构异常：该区块应为对象，当前无法逐条浏览。',
+                'metadata': _memory_metadata(value),
+                'entries': [],
+                'total': 0,
+                'offset': offset,
+                'next_offset': offset,
+                'has_more': False,
+            }, revision)
+        list_options = _memory_list_options(payload, image_cache=True)
+        items = list(value.items())
+        records = _prepare_memory_records(
+            _image_cache_records(items, _image_cache_directory_index()),
+            list_options,
+            image_cache=True,
         )
-        next_offset = offset + len(entries)
         result = {
             'scope': 'global',
             'section': section_name,
-            'kind': 'dict',
-            'entries': entries,
-            'total': len(keys),
-            'offset': offset,
-            'next_offset': next_offset,
-            'has_more': next_offset < len(keys),
+            'image_cache': True,
         }
-        if metadata_only:
-            result['metadata_only'] = True
+        result.update(_memory_dict_page(records, len(items), offset, limit, list_options, image_cache=True))
         return _ok(result, revision)
-    if metadata_only:
-        return _ok({
+    if isinstance(value, dict):
+        list_options = _memory_list_options(payload)
+        items = list(value.items())
+        records = _prepare_memory_records(_dict_memory_records(items), list_options)
+        result = {
             'scope': 'global',
             'section': section_name,
-            'kind': 'metadata',
-            'metadata_only': True,
-            'editable': False,
-            'metadata': _memory_metadata(value),
-            'entries': [],
-            'total': 0,
-            'offset': offset,
-            'next_offset': offset,
-            'has_more': False,
-        }, revision)
+        }
+        result.update(_memory_dict_page(records, len(items), offset, limit, list_options))
+        return _ok(result, revision)
 
     text, truncated = _display_memory_value(value)
     return _ok({
@@ -832,6 +1111,108 @@ def _validate_memory_entries(entries):
     return result
 
 
+def _validate_image_cache_entries(entries):
+    if not isinstance(entries, list) or not entries:
+        raise WebUIError('validation_error', 'entries 必须是非空列表', {'entries': '至少提交一个条目'})
+    if len(entries) > MEMORY_ENTRY_LIMIT:
+        raise WebUIError('validation_error', '提交的条目过多', {'entries': f'最多 {MEMORY_ENTRY_LIMIT} 条'})
+    result = []
+    seen = set()
+    total_size = 0
+    expected_fields = set(IMAGE_CACHE_FIELDS)
+    for index, entry in enumerate(entries):
+        field = f'entries.{index}'
+        if not isinstance(entry, dict):
+            raise WebUIError('validation_error', '图片缓存条目格式无效', {field: '必须是对象'})
+        key = _validate_memory_name(entry.get('key'), field + '.key', '图片缓存条目键')
+        if key in seen:
+            raise WebUIError('validation_error', '图片缓存条目重复', {field + '.key': '不能重复提交同一个键'})
+        value = entry.get('value')
+        if not isinstance(value, dict):
+            raise WebUIError('validation_error', '图片缓存字段格式无效', {field + '.value': '必须是对象'})
+        received_fields = set(value.keys())
+        if received_fields != expected_fields:
+            raise WebUIError(
+                'validation_error',
+                '图片缓存字段必须固定为 content、intent、type',
+                {field + '.value': '只能提交 content、intent、type 三个字符串字段'},
+            )
+        clean_value = {}
+        for item in IMAGE_CACHE_FIELDS:
+            text = value[item]
+            if not isinstance(text, str):
+                raise WebUIError(
+                    'validation_error',
+                    '图片缓存字段必须是字符串',
+                    {field + '.value.' + item: '必须是字符串'},
+                )
+            if len(text) > IMAGE_CACHE_FIELD_LIMIT:
+                raise WebUIError(
+                    'validation_error',
+                    '图片缓存字段过长',
+                    {field + '.value.' + item: f'不能超过 {IMAGE_CACHE_FIELD_LIMIT} 个字符'},
+                )
+            clean_value[item] = text
+        total_size += _memory_json_size(clean_value)
+        if total_size > MEMORY_WRITE_BYTES_LIMIT:
+            raise WebUIError('validation_error', '提交的图片缓存内容过大', {'entries': '总大小不能超过 512 KiB'})
+        seen.add(key)
+        result.append((key, clean_value))
+    return result
+
+
+def _handle_memory_image(payload, Proc):
+    bot_hash, _bot_info = _require_bot(Proc, payload)
+    filename = payload.get('filename')
+    if not isinstance(filename, str) or not filename or len(filename) > MEMORY_NAME_LIMIT:
+        raise WebUIError('validation_error', 'filename 无效')
+    variant = payload.get('variant', 'thumbnail')
+    if variant not in ('thumbnail', 'original'):
+        raise WebUIError('validation_error', 'variant 必须是 thumbnail 或 original')
+
+    with OlivOSAIChatAssassin.data.gMemoryLock:
+        memory = OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)
+        global_memory = memory.get(GLOBAL_MEMORY_KEY, {}) if isinstance(memory, dict) else {}
+        image_cache = global_memory.get(IMAGE_CACHE_SECTION, {}) if isinstance(global_memory, dict) else {}
+        if not isinstance(image_cache, dict) or filename not in image_cache:
+            raise WebUIError('not_found', '图片缓存档案不存在')
+
+    file_info, path = _image_cache_file_info(filename, _image_cache_directory_index())
+    if file_info['status'] == 'invalid' or path is None:
+        raise WebUIError('image_invalid', '图片缓存文件路径无效')
+    if file_info['status'] == 'missing':
+        raise WebUIError('image_missing', '缓存图片文件已删除')
+    if file_info['status'] == 'unavailable':
+        raise WebUIError('image_unreadable', '缓存图片文件无法读取')
+    if file_info['size'] > MAX_IMAGE_SOURCE_BYTES:
+        raise WebUIError('image_too_large', '缓存图片过大，无法读取')
+
+    output_size = None
+    actual_variant = variant
+    if variant == 'thumbnail':
+        thumbnail = _make_image_thumbnail(path)
+        if thumbnail is not None:
+            data, mime, output_size = thumbnail
+        else:
+            data, mime = _read_image_cache_file(path, file_info['size'])
+            actual_variant = 'original'
+    else:
+        data, mime = _read_image_cache_file(path, file_info['size'])
+
+    result = {
+        'filename': filename,
+        'variant': actual_variant,
+        'mime': mime,
+        'bytes': len(data),
+        'source_bytes': file_info['size'],
+        'data_url': f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}",
+    }
+    if output_size is not None:
+        result['width'] = output_size[0]
+        result['height'] = output_size[1]
+    return _ok(result)
+
+
 def _handle_save_memory(payload, Proc):
     bot_hash, _bot_info = _require_bot(Proc, payload)
     expected_revision = payload.get('expected_revision')
@@ -855,15 +1236,18 @@ def _handle_save_memory(payload, Proc):
         group_id = _validate_memory_name(payload.get('group_id'), 'group_id', 'group_id')
         memory_value = _validate_memory_value(payload.get('value'))
     elif scope == 'global':
-        if has_value == has_entries:
-            raise WebUIError('validation_error', '全局记忆必须且只能提交 value 或 entries')
         section_name = _validate_memory_name(payload.get('section'), 'section', 'section')
-        if section_name in MEMORY_METADATA_ONLY_SECTIONS:
-            raise WebUIError('validation_error', '该记忆区块仅支持查看元数据')
-        if has_value:
-            memory_value = _validate_memory_value(payload.get('value'))
+        if section_name == IMAGE_CACHE_SECTION:
+            if has_value or not has_entries:
+                raise WebUIError('validation_error', '图片缓存必须按条目提交 entries')
+            entries = _validate_image_cache_entries(payload.get('entries'))
         else:
-            entries = _validate_memory_entries(payload.get('entries'))
+            if has_value == has_entries:
+                raise WebUIError('validation_error', '全局记忆必须且只能提交 value 或 entries')
+            if has_value:
+                memory_value = _validate_memory_value(payload.get('value'))
+            else:
+                entries = _validate_memory_entries(payload.get('entries'))
     else:
         raise WebUIError('validation_error', 'scope 必须是 global 或 group')
 
@@ -889,8 +1273,16 @@ def _handle_save_memory(payload, Proc):
             for key, value in entries:
                 if key not in current:
                     raise WebUIError('not_found', f'记忆条目不存在: {key}')
-                current[key] = value
+                if section_name == IMAGE_CACHE_SECTION:
+                    previous = current[key]
+                    merged_value = copy.deepcopy(previous) if isinstance(previous, dict) else {}
+                    merged_value.update(value)
+                    current[key] = merged_value
+                else:
+                    current[key] = value
             return
+        if section_name == IMAGE_CACHE_SECTION:
+            raise WebUIError('memory_invalid', '图片缓存档案结构异常：该区块应为对象')
         if not has_value:
             raise WebUIError('validation_error', '该记忆区块是文本，请提交 value')
         if isinstance(current, str) and not isinstance(memory_value, str):
@@ -923,6 +1315,7 @@ _HANDLERS = {
     EVENT_SAVE_CONFIG: _handle_save_config,
     EVENT_MEMORY_OVERVIEW: _handle_memory_overview,
     EVENT_MEMORY_SECTION: _handle_memory_section,
+    EVENT_MEMORY_IMAGE: _handle_memory_image,
     EVENT_SAVE_MEMORY: _handle_save_memory,
 }
 
