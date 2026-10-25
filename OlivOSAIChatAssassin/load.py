@@ -1,10 +1,17 @@
 import os
 import json
 import threading
+import copy
 from enum import Enum
 from typing import Dict, Optional
 
 import OlivOSAIChatAssassin
+
+
+class DataRevisionConflict(Exception):
+    def __init__(self, current_revision: str):
+        super().__init__('data revision conflict')
+        self.current_revision = current_revision
 
 
 def load_logger(Proc):
@@ -91,10 +98,58 @@ class DataManager:
         # 记录文件最后修改时间
         self._config_mtime: Dict[str, float] = {}
         self._memory_mtime: Dict[str, float] = {}
+        self._config_revision: Dict[str, str] = {}
+        self._memory_revision: Dict[str, str] = {}
 
         # 读写锁
         self._config_lock = threading.Lock()
         self._memory_lock = OlivOSAIChatAssassin.data.gMemoryLock
+
+    @staticmethod
+    def _revision_from_path(path: str) -> str:
+        try:
+            file_stat = os.stat(path)
+            return f'{file_stat.st_mtime_ns}:{file_stat.st_size}'
+        except OSError:
+            return ''
+
+    @staticmethod
+    def _write_json_atomic(path: str, data: dict):
+        tmp_path = f'{path}.tmp-{os.getpid()}-{threading.get_ident()}'
+        try:
+            os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+            with open(tmp_path, 'w', encoding='utf-8', newline='\n') as file_obj:
+                json.dump(data, file_obj, ensure_ascii=False, indent=4)
+                file_obj.flush()
+                os.fsync(file_obj.fileno())
+            os.replace(tmp_path, path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _deep_merge(base: dict, patch: dict) -> dict:
+        result = copy.deepcopy(base)
+        for key, value in patch.items():
+            if isinstance(value, dict) and isinstance(result.get(key), dict):
+                result[key] = DataManager._deep_merge(result[key], value)
+            else:
+                result[key] = copy.deepcopy(value)
+        return result
+
+    @staticmethod
+    def _clear_path(data: dict, path: str):
+        keys = path.split('.')
+        target = data
+        for key in keys[:-1]:
+            if not isinstance(target.get(key), dict):
+                target[key] = {}
+            target = target[key]
+        if isinstance(target, dict):
+            target[keys[-1]] = ''
 
     # ==================== 核心加载逻辑 ====================
 
@@ -141,11 +196,11 @@ class DataManager:
         if flag_need_write:
             target_path = specific_path
             with self._config_lock:
-                with open(target_path, 'w', encoding='utf-8') as f:
-                    json.dump(config, f, ensure_ascii=False, indent=4)
+                self._write_json_atomic(target_path, config)
 
         self._config_path[bot_hash] = target_path
         self._config_mtime[bot_hash] = os.path.getmtime(target_path)
+        self._config_revision[bot_hash] = self._revision_from_path(target_path)
         OlivOSAIChatAssassin.logger.log(f"CONFIG FILE LOADED - {target_path}")
         return config
 
@@ -183,11 +238,11 @@ class DataManager:
         if flag_need_write:
             target_path = specific_path
             with self._memory_lock:
-                with open(target_path, 'w', encoding='utf-8') as f:
-                    json.dump(memory, f, ensure_ascii=False, indent=4)
+                self._write_json_atomic(target_path, memory)
 
         self._memory_path[bot_hash] = target_path
         self._memory_mtime[bot_hash] = os.path.getmtime(target_path)
+        self._memory_revision[bot_hash] = self._revision_from_path(target_path)
         OlivOSAIChatAssassin.logger.log(f"MEMORY FILE LOADED - {target_path}")
         return memory
 
@@ -274,6 +329,100 @@ class DataManager:
     def getMemory(self, bot_hash: str) -> dict:
         return self.get(DataManagerType.MEMORY, bot_hash)
 
+    def config_source(self, bot_hash: str) -> str:
+        self.getConfig(bot_hash)
+        path = self._config_path.get(bot_hash, '')
+        name = os.path.basename(path)
+        if name == 'config.json':
+            return 'shared'
+        if name == f'config_{bot_hash}.json':
+            return 'bot'
+        return 'other'
+
+    def snapshot_config(self, bot_hash: str):
+        self.getConfig(bot_hash)
+        with self._config_lock:
+            revision = self._refresh_config_if_changed(bot_hash)
+            config = copy.deepcopy(self.config[bot_hash])
+        return config, revision
+
+    def _refresh_config_if_changed(self, bot_hash: str):
+        path = self._config_path.get(bot_hash, '')
+        disk_revision = self._revision_from_path(path)
+        cached_revision = self._config_revision.get(bot_hash, '')
+        if disk_revision == cached_revision:
+            return cached_revision
+        if not path or not os.path.exists(path):
+            self._config_revision[bot_hash] = ''
+            self._config_mtime[bot_hash] = 0
+            return ''
+        with open(path, 'r', encoding='utf-8') as file_obj:
+            config = json.load(file_obj)
+        self.config[bot_hash] = config
+        self._config_mtime[bot_hash] = os.path.getmtime(path)
+        self._config_revision[bot_hash] = disk_revision
+        return disk_revision
+
+    def snapshot_memory(self, bot_hash: str):
+        self.getMemory(bot_hash)
+        with self._memory_lock:
+            memory = copy.deepcopy(self.memory[bot_hash])
+            revision = self._memory_revision.get(bot_hash, '')
+            if not revision:
+                path = self._memory_path.get(bot_hash, '')
+                revision = self._revision_from_path(path)
+                self._memory_revision[bot_hash] = revision
+        return memory, revision
+
+    def update_bot_memory(self, bot_hash: str, expected_revision: str, updater):
+        """在锁内修改指定字段，并以原子替换写回完整记忆。"""
+        self.getMemory(bot_hash)
+        with self._memory_lock:
+            path = self._memory_path.get(bot_hash)
+            if not path:
+                path = os.path.join(self.memory_dir, f"memory_{bot_hash}.json")
+            self._memory_path[bot_hash] = path
+            current_revision = self._memory_revision.get(bot_hash, '')
+            disk_revision = self._revision_from_path(path)
+            if expected_revision != current_revision or disk_revision != current_revision:
+                raise DataRevisionConflict(disk_revision or current_revision)
+
+            new_memory = copy.deepcopy(self.memory[bot_hash])
+            updater(new_memory)
+            self._write_json_atomic(path, new_memory)
+            self.memory[bot_hash] = new_memory
+            self._memory_mtime[bot_hash] = os.path.getmtime(path)
+            self._memory_revision[bot_hash] = self._revision_from_path(path)
+            return copy.deepcopy(new_memory), self._memory_revision[bot_hash]
+
+    def update_bot_config(
+        self,
+        bot_hash: str,
+        patch: dict,
+        expected_revision: str,
+        clear_secrets=None
+    ):
+        self.getConfig(bot_hash)
+        with self._config_lock:
+            path = self._config_path.get(bot_hash)
+            if not path:
+                path = os.path.join(self.config_dir, f"config_{bot_hash}.json")
+            self._config_path[bot_hash] = path
+            current_revision = self._refresh_config_if_changed(bot_hash)
+            if expected_revision != current_revision:
+                raise DataRevisionConflict(current_revision)
+
+            new_config = self._deep_merge(self.config[bot_hash], patch)
+            for secret_path in clear_secrets or []:
+                self._clear_path(new_config, secret_path)
+
+            self._write_json_atomic(path, new_config)
+            self.config[bot_hash] = new_config
+            self._config_path[bot_hash] = path
+            self._config_mtime[bot_hash] = os.path.getmtime(path)
+            self._config_revision[bot_hash] = self._revision_from_path(path)
+            return copy.deepcopy(new_config), self._config_revision[bot_hash]
+
     # ==================== 写入 / 持久化 ====================
 
     def save_bot_config(self, bot_hash: str):
@@ -284,9 +433,9 @@ class DataManager:
         if not path:
             path = os.path.join(self.config_dir, f"config_{bot_hash}.json")
         with self._config_lock:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(self.config[bot_hash], f, ensure_ascii=False, indent=4)
+            self._write_json_atomic(path, self.config[bot_hash])
             self._config_mtime[bot_hash] = os.path.getmtime(path)
+            self._config_revision[bot_hash] = self._revision_from_path(path)
 
     def save_bot_memory(self, bot_hash: str):
         if bot_hash not in self.memory:
@@ -295,6 +444,6 @@ class DataManager:
         if not path:
             path = os.path.join(self.memory_dir, f"memory_{bot_hash}.json")
         with self._memory_lock:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(self.memory[bot_hash], f, ensure_ascii=False, indent=4)
+            self._write_json_atomic(path, self.memory[bot_hash])
             self._memory_mtime[bot_hash] = os.path.getmtime(path)
+            self._memory_revision[bot_hash] = self._revision_from_path(path)

@@ -12,6 +12,7 @@ class Event:
         bot_hash_list = list(Proc.Proc_data['bot_info_dict'].keys())
         OlivOSAIChatAssassin.load.load_init_after()
         OlivOSAIChatAssassin.load.load_logger(Proc)
+        OlivOSAIChatAssassin.webUI.restore_webui_assets(Proc)
         OlivOSAIChatAssassin.load.load_bot(bot_hash_list)
         OlivOSAIChatAssassin.load.load_staticKnowledge()
 
@@ -32,6 +33,8 @@ class Event:
 
     def menu(plugin_event, Proc):
         # 插件菜单事件监听
-        if plugin_event.data.namespace == 'OlivOSAIChatAssassin':
+        if OlivOSAIChatAssassin.webUI.handle_menu(plugin_event, Proc):
+            return
+        if getattr(plugin_event.data, 'namespace', None) == 'OlivOSAIChatAssassin':
             if plugin_event.data.event == 'OlivOSAIChatAssassin_Menu':
                 pass
