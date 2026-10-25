@@ -1790,19 +1790,6 @@ body.memory-modal-open {
     color: var(--danger);
 }
 
-@media (hover: none) {
-    .memory-edit-button,
-    .memory-delete-button {
-        opacity: 1;
-        pointer-events: auto;
-        transform: none;
-    }
-
-    .memory-entry-kind {
-        opacity: 1;
-    }
-}
-
 noscript {
     display: block;
     padding: 20px;
@@ -2110,9 +2097,7 @@ noscript {
         gap: 6px;
     }
 
-    .memory-heading-actions .button,
-    .memory-edit-button,
-    .memory-delete-button {
+    .memory-heading-actions .button {
         min-height: 44px;
     }
 
@@ -2442,10 +2427,17 @@ noscript {
 
     .relationship-entry > .memory-entry-actions,
     .memory-image-entry > .memory-entry-actions {
-        display: flex;
+        display: none;
         justify-content: flex-end;
         gap: 8px;
         margin: 8px 0 10px;
+    }
+
+    .relationship-entry.selected > .memory-entry-actions,
+    .relationship-entry:focus-within > .memory-entry-actions,
+    .memory-image-entry.selected > .memory-entry-actions,
+    .memory-image-entry:focus-within > .memory-entry-actions {
+        display: flex;
     }
 
     .relationship-entry > .memory-entry-actions .memory-edit-button,
@@ -2454,14 +2446,11 @@ noscript {
         position: static;
         width: 88px;
         min-width: 88px;
-        opacity: 1;
-        pointer-events: auto;
-        transform: none;
     }
 
-    .memory-value-card.actionable::after,
-    .memory-entry.actionable::after {
-        opacity: 1;
+    .memory-detail.memory-is-loading .relationship-entry > .memory-entry-actions,
+    .memory-detail.memory-is-loading .memory-image-entry > .memory-entry-actions {
+        display: none;
     }
 }
 
