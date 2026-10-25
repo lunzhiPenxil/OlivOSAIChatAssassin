@@ -2721,6 +2721,18 @@ noscript {
         return loadMemorySection('group_index', null, targetOffset || 0, null);
     }
 
+    function memoryPagerRangeText(offset, entryCount, total) {
+        const safeTotal = Math.max(0, Number(total) || 0);
+        const safeOffset = Math.max(0, Number(offset) || 0);
+        const safeCount = Math.max(0, Number(entryCount) || 0);
+        if (safeTotal === 0 || safeCount === 0) {
+            return '0 - 0 / ' + String(safeTotal);
+        }
+        const start = Math.min(safeOffset + 1, safeTotal);
+        const end = Math.min(safeOffset + safeCount, safeTotal);
+        return String(start) + ' - ' + String(end) + ' / ' + String(safeTotal);
+    }
+
     function renderGroupMemoryIndex(data, query) {
         elements.memoryDetail.replaceChildren();
         state.memoryRenderedView = '';
@@ -2787,7 +2799,7 @@ noscript {
         });
         const status = document.createElement('span');
         status.className = 'muted';
-        status.textContent = String(Math.min(offset + entries.length, total)) + ' / ' + String(total);
+        status.textContent = memoryPagerRangeText(offset, entries.length, total);
         const next = document.createElement('button');
         next.type = 'button';
         next.className = 'button small secondary';
@@ -4188,7 +4200,7 @@ noscript {
         });
         const status = document.createElement('span');
         status.className = 'muted';
-        status.textContent = String(Math.min(offset + entries.length, total)) + ' / ' + String(total);
+        status.textContent = memoryPagerRangeText(offset, entries.length, total);
         if (data.filtered && data.unfiltered_total !== total) {
             status.textContent += '（共 ' + String(data.unfiltered_total) + ' 项）';
         }
