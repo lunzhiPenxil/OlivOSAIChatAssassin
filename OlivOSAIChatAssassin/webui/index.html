@@ -2748,11 +2748,7 @@ noscript {
 
         if (total === 0) {
             appendEmpty(elements.memoryDetail, '没有群记忆');
-            state.memoryRenderedView = 'group_index';
-            return;
-        }
-
-        if (entries.length === 0) {
+        } else if (entries.length === 0) {
             appendEmpty(elements.memoryDetail, '当前页没有群记忆');
         } else {
             const list = document.createElement('div');
@@ -2774,36 +2770,34 @@ noscript {
             elements.memoryDetail.appendChild(list);
         }
 
-        if (total > MEMORY_PAGE_SIZE || offset > 0) {
-            const pager = document.createElement('div');
-            pager.className = 'pager';
-            const previous = document.createElement('button');
-            previous.type = 'button';
-            previous.className = 'button small secondary';
-            previous.textContent = '上一页';
-            previous.disabled = offset <= 0;
-            previous.addEventListener('click', function () {
-                loadMemorySection(
-                    'group_index',
-                    null,
-                    Math.max(0, offset - MEMORY_PAGE_SIZE),
-                    null
-                );
-            });
-            const status = document.createElement('span');
-            status.className = 'muted';
-            status.textContent = String(Math.min(offset + entries.length, total)) + ' / ' + String(total);
-            const next = document.createElement('button');
-            next.type = 'button';
-            next.className = 'button small secondary';
-            next.textContent = '下一页';
-            next.disabled = !hasMore;
-            next.addEventListener('click', function () {
-                loadMemorySection('group_index', null, nextOffset, null);
-            });
-            pager.append(previous, status, next);
-            elements.memoryDetail.appendChild(pager);
-        }
+        const pager = document.createElement('div');
+        pager.className = 'pager';
+        const previous = document.createElement('button');
+        previous.type = 'button';
+        previous.className = 'button small secondary';
+        previous.textContent = '上一页';
+        previous.disabled = offset <= 0;
+        previous.addEventListener('click', function () {
+            loadMemorySection(
+                'group_index',
+                null,
+                Math.max(0, offset - MEMORY_PAGE_SIZE),
+                null
+            );
+        });
+        const status = document.createElement('span');
+        status.className = 'muted';
+        status.textContent = String(Math.min(offset + entries.length, total)) + ' / ' + String(total);
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'button small secondary';
+        next.textContent = '下一页';
+        next.disabled = !hasMore;
+        next.addEventListener('click', function () {
+            loadMemorySection('group_index', null, nextOffset, null);
+        });
+        pager.append(previous, status, next);
+        elements.memoryDetail.appendChild(pager);
         state.memoryRenderedView = 'group_index';
     }
 
@@ -4170,41 +4164,44 @@ noscript {
             elements.memoryDetail.appendChild(list);
         }
 
-        if (typeof data.total === 'number' && data.total > 0) {
-            const pagerOptions = memoryListOptionsFromQuery(query, data.image_cache === true);
-            const pager = document.createElement('div');
-            pager.className = 'pager';
-            const previous = document.createElement('button');
-            previous.type = 'button';
-            previous.className = 'button small secondary';
-            previous.textContent = '上一页';
-            previous.disabled = !(data.offset > 0);
-            previous.addEventListener('click', function () {
-                loadMemorySection(
-                    'global',
-                    query.section,
-                    Math.max(0, (data.offset || 0) - MEMORY_PAGE_SIZE),
-                    null,
-                    pagerOptions
-                );
-            });
-            const status = document.createElement('span');
-            status.className = 'muted';
-            status.textContent = String((data.offset || 0) + entries.length) + ' / ' + String(data.total);
-            if (data.filtered && data.unfiltered_total !== data.total) {
-                status.textContent += '（共 ' + String(data.unfiltered_total) + ' 项）';
-            }
-            const next = document.createElement('button');
-            next.type = 'button';
-            next.className = 'button small secondary';
-            next.textContent = '下一页';
-            next.disabled = !data.has_more;
-            next.addEventListener('click', function () {
-                loadMemorySection('global', query.section, data.next_offset || 0, null, pagerOptions);
-            });
-            pager.append(previous, status, next);
-            elements.memoryDetail.appendChild(pager);
+        const total = typeof data.total === 'number' ? data.total : entries.length;
+        const offset = typeof data.offset === 'number' ? data.offset : 0;
+        const nextOffset = typeof data.next_offset === 'number'
+            ? data.next_offset
+            : offset + entries.length;
+        const pagerOptions = memoryListOptionsFromQuery(query, data.image_cache === true);
+        const pager = document.createElement('div');
+        pager.className = 'pager';
+        const previous = document.createElement('button');
+        previous.type = 'button';
+        previous.className = 'button small secondary';
+        previous.textContent = '上一页';
+        previous.disabled = offset <= 0;
+        previous.addEventListener('click', function () {
+            loadMemorySection(
+                'global',
+                query.section,
+                Math.max(0, offset - MEMORY_PAGE_SIZE),
+                null,
+                pagerOptions
+            );
+        });
+        const status = document.createElement('span');
+        status.className = 'muted';
+        status.textContent = String(Math.min(offset + entries.length, total)) + ' / ' + String(total);
+        if (data.filtered && data.unfiltered_total !== total) {
+            status.textContent += '（共 ' + String(data.unfiltered_total) + ' 项）';
         }
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'button small secondary';
+        next.textContent = '下一页';
+        next.disabled = data.has_more !== true;
+        next.addEventListener('click', function () {
+            loadMemorySection('global', query.section, nextOffset, null, pagerOptions);
+        });
+        pager.append(previous, status, next);
+        elements.memoryDetail.appendChild(pager);
     }
 
     function parseMemoryEditorValue(editor, kind, label) {
