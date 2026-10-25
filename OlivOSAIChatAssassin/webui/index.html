@@ -2080,9 +2080,12 @@ noscript {
         if (!state.memoryDirty && !state.memoryEditorOpen) {
             state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
         }
+        if (!state.memoryQuery) {
+            state.memoryQuery = {scope: 'group_index'};
+        }
         renderOverview();
         renderMemoryOverview();
-        if (state.memoryQuery && state.memoryQuery.scope === 'group_index') {
+        if (state.memoryQuery.scope === 'group_index') {
             renderGroupMemoryIndex();
         }
         return true;
