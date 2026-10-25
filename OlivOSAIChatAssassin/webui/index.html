@@ -774,8 +774,9 @@ select[aria-invalid="true"] {
     cursor: progress;
 }
 
-.memory-detail.memory-is-loading .memory-heading-row {
-    padding-right: 180px;
+.memory-heading-row > .memory-loading-indicator {
+    top: calc(100% + 6px);
+    right: 0;
 }
 
 @keyframes memory-loading-spin {
@@ -916,6 +917,7 @@ select[aria-invalid="true"] {
 }
 
 .memory-heading-row {
+    position: relative;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -1127,7 +1129,11 @@ select[aria-invalid="true"] {
 }
 
 .memory-value-card.has-delete > pre {
-    padding-right: 140px;
+    padding-right: 104px;
+}
+
+.memory-value-card.has-delete.editable > pre {
+    padding-right: 200px;
 }
 
 .memory-value-card.selected > pre {
@@ -1147,19 +1153,22 @@ select[aria-invalid="true"] {
 }
 
 .memory-edit-button.has-delete {
-    right: 64px;
+    width: 88px;
+    right: 104px;
 }
 
 .memory-heading-actions .memory-delete-button {
     position: static;
     top: auto;
     right: auto;
+    width: auto;
     opacity: 1;
     pointer-events: auto;
     transform: none;
 }
 
 .memory-delete-button {
+    width: 88px;
     color: var(--danger);
     border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
 }
@@ -1190,6 +1199,12 @@ select[aria-invalid="true"] {
     transform: translateY(0);
 }
 
+.memory-entry:hover .memory-entry-kind,
+.memory-entry:focus-within .memory-entry-kind,
+.memory-entry.selected .memory-entry-kind {
+    opacity: 1;
+}
+
 .memory-detail.memory-is-loading .memory-edit-button {
     opacity: 0;
     pointer-events: none;
@@ -1200,6 +1215,10 @@ select[aria-invalid="true"] {
     opacity: 0;
     pointer-events: none;
     transform: translateY(-2px);
+}
+
+.memory-detail.memory-is-loading .memory-entry-kind {
+    opacity: 0;
 }
 
 .memory-entry-list {
@@ -1232,6 +1251,9 @@ select[aria-invalid="true"] {
 
 .memory-entry-kind {
     flex: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
     color: var(--muted);
     font-size: 0.78rem;
 }
@@ -1250,7 +1272,11 @@ select[aria-invalid="true"] {
 }
 
 .relationship-entry.deletable .memory-entry-header {
-    padding-right: 140px;
+    padding-right: 104px;
+}
+
+.relationship-entry.deletable.editable .memory-entry-header {
+    padding-right: 200px;
 }
 
 .relationship-entry.selected {
@@ -1763,6 +1789,10 @@ body.memory-modal-open {
         pointer-events: auto;
         transform: none;
     }
+
+    .memory-entry-kind {
+        opacity: 1;
+    }
 }
 
 noscript {
@@ -1817,6 +1847,76 @@ noscript {
         position: static;
     }
 
+    .memory-value-card.editable > pre,
+    .memory-value-card.has-delete > pre,
+    .memory-value-card.has-delete.editable > pre {
+        padding-right: 12px;
+    }
+
+    .relationship-entry .memory-entry-header,
+    .relationship-entry.deletable .memory-entry-header,
+    .relationship-entry.deletable.editable .memory-entry-header,
+    .memory-image-entry .memory-entry-header {
+        padding-right: 0;
+    }
+
+    .memory-value-card.actionable::after,
+    .memory-entry.actionable::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 1;
+        width: min(220px, 100%);
+        height: 52px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+    }
+
+    .memory-value-card.actionable::after {
+        border-radius: 0 10px 0 10px;
+        background: linear-gradient(to left, var(--surface-soft), transparent);
+    }
+
+    .memory-entry.actionable::after {
+        border-radius: 0 12px 0 12px;
+        background: linear-gradient(to left, var(--surface), transparent);
+    }
+
+    .memory-value-card.actionable.selected::after {
+        background: linear-gradient(to left, var(--accent-soft), transparent);
+    }
+
+    .relationship-entry.actionable.selected::after,
+    .memory-image-entry.actionable.selected::after {
+        background: linear-gradient(to left, var(--accent-soft), transparent);
+    }
+
+    .memory-value-card.actionable:hover::after,
+    .memory-value-card.actionable:focus-within::after,
+    .memory-value-card.actionable.selected::after,
+    .memory-entry.actionable:hover::after,
+    .memory-entry.actionable:focus-within::after,
+    .memory-entry.actionable.selected::after {
+        opacity: 1;
+    }
+
+    .memory-edit-button,
+    .memory-delete-button {
+        z-index: 3;
+    }
+
+    .memory-entry-kind {
+        position: relative;
+        z-index: 2;
+    }
+
+    .memory-detail.memory-is-loading .memory-value-card.actionable::after,
+    .memory-detail.memory-is-loading .memory-entry.actionable::after {
+        opacity: 0;
+    }
+
     .memory-list-controls {
         grid-template-columns: 1fr;
     }
@@ -1847,6 +1947,13 @@ noscript {
     .memory-modal-editor {
         min-height: 44vh;
         max-height: 52vh;
+    }
+}
+
+@media (max-width: 760px) and (hover: none) {
+    .memory-value-card.actionable::after,
+    .memory-entry.actionable::after {
+        opacity: 1;
     }
 }
 
@@ -4612,6 +4719,7 @@ noscript {
         row.appendChild(layout);
 
         if (entry.editable !== false) {
+            row.classList.add('actionable');
             const edit = document.createElement('button');
             edit.type = 'button';
             edit.className = 'button small secondary memory-edit-button';
@@ -4652,10 +4760,14 @@ noscript {
             : '';
         const extraFields = Number(relationship.extra_fields) || 0;
         const deletable = entry.deletable === true;
+        const editable = entry.editable !== false && !entry.truncated;
         const row = document.createElement('article');
         row.className = 'memory-entry relationship-entry';
         if (deletable) {
             row.classList.add('deletable');
+        }
+        if (editable || deletable) {
+            row.classList.add('actionable');
         }
         const header = document.createElement('div');
         header.className = 'memory-entry-header';
@@ -4717,7 +4829,8 @@ noscript {
             row.appendChild(note);
         }
 
-        if (entry.editable !== false && !entry.truncated) {
+        if (editable) {
+            row.classList.add('editable');
             const edit = createMemoryEditButton(entry.value || '', {
                 hasDelete: deletable,
                 mode: recognized ? 'relationship' : 'text',
@@ -5001,14 +5114,18 @@ noscript {
     }
 
     function toggleMemoryValueCard(card) {
+        const owner = card.closest('.memory-entry');
         const wasSelected = card.classList.contains('selected');
         elements.memoryDetail.querySelectorAll(
-            '.memory-value-card.selected, .memory-image-entry.selected, .relationship-entry.selected'
+            '.memory-value-card.selected, .memory-entry.selected'
         ).forEach(function (item) {
             item.classList.remove('selected');
         });
         if (!wasSelected) {
             card.classList.add('selected');
+            if (owner && owner !== card) {
+                owner.classList.add('selected');
+            }
         }
     }
 
@@ -5542,8 +5659,14 @@ noscript {
             text.textContent = state.memoryLoadingMessage ||
                 (retained ? '正在更新…' : '正在读取记忆…');
         }
-        if (indicator.parentNode !== elements.memoryDetail) {
-            elements.memoryDetail.prepend(indicator);
+        const indicatorHost = elements.memoryDetail.querySelector('.memory-heading-row') ||
+            elements.memoryDetail;
+        if (indicator.parentNode !== indicatorHost) {
+            if (indicatorHost === elements.memoryDetail) {
+                elements.memoryDetail.prepend(indicator);
+            } else {
+                indicatorHost.appendChild(indicator);
+            }
         }
         if (!state.memoryLoadingTimer) {
             state.memoryLoadingTimer = window.setInterval(updateMemoryLoadingText, 1000);
