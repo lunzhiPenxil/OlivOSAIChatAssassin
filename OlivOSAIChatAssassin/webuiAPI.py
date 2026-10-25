@@ -897,7 +897,7 @@ def _handle_memory_overview(payload, Proc):
     global_memory = memory.get(GLOBAL_MEMORY_KEY, {})
     global_sections = []
     if isinstance(global_memory, dict):
-        for name in sorted(global_memory.keys(), key=str):
+        for name in global_memory.keys():
             value = global_memory[name]
             section = {
                 'name': str(name),

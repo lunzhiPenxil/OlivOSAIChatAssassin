@@ -1529,6 +1529,7 @@ noscript {
     const MEMORY_SEARCH_LIMIT = 200;
     const MEMORY_IMAGE_CACHE_LIMIT = 80;
     const IMAGE_CACHE_SECTION = '图片缓存';
+    const MEMORY_SECTION_ORDER = ['用户侧写', '知识缓存', IMAGE_CACHE_SECTION];
     const MAX_REQUEST_BYTES = 1024 * 1024;
     const AUTO_GROW_MAX_HEIGHT = 720;
     const AUTO_GROW_VIEWPORT_RATIO = 0.72;
@@ -2387,6 +2388,25 @@ noscript {
             : '—';
     }
 
+    function orderedGlobalMemorySections(sections) {
+        const prioritized = new Map();
+        const remaining = [];
+        sections.forEach(function (section) {
+            const name = String(section.name);
+            if (MEMORY_SECTION_ORDER.includes(name)) {
+                if (!prioritized.has(name)) {
+                    prioritized.set(name, section);
+                }
+                return;
+            }
+            remaining.push(section);
+        });
+        const ordered = MEMORY_SECTION_ORDER
+            .map(function (name) { return prioritized.get(name); })
+            .filter(Boolean);
+        return ordered.concat(remaining);
+    }
+
     function renderMemoryOverview() {
         elements.memorySectionList.replaceChildren();
         if (!state.overview) {
@@ -2395,7 +2415,7 @@ noscript {
         const sections = Array.isArray(state.overview.global_sections)
             ? state.overview.global_sections
             : [];
-        sections.forEach(function (section) {
+        orderedGlobalMemorySections(sections).forEach(function (section) {
             const sectionName = String(section.name);
             const button = document.createElement('button');
             button.type = 'button';
