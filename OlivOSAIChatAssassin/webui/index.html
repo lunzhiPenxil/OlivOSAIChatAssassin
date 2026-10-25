@@ -256,6 +256,27 @@ code {
     color: var(--muted);
 }
 
+.about-essay p {
+    margin: 0 0 12px;
+    line-height: 1.75;
+}
+
+.about-essay p:last-child {
+    margin-bottom: 0;
+}
+
+.about-link-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.about-link-list a {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
 .form-section {
     margin: 0 0 18px;
     padding: 20px;
@@ -338,7 +359,8 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus,
-button:focus-visible {
+button:focus-visible,
+.about-link-list a:focus-visible {
     outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
     outline-offset: 1px;
     border-color: var(--accent);
@@ -1356,18 +1378,14 @@ noscript {
                         <strong id="overviewKnowledge">—</strong>
                     </article>
                     <article class="card">
-                        <span class="card-label">配置来源</span>
-                        <strong id="overviewSource">—</strong>
+                        <span class="card-label">图片缓存</span>
+                        <strong id="overviewImageCache">—</strong>
                     </article>
                     <article class="card">
                         <span class="card-label">配置版本</span>
                         <strong id="overviewRevision">—</strong>
                     </article>
                 </div>
-                <article class="notice">
-                    <h3>生效提示</h3>
-                    <p>模型、接口和行为配置通常在下一条消息生效。历史窗口、松弛时间和已存在群的图片队列长度需要重载插件后完整生效。</p>
-                </article>
             </section>
 
             <section id="panel-settings" class="tab-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-settings" hidden>
@@ -1576,16 +1594,31 @@ noscript {
                 <div class="section-heading">
                     <div>
                         <h2>关于</h2>
-                        <p class="muted">页面通过 OlivOS 插件消息桥访问本地插件数据。</p>
+                        <p class="muted">潜入群聊的AI聊天工作流插件</p>
                     </div>
                 </div>
                 <article class="notice">
-                    <h3>安全边界</h3>
-                    <p>页面不会读取 WebUI 密码、token 或 session。API Key 只显示是否已配置，保存时留空表示保持原值。</p>
+                    <h3>快捷访问</h3>
+                    <nav class="about-link-list" aria-label="快捷访问">
+                        <a class="button secondary" href="https://github.com/lunzhiPenxil/OlivOSAIChatAssassin" target="_blank" rel="noopener noreferrer">GitHub 页面</a>
+                        <a class="button secondary" href="https://forum.olivos.run/d/902" target="_blank" rel="noopener noreferrer">论坛页面</a>
+                        <a class="button secondary" href="https://github.com/lunzhiPenxil" target="_blank" rel="noopener noreferrer">作者：lunzhiPenxil仑质</a>
+                    </nav>
                 </article>
-                <article class="notice">
-                    <h3>协议</h3>
-                    <p>命名空间：<code>OlivOSAIChatAssassin</code><br>WebUI API 版本：<code>1</code></p>
+                <article class="notice about-essay">
+                    <h3>《群聊刺客》</h3>
+                    <p>——论社交的最小系统与图灵测试的终结</p>
+                    <p>原教旨主义图灵测试通常设定为一位人类裁判明确知道有一个机器并试图从诸多一对一场景中识别它，但这对当今的互联网现实而言是否太狭隘而不具有实际意义了？</p>
+                    <p>当我意识到这一点时，我便开始观察网友们的行为模式。最终，我得出了一个略带讽刺却符合直觉的结论：在充斥着碎片化信息的互联网浅社交中，大多数人的发言呈现出 “低信息密度、低组织成本、低参与意识与高行为重复” 的特征。在这样的语境下，人们分辨对话者是AI还是人类的警惕性本就极为淡薄，甚至可以说是主动放弃了鉴别。在这种低质量的信息交互中，AI甚至不需要刻意隐藏，因为它输出的内容与人类输出的内容，已经没有显著区别——无论是在信息熵上，还是价值观上。</p>
+                    <p>这意味着，我完全可以转变思路：不再以制造人类的通用仿品为目标去搭建一个AI Agent，而是将目标限定在“多人即时通讯群聊”这一特定场景中——一个账号信息没有特别标注、且言行与设定高度一致的AI账号。</p>
+                    <p>虽然，对于那些将互联网浅社交视为水与空气的人而言这有些冒犯，但……</p>
+                    <p>不妨设想一下：若是你在每天水群的群聊中，看到一个顶着常见二次元或抽象文化头像、用着大众脸昵称的群友，在你说话时时不时附和几句，有时反对你几句——你或许根本就不会多想。这个项目甚至不需要有大语言模型的参与。相比之下，大语言模型只是极大拓展了其上限，并略微抬高了其下限，而或许，也已远远超过其真正所需。</p>
+                    <p>正如一千个读者有一千个哈姆雷特，但AI不需要逐一实现那一千个平行世界中的希斯克里夫——它只需要人类以为它是“某个世界的凯瑟琳”，这就足够了，因为，在人际交互的最小系统里，存在感可以是一种集体幻觉。</p>
+                    <p><strong>所以我写了一个OlivOS插件，并在过去的一段时间内于几十余个群内开展了测试。</strong></p>
+                    <p>从结论上来说，实验结果符合预期。它指向了未来AI与人类共存的常态：AI不会以完美的形态出现——因为它不需要；它悄无声息地融入我们的日常场景，重塑我们的社交习惯。</p>
+                    <p>这或许预示着，真正的图灵测试已经变成了一个社会学问题，而非技术问题。AI试着证明自己是人已经成为了过去式。人是否还愿意、以及能够表现得不像AI——这才是需要付出额外努力的事情。</p>
+                    <p>或许从此以后，一切都将改变。</p>
+                    <p>2026-03-16<br>仑质</p>
                 </article>
             </section>
         </main>
@@ -1686,7 +1719,6 @@ noscript {
         selectedBot: null,
         config: null,
         secrets: {},
-        source: 'other',
         revision: '',
         overview: null,
         activeTab: 'overview',
@@ -1732,7 +1764,7 @@ noscript {
         [
             'pluginMeta', 'botSelect', 'refreshButton', 'banner', 'bannerText', 'bannerAction',
             'overviewAccount', 'overviewPlatform', 'overviewApi', 'overviewOcr', 'overviewGroups',
-            'overviewKnowledge', 'overviewSource', 'overviewRevision', 'configForm', 'configErrors',
+            'overviewKnowledge', 'overviewImageCache', 'overviewRevision', 'configForm', 'configErrors',
             'configWarnings', 'apiKey',
             'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'temperature', 'thinkingEnabled',
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
@@ -2039,7 +2071,6 @@ noscript {
         state.overview = null;
         state.revision = '';
         state.secrets = {};
-        state.source = 'other';
         state.clearSecrets.clear();
         state.dirtyFields.clear();
         state.conflict = false;
@@ -2099,7 +2130,6 @@ noscript {
         }
         state.config = response.data && response.data.config ? response.data.config : {};
         state.secrets = response.data && response.data.secrets ? response.data.secrets : {};
-        state.source = response.data && typeof response.data.source === 'string' ? response.data.source : 'other';
         state.revision = typeof response.revision === 'string' ? response.revision : '';
         renderConfigWarnings(response.data && response.data.warnings);
         fillConfigForm();
@@ -2419,7 +2449,6 @@ noscript {
             });
             state.config = response.data && response.data.config ? response.data.config : {};
             state.secrets = response.data && response.data.secrets ? response.data.secrets : {};
-            state.source = response.data && typeof response.data.source === 'string' ? response.data.source : 'other';
             state.revision = typeof response.revision === 'string' ? response.revision : '';
             state.conflict = false;
             renderConfigWarnings(response.data && response.data.warnings);
@@ -2499,6 +2528,26 @@ noscript {
         elements.configWarnings.append(title, list);
     }
 
+    function configRevisionTimeText(revision) {
+        const raw = typeof revision === 'string' ? revision : '';
+        if (!raw) {
+            return '—';
+        }
+        const timestamp = raw.split(':', 1)[0];
+        if (!/^\d+$/.test(timestamp)) {
+            return raw.slice(0, 18);
+        }
+        const date = new Date(Number(timestamp) / 1000000);
+        if (Number.isNaN(date.getTime())) {
+            return raw.slice(0, 18);
+        }
+        const pad = function (value) {
+            return String(value).padStart(2, '0');
+        };
+        return String(date.getFullYear()) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+            ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+    }
+
     function renderOverview() {
         const bot = state.bots.find(function (item) {
             return item.hash === state.selectedBot;
@@ -2547,17 +2596,14 @@ noscript {
         elements.overviewKnowledge.textContent = state.overview
             ? String(knowledgeCount) + ' 条'
             : '—';
-        const sourceLabels = {
-            bot: '专属 bot 配置',
-            shared: '共用 config.json',
-            other: '其他配置文件',
-        };
-        elements.overviewSource.textContent = state.config
-            ? (sourceLabels[state.source] || sourceLabels.other)
+        const imageCacheSection = sections.find(function (section) {
+            return section.name === IMAGE_CACHE_SECTION;
+        });
+        const imageCacheCount = imageCacheSection ? imageCacheSection.count || 0 : 0;
+        elements.overviewImageCache.textContent = state.overview
+            ? String(imageCacheCount) + ' 条'
             : '—';
-        elements.overviewRevision.textContent = state.revision
-            ? state.revision.slice(0, 18)
-            : '—';
+        elements.overviewRevision.textContent = configRevisionTimeText(state.revision);
     }
 
     function orderedGlobalMemorySections(sections) {
