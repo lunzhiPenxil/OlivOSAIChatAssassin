@@ -40,6 +40,9 @@ MEMORY_ORDER_DESC = 'desc'
 IMAGE_CACHE_SECTION = '图片缓存'
 IMAGE_CACHE_FIELDS = ('content', 'intent', 'type')
 IMAGE_CACHE_FIELD_LIMIT = 4096
+IMAGE_TYPE_CONTAINS_FILTERS = ('表情包', '截图', '照片')
+IMAGE_TYPE_OTHER = '其它'
+IMAGE_TYPE_FILTERS = IMAGE_TYPE_CONTAINS_FILTERS + (IMAGE_TYPE_OTHER,)
 IMAGE_THUMBNAIL_MAX_SIZE = (480, 360)
 IMAGE_CACHE_INDEX_TTL = 5.0
 MAX_IMAGE_SOURCE_BYTES = 32 * 1024 * 1024
@@ -729,6 +732,7 @@ def _image_cache_records(items, directory_index=None):
             'key': key_text,
             'entry': entry,
             'search_text': '\n'.join([key_text] + [fields[field] for field in IMAGE_CACHE_FIELDS]).casefold(),
+            'image_type': unicodedata.normalize('NFC', fields['type']).casefold(),
             'image_status': file_info['status'],
             'cache_hit': file_info['status'] in ('available', 'unavailable'),
         })
@@ -760,6 +764,28 @@ def _prepare_memory_records(records, options, image_cache=False):
     search = options['search'].casefold()
     if search:
         records = [record for record in records if search in record['search_text']]
+    image_types = options.get('image_types', [])
+    if image_cache and image_types:
+        contains_filters = [
+            unicodedata.normalize('NFC', item).casefold()
+            for item in IMAGE_TYPE_CONTAINS_FILTERS
+        ]
+        selected_filters = [
+            unicodedata.normalize('NFC', item).casefold()
+            for item in image_types
+            if item in IMAGE_TYPE_CONTAINS_FILTERS
+        ]
+        include_other = IMAGE_TYPE_OTHER in image_types
+
+        def type_matches(record):
+            record_type = record['image_type']
+            if any(item in record_type for item in selected_filters):
+                return True
+            if include_other:
+                return not any(item in record_type for item in contains_filters)
+            return False
+
+        records = [record for record in records if type_matches(record)]
     if options['sort'] == MEMORY_SORT_NAME:
         records.sort(key=lambda record: (record['key'].casefold(), record['index']))
     if options['order'] == MEMORY_ORDER_DESC:
@@ -793,7 +819,7 @@ def _memory_dict_page(records, unfiltered_total, offset, limit, options, image_c
         'entries': entries,
         'total': total,
         'unfiltered_total': unfiltered_total,
-        'filtered': bool(options['search']),
+        'filtered': bool(options['search'] or (image_cache and options['image_types'])),
         'search': options['search'],
         'sort': options['sort'],
         'order': options['order'],
@@ -803,6 +829,7 @@ def _memory_dict_page(records, unfiltered_total, offset, limit, options, image_c
         'has_more': next_offset < total,
     }
     if image_cache:
+        result['image_types'] = list(options['image_types'])
         result['cache_hit_total'] = sum(1 for record in records if record['cache_hit'])
     return result
 
@@ -1004,11 +1031,27 @@ def _memory_list_options(payload, image_cache=False):
     cached_first = payload.get('cached_first', bool(image_cache))
     if type(cached_first) is not bool:
         raise WebUIError('validation_error', '缓存优先级无效', {'cached_first': '必须是布尔值'})
+    image_types = []
+    if image_cache:
+        raw_image_types = payload.get('image_types', [])
+        if raw_image_types is None:
+            raw_image_types = []
+        if (
+            not isinstance(raw_image_types, list)
+            or any(item not in IMAGE_TYPE_FILTERS for item in raw_image_types)
+        ):
+            raise WebUIError(
+                'validation_error',
+                '图片类型筛选无效',
+                {'image_types': '必须是表情包、截图、照片或其它组成的数组'},
+            )
+        image_types = list(dict.fromkeys(raw_image_types))
     return {
         'sort': sort,
         'order': order,
         'search': search.strip(),
         'cached_first': cached_first,
+        'image_types': image_types,
     }
 
 

@@ -582,6 +582,43 @@ select[aria-invalid="true"] {
     font-weight: 600;
 }
 
+.memory-image-type-filter {
+    grid-column: 1 / -1;
+}
+
+.memory-image-type-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.memory-image-type-option {
+    display: inline-flex;
+    flex: none;
+    min-height: 36px;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 0.84rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.memory-image-type-option.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.memory-image-type-option input[type="checkbox"] {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+}
+
 .memory-list-summary {
     grid-column: 1 / -1;
     margin: 0;
@@ -1529,6 +1566,7 @@ noscript {
     const MEMORY_SEARCH_LIMIT = 200;
     const MEMORY_IMAGE_CACHE_LIMIT = 80;
     const IMAGE_CACHE_SECTION = '图片缓存';
+    const IMAGE_TYPE_FILTERS = ['表情包', '截图', '照片', '其它'];
     const MEMORY_SECTION_ORDER = ['用户侧写', '知识缓存', IMAGE_CACHE_SECTION];
     const MAX_REQUEST_BYTES = 1024 * 1024;
     const AUTO_GROW_MAX_HEIGHT = 720;
@@ -3236,6 +3274,7 @@ noscript {
             order: 'desc',
             search: '',
             cached_first: imageCache === true,
+            image_types: [],
         };
     }
 
@@ -3251,6 +3290,11 @@ noscript {
             cached_first: typeof query.cached_first === 'boolean'
                 ? query.cached_first
                 : defaults.cached_first,
+            image_types: Array.isArray(query.image_types)
+                ? IMAGE_TYPE_FILTERS.filter(function (item) {
+                    return query.image_types.indexOf(item) !== -1;
+                })
+                : defaults.image_types.slice(),
         };
     }
 
@@ -3338,6 +3382,40 @@ noscript {
         orderField.append(orderLabel, orderSelect);
         controls.appendChild(orderField);
 
+        const imageTypeCheckboxes = [];
+        if (imageCache) {
+            const typeField = document.createElement('div');
+            typeField.className = 'memory-list-control memory-image-type-filter';
+            typeField.dataset.memoryImageTypeFilter = '1';
+            typeField.setAttribute('role', 'group');
+            typeField.setAttribute('aria-label', '图片类型过滤');
+            const typeLabel = document.createElement('span');
+            typeLabel.textContent = '图片类型';
+            const typeOptions = document.createElement('div');
+            typeOptions.className = 'memory-image-type-options';
+            IMAGE_TYPE_FILTERS.forEach(function (typeName) {
+                const option = document.createElement('label');
+                option.className = 'memory-image-type-option';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = typeName;
+                checkbox.checked = listOptions.image_types.indexOf(typeName) !== -1;
+                checkbox.dataset.memoryImageType = typeName;
+                const text = document.createElement('span');
+                text.textContent = typeName;
+                option.classList.toggle('selected', checkbox.checked);
+                option.append(checkbox, text);
+                typeOptions.appendChild(option);
+                imageTypeCheckboxes.push(checkbox);
+                checkbox.addEventListener('change', function () {
+                    option.classList.toggle('selected', checkbox.checked);
+                    reloadWithControls();
+                });
+            });
+            typeField.append(typeLabel, typeOptions);
+            controls.appendChild(typeField);
+        }
+
         let cacheFirst = null;
         if (imageCache) {
             const cacheField = document.createElement('label');
@@ -3359,10 +3437,20 @@ noscript {
         const cacheHitTotal = typeof data.cache_hit_total === 'number'
             ? data.cache_hit_total
             : null;
+        const selectedImageTypes = imageCache && Array.isArray(data.image_types)
+            ? data.image_types
+            : [];
         const summary = document.createElement('p');
         summary.className = 'muted memory-list-summary';
         if (data.filtered) {
-            summary.textContent = '搜索“' + (data.search || '') + '”，匹配 ' +
+            const filters = [];
+            if (data.search) {
+                filters.push('搜索“' + data.search + '”');
+            }
+            if (selectedImageTypes.length) {
+                filters.push('类型：' + selectedImageTypes.join('、'));
+            }
+            summary.textContent = (filters.length ? filters.join('；') : '筛选') + '，匹配 ' +
                 String(total) + ' / 共 ' + String(unfilteredTotal) + ' 项。';
         } else {
             summary.textContent = '共 ' + String(total) + ' 项。';
@@ -3383,6 +3471,9 @@ noscript {
                 order: orderSelect.value,
                 search: searchInput.value,
                 cached_first: cacheFirst ? cacheFirst.checked : false,
+                image_types: imageTypeCheckboxes
+                    .filter(function (checkbox) { return checkbox.checked; })
+                    .map(function (checkbox) { return checkbox.value; }),
             }, extra || {});
         }
 
@@ -3443,6 +3534,11 @@ noscript {
             payload.order = requestedOptions.order;
             payload.search = requestedOptions.search;
             payload.cached_first = requestedOptions.cached_first === true;
+            if (imageCache) {
+                payload.image_types = Array.isArray(requestedOptions.image_types)
+                    ? requestedOptions.image_types
+                    : [];
+            }
         } else {
             payload.group_id = groupId;
         }
