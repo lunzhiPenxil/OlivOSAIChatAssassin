@@ -374,6 +374,27 @@ class DataManager:
                 self._memory_revision[bot_hash] = revision
         return memory, revision
 
+    def update_bot_memory(self, bot_hash: str, expected_revision: str, updater):
+        """在锁内修改指定字段，并以原子替换写回完整记忆。"""
+        self.getMemory(bot_hash)
+        with self._memory_lock:
+            path = self._memory_path.get(bot_hash)
+            if not path:
+                path = os.path.join(self.memory_dir, f"memory_{bot_hash}.json")
+            self._memory_path[bot_hash] = path
+            current_revision = self._memory_revision.get(bot_hash, '')
+            disk_revision = self._revision_from_path(path)
+            if expected_revision != current_revision or disk_revision != current_revision:
+                raise DataRevisionConflict(disk_revision or current_revision)
+
+            new_memory = copy.deepcopy(self.memory[bot_hash])
+            updater(new_memory)
+            self._write_json_atomic(path, new_memory)
+            self.memory[bot_hash] = new_memory
+            self._memory_mtime[bot_hash] = os.path.getmtime(path)
+            self._memory_revision[bot_hash] = self._revision_from_path(path)
+            return copy.deepcopy(new_memory), self._memory_revision[bot_hash]
+
     def update_bot_config(
         self,
         bot_hash: str,

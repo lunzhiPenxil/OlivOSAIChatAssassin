@@ -573,20 +573,86 @@ select[aria-invalid="true"] {
     overflow-wrap: anywhere;
 }
 
-.memory-entries {
-    margin: 12px 0 0;
+.memory-edit-hint {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
 }
 
-.memory-entries dt {
-    margin-top: 12px;
+.memory-value-card {
+    position: relative;
+    margin-top: 10px;
+}
+
+.memory-value-card > pre {
+    margin: 0;
+}
+
+.memory-value-card.editable > pre {
+    padding-right: 84px;
+}
+
+.memory-value-card.selected > pre {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.memory-edit-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-2px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.memory-value-card.editable:hover .memory-edit-button,
+.memory-value-card.editable:focus-within .memory-edit-button,
+.memory-value-card.editable.selected .memory-edit-button,
+.memory-entry:hover .memory-edit-button,
+.memory-entry:focus-within .memory-edit-button {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.memory-entry-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.memory-entry {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.memory-entry-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.memory-entry-key {
     color: var(--accent);
     font-family: "Cascadia Code", Consolas, monospace;
     font-weight: 700;
     overflow-wrap: anywhere;
 }
 
-.memory-entries dd {
-    margin: 4px 0 0;
+.memory-entry-kind {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.memory-entry-note {
+    display: block;
+    margin-top: 8px;
 }
 
 .pager {
@@ -607,7 +673,7 @@ select[aria-invalid="true"] {
     position: fixed;
     right: 22px;
     bottom: 22px;
-    z-index: 20;
+    z-index: 120;
     max-width: min(420px, calc(100vw - 44px));
     padding: 12px 16px;
     border: 1px solid var(--border);
@@ -619,6 +685,130 @@ select[aria-invalid="true"] {
 .toast.error {
     border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
     color: var(--danger);
+}
+
+body.memory-modal-open {
+    overflow: hidden;
+}
+
+.memory-modal-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.memory-modal-layer[hidden] {
+    display: none;
+}
+
+.memory-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.46);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+}
+
+.memory-modal-card {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    width: min(820px, 100%);
+    max-height: min(90vh, 980px);
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.35);
+}
+
+.memory-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.memory-modal-header h3 {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+}
+
+.memory-modal-header .eyebrow {
+    margin: 0;
+}
+
+.memory-modal-close {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    color: var(--muted);
+    background: var(--surface-soft);
+    font-size: 1.35rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.memory-modal-close:hover {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
+.memory-modal-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px 22px;
+    overflow: auto;
+}
+
+.memory-modal-meta {
+    color: var(--muted);
+    font-size: 0.84rem;
+}
+
+.memory-modal-editor {
+    width: 100%;
+    min-height: clamp(240px, 48vh, 600px);
+    max-height: 56vh;
+    resize: vertical;
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 0.84rem;
+    line-height: 1.6;
+}
+
+.memory-modal-hint {
+    margin: 0;
+    font-size: 0.82rem;
+}
+
+.memory-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 22px 20px;
+    border-top: 1px solid var(--border);
+}
+
+@media (hover: none) {
+    .memory-edit-button {
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+    }
 }
 
 noscript {
@@ -670,6 +860,30 @@ noscript {
 
     .memory-detail {
         position: static;
+    }
+
+    .memory-modal-layer {
+        padding: 10px;
+    }
+
+    .memory-modal-card {
+        max-height: 94vh;
+    }
+
+    .memory-modal-header,
+    .memory-modal-body {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    .memory-modal-actions {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    .memory-modal-editor {
+        min-height: 44vh;
+        max-height: 52vh;
     }
 }
     </style>
@@ -936,8 +1150,8 @@ noscript {
             <section id="panel-memory" class="tab-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-memory" hidden>
                 <div class="section-heading">
                     <div>
-                        <h2>记忆浏览</h2>
-                        <p class="muted">当前为只读视图；AI 更新记忆后刷新即可看到最新内容。</p>
+                        <h2>记忆浏览与编辑</h2>
+                        <p class="muted">悬停或单击内容后，使用右侧“编辑”按钮在弹窗中单独修改；图片缓存仍只显示元数据。</p>
                     </div>
                     <button id="memoryRefreshButton" class="button secondary" type="button">刷新记忆</button>
                 </div>
@@ -947,7 +1161,7 @@ noscript {
                         <div id="memorySectionList" class="memory-chip-list"></div>
                     </aside>
                     <article id="memoryDetail" class="memory-detail">
-                        <p class="muted">选择左侧分类查看内容。</p>
+                        <p class="muted">选择左侧分类查看或编辑内容。</p>
                     </article>
                 </div>
             </section>
@@ -970,6 +1184,27 @@ noscript {
             </section>
         </main>
     </div>
+    <div id="memoryModal" class="memory-modal-layer" role="dialog" aria-modal="true" aria-labelledby="memoryModalTitle" aria-describedby="memoryModalHint" hidden>
+        <div class="memory-modal-backdrop" data-memory-modal-close aria-hidden="true"></div>
+        <section class="memory-modal-card">
+            <header class="memory-modal-header">
+                <div>
+                    <p class="eyebrow">编辑记忆</p>
+                    <h3 id="memoryModalTitle">编辑记忆</h3>
+                </div>
+                <button id="memoryModalClose" class="memory-modal-close" type="button" aria-label="关闭编辑窗口">×</button>
+            </header>
+            <div class="memory-modal-body">
+                <div id="memoryModalMeta" class="memory-modal-meta"></div>
+                <textarea id="memoryModalEditor" class="memory-modal-editor" spellcheck="false" aria-label="记忆内容"></textarea>
+                <p id="memoryModalHint" class="muted memory-modal-hint"></p>
+            </div>
+            <footer class="memory-modal-actions">
+                <button id="memoryModalCancel" class="button secondary" type="button">取消</button>
+                <button id="memoryModalSave" class="button primary" type="button">保存</button>
+            </footer>
+        </section>
+    </div>
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <noscript>此页面需要启用 JavaScript。</noscript>
     <script>
@@ -982,6 +1217,7 @@ noscript {
         saveConfig: 'OlivOSAIChatAssassin_WebUI_SaveConfig',
         memoryOverview: 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview',
         memorySection: 'OlivOSAIChatAssassin_WebUI_GetMemorySection',
+        saveMemory: 'OlivOSAIChatAssassin_WebUI_SaveMemory',
     };
     const API_VERSION = 1;
     const REQUEST_TIMEOUT = 10000;
@@ -1009,6 +1245,10 @@ noscript {
         clearSecrets: new Set(),
         dirtyFields: new Set(),
         memoryQuery: null,
+        memoryRevision: '',
+        memoryDirty: false,
+        memoryEditorOpen: false,
+        memoryEditorContext: null,
         requestSequence: 0,
         requestTickets: {config: 0, overview: 0, memory: 0},
         botEpoch: 0,
@@ -1034,7 +1274,9 @@ noscript {
             'historyDynamicSize', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
             'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
             'saveButton', 'memoryRefreshButton', 'memorySectionList',
-            'memoryDetail', 'toast',
+            'memoryDetail', 'memoryModal', 'memoryModalTitle', 'memoryModalMeta',
+            'memoryModalEditor', 'memoryModalHint', 'memoryModalClose',
+            'memoryModalCancel', 'memoryModalSave', 'toast',
         ].forEach(function (id) {
             elements[id] = document.getElementById(id);
         });
@@ -1060,10 +1302,29 @@ noscript {
         });
 
         elements.botSelect.addEventListener('change', function () {
-            selectBot(elements.botSelect.value);
+            const nextBot = elements.botSelect.value;
+            if (nextBot !== state.selectedBot && !confirmDiscardMemoryEdits()) {
+                elements.botSelect.value = state.selectedBot || '';
+                return;
+            }
+            selectBot(nextBot);
         });
         elements.refreshButton.addEventListener('click', refreshCurrent);
         elements.memoryRefreshButton.addEventListener('click', refreshMemory);
+        elements.memoryModalClose.addEventListener('click', function () {
+            closeMemoryEditor(false);
+        });
+        elements.memoryModalCancel.addEventListener('click', function () {
+            closeMemoryEditor(false);
+        });
+        elements.memoryModalSave.addEventListener('click', saveMemoryEditor);
+        elements.memoryModalEditor.addEventListener('input', handleMemoryEditorInput);
+        elements.memoryModal.addEventListener('keydown', handleMemoryModalKeydown);
+        document.querySelectorAll('[data-memory-modal-close]').forEach(function (control) {
+            control.addEventListener('click', function () {
+                closeMemoryEditor(false);
+            });
+        });
         elements.resetButton.addEventListener('click', function () {
             if (!state.config) {
                 return;
@@ -1090,7 +1351,10 @@ noscript {
         window.addEventListener('resize', scheduleTextareaResize);
 
         window.setInterval(function () {
-            if (!state.visible || document.hidden || state.busy || state.dirty || !state.selectedBot) {
+            if (
+                !state.visible || document.hidden || state.busy || state.dirty ||
+                state.memoryEditorOpen || !state.selectedBot
+            ) {
                 return;
             }
             if (state.activeTab !== 'overview' && state.activeTab !== 'memory') {
@@ -1118,7 +1382,10 @@ noscript {
                 return;
             }
             state.visible = message.visible === true;
-            if (state.visible && state.selectedBot && !state.dirty && !state.busy) {
+            if (
+                state.visible && state.selectedBot && !state.dirty &&
+                !state.busy && !state.memoryEditorOpen
+            ) {
                 loadOverview(state.selectedBot).catch(function () {
                     return undefined;
                 });
@@ -1277,6 +1544,9 @@ noscript {
         state.dirtyFields.clear();
         state.conflict = false;
         state.memoryQuery = null;
+        state.memoryRevision = '';
+        state.memoryDirty = false;
+        state.memoryEditorOpen = false;
         state.requestTickets.memory += 1;
         state.dirty = false;
         hideBanner();
@@ -1285,7 +1555,7 @@ noscript {
         elements.memoryDetail.replaceChildren();
         const empty = document.createElement('p');
         empty.className = 'muted';
-        empty.textContent = '选择左侧分类查看内容。';
+        empty.textContent = '选择左侧分类查看或编辑内容。';
         elements.memoryDetail.appendChild(empty);
         setBusy(true);
         try {
@@ -1337,6 +1607,9 @@ noscript {
             return false;
         }
         state.overview = response.data || {};
+        if (!state.memoryDirty && !state.memoryEditorOpen) {
+            state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
+        }
         renderOverview();
         renderMemoryOverview();
         if (state.memoryQuery && state.memoryQuery.scope === 'group_index') {
@@ -1828,6 +2101,11 @@ noscript {
     }
 
     function showGroupMemoryIndex() {
+        if (!confirmDiscardMemoryEdits()) {
+            return;
+        }
+        state.memoryDirty = false;
+        state.memoryEditorOpen = false;
         state.requestTickets.memory += 1;
         state.memoryQuery = {scope: 'group_index'};
         markMemorySelection('group_index', null);
@@ -1853,7 +2131,7 @@ noscript {
 
         const summary = document.createElement('p');
         summary.className = 'muted';
-        summary.textContent = '共 ' + String(groupCount) + ' 个群；选择群查看完整摘要。';
+        summary.textContent = '共 ' + String(groupCount) + ' 个群；选择群查看或编辑摘要。';
         elements.memoryDetail.appendChild(summary);
 
         if (groups.length === 0) {
@@ -1890,10 +2168,207 @@ noscript {
         parent.appendChild(empty);
     }
 
-    async function loadMemorySection(scope, section, offset, groupId) {
-        if (!state.selectedBot) {
+    function memoryKindText(kind) {
+        const labels = {
+            str: '文本',
+            dict: '字典 JSON',
+            list: '列表 JSON',
+            int: '数字 JSON',
+            float: '数字 JSON',
+            bool: '布尔 JSON',
+            NoneType: 'null JSON',
+        };
+        return labels[kind] || ('JSON · ' + String(kind || '未知类型'));
+    }
+
+    function memoryKindHint(kind) {
+        if (kind === 'str' || !kind) {
+            return '内容按纯文本保存，不会解析 JSON。';
+        }
+        return '该内容按 ' + memoryKindText(kind) + ' 编辑，保存前会校验 JSON 格式。';
+    }
+
+    function toggleMemoryValueCard(card) {
+        const wasSelected = card.classList.contains('selected');
+        elements.memoryDetail.querySelectorAll('.memory-value-card.selected').forEach(function (item) {
+            item.classList.remove('selected');
+        });
+        if (!wasSelected) {
+            card.classList.add('selected');
+        }
+    }
+
+    function createMemoryValueCard(text, options) {
+        const card = document.createElement('div');
+        card.className = 'memory-value-card';
+        const preview = document.createElement('pre');
+        preview.textContent = text || '（空）';
+        card.appendChild(preview);
+        if (!options.editable) {
+            return card;
+        }
+        card.classList.add('editable');
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'button small secondary memory-edit-button';
+        edit.textContent = '编辑';
+        edit.setAttribute('aria-label', '编辑' + options.label);
+        edit.addEventListener('click', function (event) {
+            event.stopPropagation();
+            openMemoryEditor(Object.assign({}, options, {
+                value: text,
+                trigger: edit,
+            }));
+        });
+        card.appendChild(edit);
+        card.addEventListener('click', function (event) {
+            if (event.target.closest('.memory-edit-button')) {
+                return;
+            }
+            toggleMemoryValueCard(card);
+        });
+        return card;
+    }
+
+    function openMemoryEditor(options) {
+        if (state.busy || state.memoryEditorOpen || !options || typeof options.buildRequest !== 'function') {
             return;
         }
+        const value = typeof options.value === 'string' ? options.value : '';
+        const kind = options.kind || 'str';
+        state.memoryEditorContext = Object.assign({}, options, {
+            kind: kind,
+            label: options.label || '记忆内容',
+            originalValue: value,
+            trigger: options.trigger || document.activeElement,
+        });
+        state.memoryDirty = false;
+        state.memoryEditorOpen = true;
+        elements.memoryModalTitle.textContent = options.title || ('编辑' + state.memoryEditorContext.label);
+        elements.memoryModalMeta.textContent = options.meta || memoryKindText(kind);
+        elements.memoryModalHint.textContent = options.hint || memoryKindHint(kind);
+        elements.memoryModalEditor.value = value;
+        elements.memoryModalEditor.removeAttribute('aria-invalid');
+        elements.memoryModalSave.textContent = '保存';
+        elements.memoryModalSave.disabled = false;
+        elements.memoryModal.hidden = false;
+        document.body.classList.add('memory-modal-open');
+        window.requestAnimationFrame(function () {
+            elements.memoryModalEditor.focus();
+            elements.memoryModalEditor.setSelectionRange(value.length, value.length);
+        });
+    }
+
+    function handleMemoryEditorInput() {
+        const context = state.memoryEditorContext;
+        if (!context) {
+            return;
+        }
+        elements.memoryModalEditor.removeAttribute('aria-invalid');
+        state.memoryDirty = elements.memoryModalEditor.value !== context.originalValue;
+    }
+
+    function closeMemoryEditor(force) {
+        if (!state.memoryEditorOpen) {
+            return true;
+        }
+        if (state.busy && !force) {
+            return false;
+        }
+        if (!force && !confirmDiscardMemoryEdits()) {
+            return false;
+        }
+        const trigger = state.memoryEditorContext ? state.memoryEditorContext.trigger : null;
+        state.memoryDirty = false;
+        state.memoryEditorOpen = false;
+        state.memoryEditorContext = null;
+        elements.memoryModal.hidden = true;
+        elements.memoryModalEditor.value = '';
+        elements.memoryModalEditor.removeAttribute('aria-invalid');
+        elements.memoryModalSave.textContent = '保存';
+        document.body.classList.remove('memory-modal-open');
+        if (trigger && trigger.isConnected) {
+            window.requestAnimationFrame(function () {
+                trigger.focus();
+            });
+        }
+        return true;
+    }
+
+    function handleMemoryModalKeydown(event) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeMemoryEditor(false);
+            return;
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+            event.preventDefault();
+            saveMemoryEditor();
+            return;
+        }
+        if (event.key !== 'Tab') {
+            return;
+        }
+        const controls = Array.from(
+            elements.memoryModal.querySelectorAll('button:not(:disabled), textarea:not(:disabled)')
+        );
+        if (controls.length === 0) {
+            return;
+        }
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    async function saveMemoryEditor() {
+        const context = state.memoryEditorContext;
+        if (!state.memoryEditorOpen || !context || state.busy) {
+            return;
+        }
+        let value = null;
+        try {
+            value = parseMemoryEditorValue(elements.memoryModalEditor, context.kind, context.label);
+        } catch (error) {
+            showToast(error.message, true);
+            return;
+        }
+        elements.memoryModalSave.disabled = true;
+        elements.memoryModalSave.textContent = '保存中…';
+        try {
+            const saved = await saveMemory(context.buildRequest(value), context.successMessage);
+            if (saved) {
+                closeMemoryEditor(true);
+            }
+        } finally {
+            if (elements.memoryModalSave.isConnected) {
+                elements.memoryModalSave.disabled = false;
+                elements.memoryModalSave.textContent = '保存';
+            }
+        }
+    }
+
+    function confirmDiscardMemoryEdits() {
+        if (!state.memoryDirty) {
+            return true;
+        }
+        return window.confirm('当前记忆有未保存的修改，确定放弃吗？');
+    }
+
+    async function loadMemorySection(scope, section, offset, groupId) {
+        if (!state.selectedBot) {
+            return false;
+        }
+        if (!confirmDiscardMemoryEdits()) {
+            return false;
+        }
+        state.memoryDirty = false;
+        state.memoryEditorOpen = false;
         const ticket = state.requestTickets.memory + 1;
         state.requestTickets.memory = ticket;
         const payload = {
@@ -1919,6 +2394,7 @@ noscript {
             if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
                 return;
             }
+            state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
             renderMemorySection(response.data || {}, payload);
         } catch (error) {
             if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
@@ -1958,11 +2434,34 @@ noscript {
 
         if (data.scope === 'group' || data.kind === 'text') {
             const text = typeof data.value === 'string' ? data.value : '';
-            const pre = document.createElement('pre');
-            pre.textContent = text || '（空）';
-            elements.memoryDetail.appendChild(pre);
-            if (data.truncated) {
-                appendEmpty(elements.memoryDetail, '内容过长，已截断显示');
+            const kind = data.value_kind || 'str';
+            const editable = data.editable !== false && !data.truncated;
+            const label = query.scope === 'group' ? '群记忆内容' : query.section + ' 内容';
+            if (editable) {
+                const hint = document.createElement('p');
+                hint.className = 'muted memory-edit-hint';
+                hint.textContent = '悬停或单击内容后，点击右侧“编辑”按钮。';
+                elements.memoryDetail.appendChild(hint);
+            }
+            const card = createMemoryValueCard(text, {
+                editable: editable,
+                kind: kind,
+                label: label,
+                title: query.scope === 'group' ? '编辑群 ' + query.group_id + ' 的记忆' : '编辑全局 · ' + query.section,
+                meta: memoryKindText(kind),
+                buildRequest: function (value) {
+                    return query.scope === 'group'
+                        ? {scope: 'group', group_id: query.group_id, value: value}
+                        : {scope: 'global', section: query.section, value: value};
+                },
+                successMessage: '记忆已保存',
+            });
+            elements.memoryDetail.appendChild(card);
+            if (!editable) {
+                appendEmpty(
+                    elements.memoryDetail,
+                    data.truncated ? '内容过长，已截断显示；为避免覆盖完整内容，当前不可编辑。' : '该内容当前不可编辑。'
+                );
             }
             return;
         }
@@ -1971,24 +2470,63 @@ noscript {
         if (entries.length === 0) {
             appendEmpty(elements.memoryDetail, '该区块为空');
         } else {
-            const list = document.createElement('dl');
-            list.className = 'memory-entries';
+            const hasEditable = !data.metadata_only && entries.some(function (entry) {
+                return entry.editable !== false && !entry.truncated;
+            });
+            if (hasEditable) {
+                const hint = document.createElement('p');
+                hint.className = 'muted memory-edit-hint';
+                hint.textContent = '悬停或单击内容后，点击右侧“编辑”按钮，逐条修改并保存。';
+                elements.memoryDetail.appendChild(hint);
+            }
+            const list = document.createElement('div');
+            list.className = 'memory-entry-list';
             entries.forEach(function (entry) {
-                const term = document.createElement('dt');
+                const row = document.createElement('article');
+                row.className = 'memory-entry';
+                const header = document.createElement('div');
+                header.className = 'memory-entry-header';
+                const term = document.createElement('strong');
+                term.className = 'memory-entry-key';
                 term.textContent = entry.key;
-                const description = document.createElement('dd');
-                const pre = document.createElement('pre');
-                pre.textContent = data.metadata_only
+                const kind = document.createElement('small');
+                kind.className = 'memory-entry-kind';
+                kind.textContent = data.metadata_only ? '只读元数据' : memoryKindText(entry.kind || 'str');
+                header.append(term, kind);
+                row.appendChild(header);
+                const editable = !data.metadata_only && entry.editable !== false && !entry.truncated;
+                const previewText = data.metadata_only
                     ? memoryMetadataText(entry)
-                    : (entry.value || '（空）');
-                description.appendChild(pre);
-                if (entry.truncated) {
+                    : (entry.value || '');
+                const card = createMemoryValueCard(previewText, {
+                    editable: editable,
+                    kind: entry.kind || 'str',
+                    label: '记忆条目 ' + entry.key,
+                    title: '编辑 · ' + query.section + ' / ' + entry.key,
+                    meta: memoryKindText(entry.kind || 'str'),
+                    buildRequest: function (value) {
+                        return {
+                            scope: 'global',
+                            section: query.section,
+                            entries: [{key: entry.key, value: value}],
+                        };
+                    },
+                    successMessage: '记忆条目已保存',
+                });
+                row.appendChild(card);
+                row.addEventListener('click', function (event) {
+                    if (event.target.closest('button') || event.target.closest('.memory-value-card')) {
+                        return;
+                    }
+                    toggleMemoryValueCard(card);
+                });
+                if (entry.truncated && !data.metadata_only) {
                     const note = document.createElement('small');
-                    note.className = 'muted';
-                    note.textContent = '内容过长，已截断显示';
-                    description.appendChild(note);
+                    note.className = 'muted memory-entry-note';
+                    note.textContent = '内容过长，已截断显示；为避免覆盖完整内容，当前不可编辑。';
+                    row.appendChild(note);
                 }
-                list.append(term, description);
+                list.appendChild(row);
             });
             elements.memoryDetail.appendChild(list);
             if (data.metadata_only) {
@@ -2023,6 +2561,89 @@ noscript {
         }
     }
 
+    function parseMemoryEditorValue(editor, kind, label) {
+        if (kind === 'str' || !kind) {
+            return editor.value;
+        }
+        try {
+            return JSON.parse(editor.value);
+        } catch (error) {
+            editor.setAttribute('aria-invalid', 'true');
+            editor.focus();
+            throw new Error(label + ' 不是有效的 JSON，请修正后再保存');
+        }
+    }
+
+    function lockMemoryControl(control, locked) {
+        if (locked) {
+            if (!control.hasAttribute('data-memory-was-disabled')) {
+                control.setAttribute('data-memory-was-disabled', control.disabled ? '1' : '0');
+            }
+            control.disabled = true;
+            return;
+        }
+        if (control.hasAttribute('data-memory-was-disabled')) {
+            control.disabled = control.getAttribute('data-memory-was-disabled') === '1';
+            control.removeAttribute('data-memory-was-disabled');
+        }
+    }
+
+    function setMemoryControlsLocked(locked) {
+        elements.memorySectionList.querySelectorAll('button').forEach(function (control) {
+            lockMemoryControl(control, locked);
+        });
+        elements.memoryDetail.querySelectorAll('textarea, button').forEach(function (control) {
+            lockMemoryControl(control, locked);
+        });
+        elements.memoryModal.querySelectorAll('textarea, button').forEach(function (control) {
+            lockMemoryControl(control, locked);
+        });
+    }
+
+    async function saveMemory(request, successMessage) {
+        if (!state.selectedBot || state.busy) {
+            return false;
+        }
+        if (!state.memoryRevision) {
+            showToast('记忆 revision 缺失，请先刷新记忆', true);
+            return false;
+        }
+        setBusy(true);
+        setMemoryControlsLocked(true);
+        try {
+            const payload = Object.assign({
+                bot_hash: state.selectedBot,
+                expected_revision: state.memoryRevision,
+            }, request);
+            const response = await callApi(EVENTS.saveMemory, payload);
+            state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
+            closeMemoryEditor(true);
+            try {
+                await loadOverview(state.selectedBot);
+                if (state.memoryQuery && state.memoryQuery.scope !== 'group_index') {
+                    await loadMemorySection(
+                        state.memoryQuery.scope,
+                        state.memoryQuery.section,
+                        state.memoryQuery.offset || 0,
+                        state.memoryQuery.group_id
+                    );
+                }
+                setMemoryControlsLocked(true);
+            } catch (error) {
+                showToast('记忆已保存，但页面刷新失败：' + errorMessage(error), true);
+                return true;
+            }
+            showToast(successMessage || '记忆已保存');
+            return true;
+        } catch (error) {
+            showToast(errorMessage(error), true);
+            return false;
+        } finally {
+            setMemoryControlsLocked(false);
+            setBusy(false);
+        }
+    }
+
     function memoryMetadataText(entry) {
         if (entry.kind === 'str') {
             return '文本 · ' + String(entry.length || 0) + ' 字符';
@@ -2047,6 +2668,11 @@ noscript {
         if (!state.selectedBot || state.busy) {
             return;
         }
+        if (!confirmDiscardMemoryEdits()) {
+            return;
+        }
+        state.memoryDirty = false;
+        state.memoryEditorOpen = false;
         setBusy(true);
         try {
             await loadOverview(state.selectedBot);

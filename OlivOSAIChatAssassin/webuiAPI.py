@@ -15,6 +15,7 @@ EVENT_GET_CONFIG = 'OlivOSAIChatAssassin_WebUI_GetConfig'
 EVENT_SAVE_CONFIG = 'OlivOSAIChatAssassin_WebUI_SaveConfig'
 EVENT_MEMORY_OVERVIEW = 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview'
 EVENT_MEMORY_SECTION = 'OlivOSAIChatAssassin_WebUI_GetMemorySection'
+EVENT_SAVE_MEMORY = 'OlivOSAIChatAssassin_WebUI_SaveMemory'
 
 SECRET_PATHS = ('api_key', 'ocr_api.api_key')
 GLOBAL_MEMORY_KEY = '全局'
@@ -22,6 +23,10 @@ MEMORY_GROUP_LIMIT = 200
 MEMORY_ENTRY_LIMIT = 100
 MEMORY_BYTES_LIMIT = 128 * 1024
 MEMORY_VALUE_LIMIT = 20000
+MEMORY_WRITE_BYTES_LIMIT = 512 * 1024
+MEMORY_WRITE_VALUE_LIMIT = 256 * 1024
+MEMORY_NAME_LIMIT = 256
+MEMORY_METADATA_ONLY_SECTIONS = frozenset(('图片缓存',))
 MAX_REQUEST_BYTES = 1024 * 1024
 WEBUI_ASSET_FILES = ('webui/index.html',)
 
@@ -555,7 +560,7 @@ def _handle_bootstrap(payload, Proc):
             'config_read': True,
             'config_write': True,
             'memory_read': True,
-            'memory_write': False,
+            'memory_write': True,
         },
     })
 
@@ -667,14 +672,16 @@ def _slice_entries(items, offset, limit, metadata_only=False):
         if len(entries) >= limit:
             break
         if metadata_only:
-            entry = {'key': str(key)}
+            entry = {'key': str(key), 'editable': False}
             entry.update(_memory_metadata(value))
         else:
             text, truncated = _display_memory_value(value)
             entry = {
                 'key': str(key),
+                'kind': type(value).__name__,
                 'value': text,
                 'truncated': truncated,
+                'editable': not truncated,
             }
         entry_size = len(json.dumps(entry, ensure_ascii=False).encode('utf-8'))
         if entries and used_bytes + entry_size > MEMORY_BYTES_LIMIT:
@@ -704,7 +711,9 @@ def _handle_memory_section(payload, Proc):
             'scope': 'group',
             'group_id': group_id,
             'value': text,
+            'value_kind': type(memory[group_id]).__name__,
             'truncated': truncated,
+            'editable': not truncated,
         }, revision)
 
     if scope != 'global':
@@ -716,7 +725,7 @@ def _handle_memory_section(payload, Proc):
     if not isinstance(global_memory, dict) or section_name not in global_memory:
         raise WebUIError('not_found', '该全局记忆区块不存在')
     value = global_memory[section_name]
-    metadata_only = section_name == '图片缓存'
+    metadata_only = section_name in MEMORY_METADATA_ONLY_SECTIONS
     if isinstance(value, dict):
         keys = sorted(value.keys(), key=str)
         entries = _slice_entries(
@@ -745,6 +754,7 @@ def _handle_memory_section(payload, Proc):
             'section': section_name,
             'kind': 'metadata',
             'metadata_only': True,
+            'editable': False,
             'metadata': _memory_metadata(value),
             'entries': [],
             'total': 0,
@@ -759,8 +769,152 @@ def _handle_memory_section(payload, Proc):
         'section': section_name,
         'kind': 'text',
         'value': text,
+        'value_kind': type(value).__name__,
         'truncated': truncated,
+        'editable': not truncated,
     }, revision)
+
+
+def _memory_json_size(value):
+    try:
+        return len(json.dumps(value, ensure_ascii=False).encode('utf-8'))
+    except (TypeError, ValueError):
+        raise WebUIError('validation_error', '记忆内容必须是可序列化的 JSON 值')
+
+
+def _validate_memory_name(value, field, label):
+    if not isinstance(value, str) or not value or len(value) > MEMORY_NAME_LIMIT:
+        raise WebUIError(
+            'validation_error',
+            f'{label} 无效',
+            {field: f'必须是 1 到 {MEMORY_NAME_LIMIT} 个字符的文本'},
+        )
+    return value
+
+
+def _validate_memory_text(value, field='value'):
+    if not isinstance(value, str):
+        raise WebUIError('validation_error', '记忆文本必须是字符串', {field: '必须是字符串'})
+    if _memory_json_size(value) > MEMORY_WRITE_VALUE_LIMIT:
+        raise WebUIError('validation_error', '记忆文本过大', {field: '内容不能超过 256 KiB'})
+    return value
+
+
+def _validate_memory_value(value, field='value'):
+    if _memory_json_size(value) > MEMORY_WRITE_VALUE_LIMIT:
+        raise WebUIError('validation_error', '记忆条目过大', {field: '内容不能超过 256 KiB'})
+    return copy.deepcopy(value)
+
+
+def _validate_memory_entries(entries):
+    if not isinstance(entries, list) or not entries:
+        raise WebUIError('validation_error', 'entries 必须是非空列表', {'entries': '至少提交一个条目'})
+    if len(entries) > MEMORY_ENTRY_LIMIT:
+        raise WebUIError('validation_error', '提交的条目过多', {'entries': f'最多 {MEMORY_ENTRY_LIMIT} 条'})
+    result = []
+    seen = set()
+    total_size = 0
+    for index, entry in enumerate(entries):
+        field = f'entries.{index}'
+        if not isinstance(entry, dict):
+            raise WebUIError('validation_error', '记忆条目格式无效', {field: '必须是对象'})
+        key = _validate_memory_name(entry.get('key'), field + '.key', '记忆条目键')
+        if key in seen:
+            raise WebUIError('validation_error', '记忆条目重复', {field + '.key': '不能重复提交同一个键'})
+        if 'value' not in entry:
+            raise WebUIError('validation_error', '记忆条目缺少 value', {field + '.value': '必须有 value'})
+        value = _validate_memory_value(entry['value'], field + '.value')
+        total_size += _memory_json_size(value)
+        if total_size > MEMORY_WRITE_BYTES_LIMIT:
+            raise WebUIError('validation_error', '提交的记忆内容过大', {'entries': '总大小不能超过 512 KiB'})
+        seen.add(key)
+        result.append((key, value))
+    return result
+
+
+def _handle_save_memory(payload, Proc):
+    bot_hash, _bot_info = _require_bot(Proc, payload)
+    expected_revision = payload.get('expected_revision')
+    if not isinstance(expected_revision, str) or not expected_revision:
+        raise WebUIError(
+            'validation_error',
+            'expected_revision 无效',
+            {'expected_revision': '必须是当前记忆 revision'},
+        )
+
+    scope = payload.get('scope')
+    has_value = 'value' in payload
+    has_entries = 'entries' in payload
+    group_id = None
+    section_name = None
+    memory_value = None
+    entries = None
+    if scope == 'group':
+        if has_entries or not has_value:
+            raise WebUIError('validation_error', '群记忆必须提交 value')
+        group_id = _validate_memory_name(payload.get('group_id'), 'group_id', 'group_id')
+        memory_value = _validate_memory_value(payload.get('value'))
+    elif scope == 'global':
+        if has_value == has_entries:
+            raise WebUIError('validation_error', '全局记忆必须且只能提交 value 或 entries')
+        section_name = _validate_memory_name(payload.get('section'), 'section', 'section')
+        if section_name in MEMORY_METADATA_ONLY_SECTIONS:
+            raise WebUIError('validation_error', '该记忆区块仅支持查看元数据')
+        if has_value:
+            memory_value = _validate_memory_value(payload.get('value'))
+        else:
+            entries = _validate_memory_entries(payload.get('entries'))
+    else:
+        raise WebUIError('validation_error', 'scope 必须是 global 或 group')
+
+    def apply(memory):
+        if not isinstance(memory, dict):
+            raise WebUIError('memory_invalid', '记忆文件根节点必须是对象')
+        if scope == 'group':
+            if group_id not in memory:
+                raise WebUIError('not_found', '该群记忆不存在')
+            current = memory[group_id]
+            if isinstance(current, str) and not isinstance(memory_value, str):
+                raise WebUIError('validation_error', '群记忆当前是文本，不能保存为其他类型', {'value': '必须是字符串'})
+            memory[group_id] = memory_value
+            return
+
+        global_memory = memory.get(GLOBAL_MEMORY_KEY)
+        if not isinstance(global_memory, dict) or section_name not in global_memory:
+            raise WebUIError('not_found', '该全局记忆区块不存在')
+        current = global_memory[section_name]
+        if isinstance(current, dict):
+            if entries is None:
+                raise WebUIError('validation_error', '该记忆区块是字典，请提交 entries')
+            for key, value in entries:
+                if key not in current:
+                    raise WebUIError('not_found', f'记忆条目不存在: {key}')
+                current[key] = value
+            return
+        if not has_value:
+            raise WebUIError('validation_error', '该记忆区块是文本，请提交 value')
+        if isinstance(current, str) and not isinstance(memory_value, str):
+            raise WebUIError('validation_error', '文本记忆区块只能保存字符串', {'value': '必须是字符串'})
+        global_memory[section_name] = memory_value
+
+    try:
+        _memory, revision = OlivOSAIChatAssassin.data.gData.update_bot_memory(
+            bot_hash,
+            expected_revision,
+            apply,
+        )
+    except OlivOSAIChatAssassin.load.DataRevisionConflict as exc:
+        raise WebUIError(
+            'conflict',
+            '记忆已被其他操作修改，请刷新记忆后重试',
+            {'current_revision': exc.current_revision},
+        )
+    result = {'scope': scope}
+    if group_id is not None:
+        result['group_id'] = group_id
+    if section_name is not None:
+        result['section'] = section_name
+    return _ok(result, revision)
 
 
 _HANDLERS = {
@@ -769,6 +923,7 @@ _HANDLERS = {
     EVENT_SAVE_CONFIG: _handle_save_config,
     EVENT_MEMORY_OVERVIEW: _handle_memory_overview,
     EVENT_MEMORY_SECTION: _handle_memory_section,
+    EVENT_SAVE_MEMORY: _handle_save_memory,
 }
 
 
