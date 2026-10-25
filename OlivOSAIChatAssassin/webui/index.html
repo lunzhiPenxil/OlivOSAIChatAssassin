@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>群聊刺客</title>
     <style>
 :root {
@@ -60,10 +60,14 @@
 html {
     min-height: 100%;
     background: var(--bg);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 body {
     min-height: 100vh;
+    min-height: 100svh;
     margin: 0;
     color: var(--text);
     background:
@@ -1152,6 +1156,10 @@ select[aria-invalid="true"] {
     transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
+.memory-entry-actions {
+    display: contents;
+}
+
 .memory-edit-button.has-delete {
     width: 88px;
     right: 104px;
@@ -1803,48 +1811,323 @@ noscript {
 }
 
 @media (max-width: 760px) {
+    html {
+        scroll-padding-top: calc(58px + env(safe-area-inset-top, 0px));
+    }
+
     .page-shell {
+        padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    }
+
+    .topbar {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 18px;
+    }
+
+    .title-block h1 {
+        font-size: 1.55rem;
+    }
+
+    .title-block p {
+        margin-bottom: 0;
+        font-size: 0.86rem;
+    }
+
+    .account-tools {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .account-tools .button {
+        min-height: 44px;
+        padding-right: 14px;
+        padding-left: 14px;
+    }
+
+    .tabs {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+        margin: 14px -2px 16px;
+        padding: 4px;
+        overflow: visible;
+        border-radius: 14px;
+        background: var(--surface);
+    }
+
+    .tab-button {
+        width: 100%;
+        min-height: 44px;
+        padding: 6px 4px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+    }
+
+    .section-heading {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .section-heading > div {
+        min-width: 0;
+        flex: 1 1 220px;
+    }
+
+    .section-heading > .button {
+        flex: 0 0 auto;
+        min-height: 44px;
+        margin-left: auto;
+    }
+
+    .section-heading h2 {
+        font-size: 1.2rem;
+    }
+
+    .section-heading p {
+        font-size: 0.86rem;
+    }
+
+    .card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .card {
+        min-height: 96px;
         padding: 14px;
     }
 
-    .topbar,
-    .section-heading,
-    .account-tools,
-    .memory-layout,
+    .card strong {
+        font-size: 1.02rem;
+    }
+
+    .notice {
+        padding: 14px;
+    }
+
+    .about-link-list {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .about-link-list a {
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .about-essay p {
+        line-height: 1.8;
+    }
+
+    .memory-layout {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
     .memory-image-layout {
         display: flex;
         flex-direction: column;
         align-items: stretch;
     }
 
-    .topbar {
-        gap: 16px;
-        padding: 18px;
+    .form-section {
+        margin-bottom: 12px;
+        padding: 14px;
     }
 
-    .account-tools {
-        min-width: 0;
+    .form-section legend {
+        font-size: 0.96rem;
     }
 
     .form-grid {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
 
     .span-2 {
         grid-column: auto;
     }
 
+    .check-field {
+        min-height: 48px;
+        padding: 10px 12px;
+    }
+
+    .check-field input {
+        width: 20px;
+        height: 20px;
+    }
+
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    textarea {
+        min-height: 96px;
+    }
+
     .secret-row {
         flex-direction: column;
+        gap: 8px;
+    }
+
+    .secret-row .button {
+        min-height: 44px;
     }
 
     .sticky-heading {
-        position: static;
-        background: transparent;
+        position: sticky;
+        top: env(safe-area-inset-top, 0px);
+        z-index: 20;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 12px;
+        padding: 8px 2px;
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+        background: color-mix(in srgb, var(--bg) 88%, transparent);
+        -webkit-backdrop-filter: blur(14px);
+        backdrop-filter: blur(14px);
+    }
+
+    .sticky-heading > div {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .sticky-heading h2 {
+        overflow: hidden;
+        font-size: 1.05rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sticky-heading p {
+        display: none;
+    }
+
+    .sticky-heading .action-row {
+        flex: 0 0 auto;
+        gap: 6px;
+    }
+
+    .sticky-heading .action-row .button {
+        min-height: 44px;
+        padding: 8px 12px;
+    }
+
+    .form-section .field,
+    .form-section .check-field {
+        scroll-margin-top: calc(58px + env(safe-area-inset-top, 0px));
     }
 
     .memory-detail {
         position: static;
+        scroll-margin-top: 8px;
+    }
+
+    .memory-sidebar,
+    .memory-detail {
+        padding: 14px;
+        border-radius: 12px;
+    }
+
+    .memory-sidebar h3 {
+        margin-bottom: 8px;
+    }
+
+    .memory-chip-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .memory-chip {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        padding: 8px 10px;
+        overflow: hidden;
+        scroll-margin-top: 8px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .memory-chip small {
+        font-size: 0.75rem;
+    }
+
+    .memory-other-group {
+        grid-column: 1 / -1;
+        gap: 8px;
+    }
+
+    .memory-other-toggle {
+        width: 100%;
+    }
+
+    .memory-other-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-left: 0;
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .memory-chip-nested {
+        padding: 8px 10px;
+    }
+
+    .memory-heading-row {
+        gap: 8px;
+    }
+
+    .memory-heading-row h3 {
+        min-width: 0;
+    }
+
+    .memory-heading-actions {
+        gap: 6px;
+    }
+
+    .memory-heading-actions .button,
+    .memory-edit-button,
+    .memory-delete-button {
+        min-height: 44px;
+    }
+
+    .memory-detail pre {
+        padding: 12px;
+        font-size: 0.8rem;
+        line-height: 1.65;
+    }
+
+    .memory-entry {
+        padding: 12px;
+    }
+
+    .memory-entry-header {
+        gap: 8px;
     }
 
     .memory-value-card.editable > pre,
@@ -1919,38 +2202,263 @@ noscript {
 
     .memory-list-controls {
         grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 10px;
+        border-radius: 10px;
+    }
+
+    .memory-list-control > span:not(.select-shell) {
+        font-size: 0.76rem;
+    }
+
+    .memory-list-control input,
+    .memory-list-control select {
+        min-height: 44px;
+        padding: 8px 10px;
+        font-size: 16px;
+    }
+
+    .memory-list-control select {
+        padding-right: 34px;
+    }
+
+    .memory-search-row {
+        gap: 6px;
+    }
+
+    .memory-search-row .button {
+        min-height: 44px;
+    }
+
+    .memory-list-control.check-field {
+        min-height: 44px;
+        padding: 8px 10px;
+    }
+
+    .memory-image-type-options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+    .memory-image-type-option {
+        min-height: 44px;
+        justify-content: center;
+        padding: 7px 9px;
+    }
+
+    .memory-list-summary {
+        font-size: 0.76rem;
+    }
+
+    .memory-group-index {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .memory-group-card {
+        min-height: 64px;
+        padding: 10px 12px;
+        scroll-margin-top: 8px;
+    }
+
+    .memory-entry,
+    .memory-value-card,
+    .pager {
+        scroll-margin-top: 8px;
+    }
+
+    .memory-image-thumb,
+    .memory-image-missing {
+        min-height: 180px;
+    }
+
+    .memory-image-thumb img {
+        max-height: 240px;
+    }
+
+    .memory-image-fields-list {
+        grid-template-columns: minmax(64px, 32%) minmax(0, 1fr);
+        gap: 6px 10px;
+    }
+
+    .pager {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+    }
+
+    .pager .button {
+        min-width: 0;
+        min-height: 44px;
+        padding: 8px 10px;
+    }
+
+    .pager span {
+        min-width: 0;
+        font-size: 0.78rem;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .relationship-extra summary,
+    .memory-relationship-advanced summary {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+    }
+
+    .memory-relationship-identity {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    .memory-relationship-alias-toolbar {
+        flex-wrap: wrap;
+    }
+
+    .memory-relationship-alias-row {
+        gap: 6px;
+    }
+
+    .memory-relationship-alias-row .button {
+        min-height: 44px;
+    }
+
+    .select-menu-option {
+        min-height: 44px;
+        padding: 10px 36px 10px 12px;
     }
 
     .memory-create-fields {
         grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .toast {
+        right: max(12px, env(safe-area-inset-right, 0px));
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        left: max(12px, env(safe-area-inset-left, 0px));
+        max-width: none;
+        padding: 12px 14px;
+        overflow-wrap: anywhere;
+    }
+
+    body.memory-modal-open .toast {
+        bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     }
 
     .memory-modal-layer {
-        padding: 10px;
+        align-items: end;
+        justify-items: stretch;
+        padding: 0;
     }
 
     .memory-modal-card {
-        max-height: 94vh;
+        width: 100%;
+        max-height: calc(100vh - env(safe-area-inset-top, 0px));
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+        border-right: 0;
+        border-bottom: 0;
+        border-left: 0;
+        border-radius: 18px 18px 0 0;
     }
 
-    .memory-modal-header,
+    .memory-modal-header {
+        gap: 10px;
+        padding: 14px 16px 12px;
+    }
+
+    .memory-modal-header h3 {
+        font-size: 1.15rem;
+    }
+
+    .memory-modal-close {
+        width: 44px;
+        height: 44px;
+        border-radius: 11px;
+    }
+
     .memory-modal-body {
-        padding-right: 16px;
-        padding-left: 16px;
+        gap: 12px;
+        padding: 14px 16px;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .memory-modal-meta {
+        font-size: 0.8rem;
     }
 
     .memory-modal-actions {
-        padding-right: 16px;
-        padding-left: 16px;
+        gap: 8px;
+        padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+    }
+
+    .memory-modal-actions .button {
+        min-height: 48px;
+        flex: 1 1 0;
     }
 
     .memory-modal-editor {
-        min-height: 44vh;
-        max-height: 52vh;
+        min-height: clamp(180px, 34dvh, 420px);
+        max-height: 42dvh;
+        font-size: 16px;
+        line-height: 1.55;
+    }
+
+    .memory-image-fields textarea,
+    .memory-relationship-description-field textarea,
+    .memory-relationship-advanced textarea {
+        min-height: 96px;
+    }
+
+    .image-viewer-card {
+        max-height: calc(100vh - env(safe-area-inset-top, 0px));
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    }
+
+    .image-viewer-body {
+        min-height: min(44vh, 520px);
+        padding: 10px 12px;
+    }
+
+    .image-viewer-body img {
+        max-height: calc(100vh - 210px - env(safe-area-inset-bottom, 0px));
+        max-height: calc(100dvh - 210px - env(safe-area-inset-bottom, 0px));
     }
 }
 
 @media (max-width: 760px) and (hover: none) {
+    .relationship-entry .memory-entry-header,
+    .memory-image-entry .memory-entry-header {
+        flex-wrap: wrap;
+    }
+
+    .relationship-entry > .memory-entry-actions,
+    .memory-image-entry > .memory-entry-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin: 8px 0 10px;
+    }
+
+    .relationship-entry > .memory-entry-actions .memory-edit-button,
+    .relationship-entry > .memory-entry-actions .memory-delete-button,
+    .memory-image-entry > .memory-entry-actions .memory-edit-button {
+        position: static;
+        width: 88px;
+        min-width: 88px;
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+    }
+
     .memory-value-card.actionable::after,
     .memory-entry.actionable::after {
         opacity: 1;
@@ -2482,6 +2990,7 @@ noscript {
         memoryActiveTicket: 0,
         memoryRenderedView: '',
         memoryQueuedLoad: null,
+        memoryRevealPending: false,
         memoryLoadingStartedAt: 0,
         memoryLoadingMessage: '',
         memoryLoadingTimer: 0,
@@ -3290,6 +3799,7 @@ noscript {
         state.memoryActiveTicket = 0;
         state.memoryRenderedView = '';
         state.memoryQueuedLoad = null;
+        state.memoryRevealPending = false;
         state.memoryImageQueue.length = 0;
         state.memoryEditorOpen = false;
         state.requestTickets.memory += 1;
@@ -3853,6 +4363,7 @@ noscript {
         detail.textContent = memorySectionDetailText(section);
         button.appendChild(detail);
         button.addEventListener('click', function () {
+            requestMemoryDetailRevealOnMobile();
             if (nested) {
                 state.memoryOtherExpanded = true;
             }
@@ -3973,8 +4484,43 @@ noscript {
     }
 
     function showGroupMemoryIndex(offset) {
+        requestMemoryDetailRevealOnMobile();
         const targetOffset = typeof offset === 'number' ? offset : state.memoryGroupIndexOffset;
         return loadMemorySection('group_index', null, targetOffset || 0, null);
+    }
+
+    function requestMemoryDetailRevealOnMobile() {
+        if (!window.matchMedia || !window.matchMedia('(max-width: 760px)').matches) {
+            return;
+        }
+        state.memoryRevealPending = true;
+        revealMemoryDetailOnMobile();
+    }
+
+    function revealMemoryDetailOnMobile() {
+        if (!window.matchMedia || !window.matchMedia('(max-width: 760px)').matches) {
+            return;
+        }
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        elements.memoryDetail.scrollIntoView({
+            block: 'start',
+            behavior: reduceMotion ? 'auto' : 'smooth',
+        });
+    }
+
+    function revealMemoryDetailAfterRenderOnMobile() {
+        if (!state.memoryRevealPending) {
+            return;
+        }
+        state.memoryRevealPending = false;
+        const reveal = function () {
+            revealMemoryDetailOnMobile();
+        };
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(reveal);
+        } else {
+            window.setTimeout(reveal, 0);
+        }
     }
 
     function memoryPagerRangeText(offset, entryCount, total) {
@@ -4043,6 +4589,7 @@ noscript {
                 preview.textContent = group.preview || '（空）';
                 button.append(groupName, preview);
                 button.addEventListener('click', function () {
+                    requestMemoryDetailRevealOnMobile();
                     loadMemorySection('group', null, 0, group.group_id);
                 });
                 list.appendChild(button);
@@ -4058,6 +4605,7 @@ noscript {
         previous.textContent = '上一页';
         previous.disabled = offset <= 0;
         previous.addEventListener('click', function () {
+            requestMemoryDetailRevealOnMobile();
             loadMemorySection(
                 'group_index',
                 null,
@@ -4074,6 +4622,7 @@ noscript {
         next.textContent = '下一页';
         next.disabled = !hasMore;
         next.addEventListener('click', function () {
+            requestMemoryDetailRevealOnMobile();
             loadMemorySection('group_index', null, nextOffset, null);
         });
         pager.append(previous, status, next);
@@ -4720,6 +5269,8 @@ noscript {
 
         if (entry.editable !== false) {
             row.classList.add('actionable');
+            const actions = document.createElement('div');
+            actions.className = 'memory-entry-actions';
             const edit = document.createElement('button');
             edit.type = 'button';
             edit.className = 'button small secondary memory-edit-button';
@@ -4729,7 +5280,8 @@ noscript {
                 event.stopPropagation();
                 openImageEditor(entry, edit);
             });
-            row.appendChild(edit);
+            actions.appendChild(edit);
+            layout.before(actions);
         } else {
             const note = document.createElement('small');
             note.className = 'muted memory-entry-note';
@@ -4829,6 +5381,8 @@ noscript {
             row.appendChild(note);
         }
 
+        const actions = document.createElement('div');
+        actions.className = 'memory-entry-actions';
         if (editable) {
             row.classList.add('editable');
             const edit = createMemoryEditButton(entry.value || '', {
@@ -4852,10 +5406,10 @@ noscript {
                 },
                 successMessage: '人物关系已保存',
             });
-            row.appendChild(edit);
+            actions.appendChild(edit);
         }
         if (deletable) {
-            row.appendChild(createMemoryDeleteButton({
+            actions.appendChild(createMemoryDeleteButton({
                 label: '人物关系 ' + entry.key,
                 buildRequest: function () {
                     return {
@@ -4867,6 +5421,9 @@ noscript {
                 },
                 successMessage: '人物关系已删除',
             }));
+        }
+        if (editable || deletable) {
+            header.after(actions);
         }
 
         row.addEventListener('click', function (event) {
@@ -5944,6 +6501,7 @@ noscript {
             state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
             renderMemorySection(response.data || {}, payload);
             state.memoryRenderedView = memoryViewKey(payload);
+            revealMemoryDetailAfterRenderOnMobile();
             if (requestedOptions.focusSearch) {
                 focusMemorySearch(requestedOptions.searchSelection);
             }
@@ -5959,6 +6517,7 @@ noscript {
                 state.memoryRenderedView = '';
                 appendEmpty(elements.memoryDetail, errorMessage(error));
             }
+            state.memoryRevealPending = false;
             return false;
         } finally {
             if (state.memoryActiveTicket === ticket) {
@@ -6229,6 +6788,7 @@ noscript {
         previous.textContent = '上一页';
         previous.disabled = offset <= 0;
         previous.addEventListener('click', function () {
+            requestMemoryDetailRevealOnMobile();
             loadMemorySection(
                 'global',
                 query.section,
@@ -6249,6 +6809,7 @@ noscript {
         next.textContent = '下一页';
         next.disabled = data.has_more !== true;
         next.addEventListener('click', function () {
+            requestMemoryDetailRevealOnMobile();
             loadMemorySection('global', query.section, nextOffset, null, pagerOptions);
         });
         pager.append(previous, status, next);
