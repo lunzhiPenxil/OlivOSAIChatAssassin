@@ -471,20 +471,14 @@ select[aria-invalid="true"] {
     font-size: 0.92rem;
 }
 
-.memory-sidebar h3:not(:first-child) {
-    margin-top: 22px;
-}
-
-.memory-chip-list,
-.memory-group-list {
+.memory-chip-list {
     display: flex;
     flex-direction: column;
     gap: 7px;
     overflow: visible;
 }
 
-.memory-chip,
-.memory-group {
+.memory-chip {
     width: 100%;
     padding: 9px 11px;
     border: 1px solid var(--border);
@@ -497,15 +491,12 @@ select[aria-invalid="true"] {
 }
 
 .memory-chip:hover,
-.memory-group:hover,
-.memory-chip.selected,
-.memory-group.selected {
+.memory-chip.selected {
     border-color: var(--accent);
     background: var(--accent-soft);
 }
 
-.memory-chip small,
-.memory-group small {
+.memory-chip small {
     display: block;
     overflow: hidden;
     color: var(--muted);
@@ -515,6 +506,57 @@ select[aria-invalid="true"] {
 
 .memory-detail h3 {
     margin: 0 0 4px;
+    overflow-wrap: anywhere;
+}
+
+.memory-heading-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.memory-heading-row h3 {
+    margin: 0;
+}
+
+.memory-group-index {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.memory-group-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    background: var(--surface-soft);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.memory-group-card:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.memory-group-card strong {
+    font-size: 0.92rem;
+}
+
+.memory-group-card small {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--muted);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow-wrap: anywhere;
 }
 
@@ -901,13 +943,11 @@ noscript {
                 </div>
                 <div class="memory-layout">
                     <aside class="memory-sidebar">
-                        <h3>全局区块</h3>
-                        <div id="globalSectionList" class="memory-chip-list"></div>
-                        <h3>群记忆</h3>
-                        <div id="groupMemoryList" class="memory-group-list"></div>
+                        <h3>记忆分类</h3>
+                        <div id="memorySectionList" class="memory-chip-list"></div>
                     </aside>
                     <article id="memoryDetail" class="memory-detail">
-                        <p class="muted">选择左侧区块查看内容。</p>
+                        <p class="muted">选择左侧分类查看内容。</p>
                     </article>
                 </div>
             </section>
@@ -993,7 +1033,7 @@ noscript {
             'replyKeywords', 'ignorePrefixes', 'historySizeMin', 'historySize', 'historyDynamic',
             'historyDynamicSize', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
             'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
-            'saveButton', 'memoryRefreshButton', 'globalSectionList', 'groupMemoryList',
+            'saveButton', 'memoryRefreshButton', 'memorySectionList',
             'memoryDetail', 'toast',
         ].forEach(function (id) {
             elements[id] = document.getElementById(id);
@@ -1245,7 +1285,7 @@ noscript {
         elements.memoryDetail.replaceChildren();
         const empty = document.createElement('p');
         empty.className = 'muted';
-        empty.textContent = '选择左侧区块查看内容。';
+        empty.textContent = '选择左侧分类查看内容。';
         elements.memoryDetail.appendChild(empty);
         setBusy(true);
         try {
@@ -1299,6 +1339,9 @@ noscript {
         state.overview = response.data || {};
         renderOverview();
         renderMemoryOverview();
+        if (state.memoryQuery && state.memoryQuery.scope === 'group_index') {
+            renderGroupMemoryIndex();
+        }
         return true;
     }
 
@@ -1728,21 +1771,19 @@ noscript {
     }
 
     function renderMemoryOverview() {
-        elements.globalSectionList.replaceChildren();
-        elements.groupMemoryList.replaceChildren();
+        elements.memorySectionList.replaceChildren();
         if (!state.overview) {
             return;
         }
         const sections = Array.isArray(state.overview.global_sections)
             ? state.overview.global_sections
             : [];
-        if (sections.length === 0) {
-            appendEmpty(elements.globalSectionList, '没有全局记忆区块');
-        }
         sections.forEach(function (section) {
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'memory-chip';
+            button.dataset.memoryScope = 'global';
+            button.dataset.memorySection = String(section.name);
             button.textContent = section.name;
             const detail = document.createElement('small');
             detail.textContent = section.kind === 'dict'
@@ -1752,28 +1793,93 @@ noscript {
             button.addEventListener('click', function () {
                 loadMemorySection('global', section.name, 0);
             });
-            elements.globalSectionList.appendChild(button);
+            elements.memorySectionList.appendChild(button);
         });
 
         const groups = Array.isArray(state.overview.groups) ? state.overview.groups : [];
-        if (groups.length === 0) {
-            appendEmpty(elements.groupMemoryList, '没有群记忆');
+        const groupCount = typeof state.overview.group_count === 'number'
+            ? state.overview.group_count
+            : groups.length;
+        const groupButton = document.createElement('button');
+        groupButton.type = 'button';
+        groupButton.className = 'memory-chip';
+        groupButton.dataset.memoryScope = 'group_index';
+        groupButton.textContent = '群记忆';
+        const groupDetail = document.createElement('small');
+        groupDetail.textContent = '群摘要 · ' + String(groupCount) + ' 个';
+        groupButton.appendChild(groupDetail);
+        groupButton.addEventListener('click', showGroupMemoryIndex);
+        elements.memorySectionList.prepend(groupButton);
+
+        markMemorySelection(
+            state.memoryQuery ? state.memoryQuery.scope : '',
+            state.memoryQuery ? state.memoryQuery.section : null
+        );
+    }
+
+    function markMemorySelection(scope, section) {
+        const selectedScope = scope === 'group' ? 'group_index' : scope;
+        elements.memorySectionList.querySelectorAll('.memory-chip').forEach(function (button) {
+            const selected = button.dataset.memoryScope === selectedScope &&
+                (selectedScope !== 'global' || button.dataset.memorySection === String(section));
+            button.classList.toggle('selected', selected);
+            button.setAttribute('aria-current', selected ? 'true' : 'false');
+        });
+    }
+
+    function showGroupMemoryIndex() {
+        state.requestTickets.memory += 1;
+        state.memoryQuery = {scope: 'group_index'};
+        markMemorySelection('group_index', null);
+        renderGroupMemoryIndex();
+    }
+
+    function renderGroupMemoryIndex() {
+        if (!state.overview) {
+            return;
         }
+        const groups = Array.isArray(state.overview.groups) ? state.overview.groups : [];
+        const groupCount = typeof state.overview.group_count === 'number'
+            ? state.overview.group_count
+            : groups.length;
+        elements.memoryDetail.replaceChildren();
+
+        const headingRow = document.createElement('div');
+        headingRow.className = 'memory-heading-row';
+        const heading = document.createElement('h3');
+        heading.textContent = '群记忆';
+        headingRow.appendChild(heading);
+        elements.memoryDetail.appendChild(headingRow);
+
+        const summary = document.createElement('p');
+        summary.className = 'muted';
+        summary.textContent = '共 ' + String(groupCount) + ' 个群；选择群查看完整摘要。';
+        elements.memoryDetail.appendChild(summary);
+
+        if (groups.length === 0) {
+            appendEmpty(elements.memoryDetail, '没有群记忆');
+            return;
+        }
+
+        const list = document.createElement('div');
+        list.className = 'memory-group-index';
         groups.forEach(function (group) {
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'memory-group';
-            button.textContent = group.group_id;
-            const detail = document.createElement('small');
-            detail.textContent = group.preview || '（空）';
-            button.appendChild(detail);
+            button.className = 'memory-group-card';
+            const groupName = document.createElement('strong');
+            groupName.textContent = '群 ' + group.group_id;
+            const preview = document.createElement('small');
+            preview.textContent = group.preview || '（空）';
+            button.append(groupName, preview);
             button.addEventListener('click', function () {
                 loadMemorySection('group', null, 0, group.group_id);
             });
-            elements.groupMemoryList.appendChild(button);
+            list.appendChild(button);
         });
+        elements.memoryDetail.appendChild(list);
         if (state.overview.groups_truncated) {
-            appendEmpty(elements.groupMemoryList, '群数量较多，仅显示前 ' + groups.length + ' 个');
+            appendEmpty(elements.memoryDetail, '群数量较多，仅显示前 ' + groups.length + ' 个');
         }
     }
 
@@ -1802,6 +1908,7 @@ noscript {
             payload.group_id = groupId;
         }
         state.memoryQuery = payload;
+        markMemorySelection(scope, section);
         elements.memoryDetail.replaceChildren();
         const loading = document.createElement('p');
         loading.className = 'muted';
@@ -1824,11 +1931,22 @@ noscript {
 
     function renderMemorySection(data, query) {
         elements.memoryDetail.replaceChildren();
+        const headingRow = document.createElement('div');
+        headingRow.className = 'memory-heading-row';
         const heading = document.createElement('h3');
         heading.textContent = query.scope === 'group'
             ? '群 ' + query.group_id
             : '全局 · ' + query.section;
-        elements.memoryDetail.appendChild(heading);
+        headingRow.appendChild(heading);
+        if (query.scope === 'group') {
+            const back = document.createElement('button');
+            back.type = 'button';
+            back.className = 'button small secondary';
+            back.textContent = '返回群列表';
+            back.addEventListener('click', showGroupMemoryIndex);
+            headingRow.appendChild(back);
+        }
+        elements.memoryDetail.appendChild(headingRow);
 
         if (data.metadata_only && data.kind === 'metadata') {
             const pre = document.createElement('pre');
@@ -1938,7 +2056,7 @@ noscript {
         } finally {
             setBusy(false);
         }
-        if (state.memoryQuery) {
+        if (state.memoryQuery && state.memoryQuery.scope !== 'group_index') {
             await loadMemorySection(
                 state.memoryQuery.scope,
                 state.memoryQuery.section,
