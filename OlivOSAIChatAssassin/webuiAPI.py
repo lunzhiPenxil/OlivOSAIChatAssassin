@@ -962,6 +962,20 @@ def _handle_save_config(payload, Proc):
     }, revision)
 
 
+def _memory_group_index_entries(memory, group_keys):
+    entries = []
+    for group_id in group_keys:
+        value = memory[group_id]
+        text, truncated = _display_memory_value(value, limit=200)
+        entries.append({
+            'group_id': str(group_id),
+            'preview': text,
+            'length': len(text),
+            'truncated': truncated,
+        })
+    return entries
+
+
 def _handle_memory_overview(payload, Proc):
     bot_hash, _bot_info = _require_bot(Proc, payload)
     memory, revision = OlivOSAIChatAssassin.data.gData.snapshot_memory(bot_hash)
@@ -987,18 +1001,9 @@ def _handle_memory_overview(payload, Proc):
                 section['truncated'] = truncated
             global_sections.append(section)
 
-    groups = []
     group_keys = [key for key in memory.keys() if key != GLOBAL_MEMORY_KEY]
     group_keys.reverse()
-    for group_id in group_keys[:MEMORY_GROUP_LIMIT]:
-        value = memory[group_id]
-        text, truncated = _display_memory_value(value, limit=200)
-        groups.append({
-            'group_id': str(group_id),
-            'preview': text,
-            'length': len(text),
-            'truncated': truncated,
-        })
+    groups = _memory_group_index_entries(memory, group_keys[:MEMORY_GROUP_LIMIT])
     return _ok({
         'global_sections': global_sections,
         'groups': groups,
@@ -1065,6 +1070,20 @@ def _handle_memory_section(payload, Proc):
     memory, revision = OlivOSAIChatAssassin.data.gData.snapshot_memory(bot_hash)
     if not isinstance(memory, dict):
         raise WebUIError('memory_invalid', '记忆文件根节点必须是对象')
+
+    if scope == 'group_index':
+        group_keys = [key for key in memory.keys() if key != GLOBAL_MEMORY_KEY]
+        group_keys.reverse()
+        entries = _memory_group_index_entries(memory, group_keys[offset:offset + limit])
+        next_offset = offset + len(entries)
+        return _ok({
+            'scope': 'group_index',
+            'entries': entries,
+            'total': len(group_keys),
+            'offset': offset,
+            'next_offset': next_offset,
+            'has_more': next_offset < len(group_keys),
+        }, revision)
 
     if scope == 'group':
         group_id = payload.get('group_id')

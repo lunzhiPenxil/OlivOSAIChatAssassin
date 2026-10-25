@@ -564,6 +564,42 @@ select[aria-invalid="true"] {
     white-space: nowrap;
 }
 
+.memory-other-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.memory-chip-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.memory-other-arrow {
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.memory-other-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-left: 14px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+}
+
+.memory-other-list[hidden] {
+    display: none;
+}
+
+.memory-chip-nested {
+    padding: 8px 10px;
+    background: var(--surface);
+}
+
 .memory-detail h3 {
     margin: 0 0 4px;
     overflow-wrap: anywhere;
@@ -1637,7 +1673,7 @@ noscript {
     const MEMORY_IMAGE_CACHE_LIMIT = 80;
     const IMAGE_CACHE_SECTION = '图片缓存';
     const IMAGE_TYPE_FILTERS = ['表情包', '截图', '照片', '其它'];
-    const MEMORY_SECTION_ORDER = ['用户侧写', '知识缓存', IMAGE_CACHE_SECTION];
+    const MEMORY_SECTION_ORDER = ['用户侧写', '人物关系', '知识缓存', '知识搜索', IMAGE_CACHE_SECTION];
     const MAX_REQUEST_BYTES = 1024 * 1024;
     const AUTO_GROW_MAX_HEIGHT = 720;
     const AUTO_GROW_VIEWPORT_RATIO = 0.72;
@@ -1662,6 +1698,8 @@ noscript {
         clearSecrets: new Set(),
         dirtyFields: new Set(),
         memoryQuery: null,
+        memoryOtherExpanded: false,
+        memoryGroupIndexOffset: 0,
         memoryRevision: '',
         memoryDirty: false,
         memoryLoading: false,
@@ -2006,6 +2044,8 @@ noscript {
         state.dirtyFields.clear();
         state.conflict = false;
         state.memoryQuery = null;
+        state.memoryOtherExpanded = false;
+        state.memoryGroupIndexOffset = 0;
         state.memoryRevision = '';
         state.memoryDirty = false;
         state.memoryLoading = false;
@@ -2080,13 +2120,16 @@ noscript {
         if (!state.memoryDirty && !state.memoryEditorOpen) {
             state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
         }
-        if (!state.memoryQuery) {
-            state.memoryQuery = {scope: 'group_index'};
+        const loadDefaultGroupIndex = !state.memoryQuery;
+        if (loadDefaultGroupIndex) {
+            state.memoryQuery = {scope: 'group_index', offset: 0, limit: MEMORY_PAGE_SIZE};
         }
         renderOverview();
         renderMemoryOverview();
-        if (state.memoryQuery.scope === 'group_index') {
-            renderGroupMemoryIndex();
+        if (loadDefaultGroupIndex) {
+            loadMemorySection('group_index', null, 0, null).catch(function (error) {
+                showToast(errorMessage(error), true);
+            });
         }
         return true;
     }
@@ -2536,6 +2579,85 @@ noscript {
         return ordered.concat(remaining);
     }
 
+    function isSpecialMemorySection(name) {
+        return MEMORY_SECTION_ORDER.includes(String(name));
+    }
+
+    function appendMemorySectionButton(container, section, nested) {
+        const sectionName = String(section.name);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = nested ? 'memory-chip memory-chip-nested' : 'memory-chip';
+        button.dataset.memoryScope = 'global';
+        button.dataset.memorySection = sectionName;
+        button.textContent = sectionName;
+        const detail = document.createElement('small');
+        detail.textContent = memorySectionDetailText(section);
+        button.appendChild(detail);
+        button.addEventListener('click', function () {
+            if (nested) {
+                state.memoryOtherExpanded = true;
+            }
+            const sameSection = state.memoryQuery &&
+                state.memoryQuery.scope === 'global' &&
+                state.memoryQuery.section === sectionName;
+            const options = sameSection
+                ? memoryListOptionsFromQuery(state.memoryQuery, sectionName === IMAGE_CACHE_SECTION)
+                : undefined;
+            loadMemorySection('global', sectionName, 0, null, options);
+        });
+        container.appendChild(button);
+    }
+
+    function appendMemoryOtherMenu(sections) {
+        if (sections.length === 0) {
+            state.memoryOtherExpanded = false;
+            return;
+        }
+        const group = document.createElement('div');
+        group.className = 'memory-other-group';
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.id = 'memoryOtherToggle';
+        toggle.className = 'memory-chip memory-other-toggle';
+        toggle.dataset.memoryOtherToggle = '1';
+        toggle.setAttribute('aria-controls', 'memoryOtherSectionList');
+        const heading = document.createElement('span');
+        heading.className = 'memory-chip-heading';
+        const label = document.createElement('span');
+        label.textContent = '其它';
+        const arrow = document.createElement('span');
+        arrow.className = 'memory-other-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        heading.append(label, arrow);
+        toggle.appendChild(heading);
+        const detail = document.createElement('small');
+        detail.textContent = String(sections.length) + ' 个分类';
+        toggle.appendChild(detail);
+        const list = document.createElement('div');
+        list.id = 'memoryOtherSectionList';
+        list.className = 'memory-other-list';
+        list.setAttribute('role', 'group');
+        list.setAttribute('aria-labelledby', 'memoryOtherToggle');
+        sections.forEach(function (section) {
+            appendMemorySectionButton(list, section, true);
+        });
+        const sync = function () {
+            const expanded = state.memoryOtherExpanded;
+            list.hidden = !expanded;
+            toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            toggle.classList.toggle('expanded', expanded);
+            arrow.textContent = expanded ? '▾' : '▸';
+        };
+        toggle.addEventListener('click', function () {
+            state.memoryOtherExpanded = !state.memoryOtherExpanded;
+            sync();
+        });
+        group.append(toggle, list);
+        sync();
+        elements.memorySectionList.appendChild(group);
+    }
+
     function renderMemoryOverview() {
         elements.memorySectionList.replaceChildren();
         if (!state.overview) {
@@ -2544,29 +2666,11 @@ noscript {
         const sections = Array.isArray(state.overview.global_sections)
             ? state.overview.global_sections
             : [];
-        orderedGlobalMemorySections(sections).forEach(function (section) {
-            const sectionName = String(section.name);
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'memory-chip';
-            button.dataset.memoryScope = 'global';
-            button.dataset.memorySection = sectionName;
-            button.textContent = sectionName;
-            const detail = document.createElement('small');
-            detail.textContent = section.kind === 'dict'
-                ? '字典 · ' + String(section.count || 0) + ' 项'
-                : '文本 · ' + String(section.count || 0) + ' 字';
-            button.appendChild(detail);
-            button.addEventListener('click', function () {
-                const sameSection = state.memoryQuery &&
-                    state.memoryQuery.scope === 'global' &&
-                    state.memoryQuery.section === sectionName;
-                const options = sameSection
-                    ? memoryListOptionsFromQuery(state.memoryQuery, sectionName === IMAGE_CACHE_SECTION)
-                    : undefined;
-                loadMemorySection('global', sectionName, 0, null, options);
-            });
-            elements.memorySectionList.appendChild(button);
+        const orderedSections = orderedGlobalMemorySections(sections);
+        orderedSections.forEach(function (section) {
+            if (isSpecialMemorySection(section.name)) {
+                appendMemorySectionButton(elements.memorySectionList, section, false);
+            }
         });
 
         const groups = Array.isArray(state.overview.groups) ? state.overview.groups : [];
@@ -2584,6 +2688,10 @@ noscript {
         groupButton.addEventListener('click', showGroupMemoryIndex);
         elements.memorySectionList.prepend(groupButton);
 
+        appendMemoryOtherMenu(orderedSections.filter(function (section) {
+            return !isSpecialMemorySection(section.name);
+        }));
+
         markMemorySelection(
             state.memoryQuery ? state.memoryQuery.scope : '',
             state.memoryQuery ? state.memoryQuery.section : null
@@ -2592,41 +2700,38 @@ noscript {
 
     function markMemorySelection(scope, section) {
         const selectedScope = scope === 'group' ? 'group_index' : scope;
+        const selectedOther = selectedScope === 'global' &&
+            Boolean(section) && !isSpecialMemorySection(section);
         elements.memorySectionList.querySelectorAll('.memory-chip').forEach(function (button) {
             const selected = button.dataset.memoryScope === selectedScope &&
                 (selectedScope !== 'global' || button.dataset.memorySection === String(section));
             button.classList.toggle('selected', selected);
             button.setAttribute('aria-current', selected ? 'true' : 'false');
         });
-    }
-
-    function showGroupMemoryIndex() {
-        if (!confirmDiscardMemoryEdits()) {
-            return;
+        const otherToggle = elements.memorySectionList.querySelector('[data-memory-other-toggle]');
+        if (otherToggle) {
+            otherToggle.classList.toggle('selected', selectedOther);
+            otherToggle.setAttribute('aria-current', selectedOther ? 'true' : 'false');
         }
-        closeImageViewer();
-        clearMemoryImageObservers();
-        state.memoryDirty = false;
-        state.memoryEditorOpen = false;
-        state.requestTickets.memory += 1;
-        state.memoryQueuedLoad = null;
-        state.memoryQuery = {scope: 'group_index'};
-        setMemoryLoading(false, false);
-        markMemorySelection('group_index', null);
-        renderGroupMemoryIndex();
     }
 
-    function renderGroupMemoryIndex() {
+    function showGroupMemoryIndex(offset) {
+        const targetOffset = typeof offset === 'number' ? offset : state.memoryGroupIndexOffset;
+        return loadMemorySection('group_index', null, targetOffset || 0, null);
+    }
+
+    function renderGroupMemoryIndex(data, query) {
         elements.memoryDetail.replaceChildren();
         state.memoryRenderedView = '';
-        if (!state.overview) {
-            appendEmpty(elements.memoryDetail, '正在读取群记忆索引，请稍候…');
-            return;
-        }
-        const groups = Array.isArray(state.overview.groups) ? state.overview.groups : [];
-        const groupCount = typeof state.overview.group_count === 'number'
-            ? state.overview.group_count
-            : groups.length;
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        const total = typeof data.total === 'number' ? data.total : entries.length;
+        const fallbackOffset = query && typeof query.offset === 'number' ? query.offset : 0;
+        const offset = typeof data.offset === 'number' ? data.offset : fallbackOffset;
+        const nextOffset = typeof data.next_offset === 'number'
+            ? data.next_offset
+            : offset + entries.length;
+        const hasMore = data.has_more === true;
+        state.memoryGroupIndexOffset = offset;
 
         const headingRow = document.createElement('div');
         headingRow.className = 'memory-heading-row';
@@ -2637,33 +2742,66 @@ noscript {
 
         const summary = document.createElement('p');
         summary.className = 'muted';
-        summary.textContent = '共 ' + String(groupCount) + ' 个群；选择群查看或编辑摘要。';
+        summary.textContent = '共 ' + String(total) + ' 个群；选择群查看或编辑摘要。';
         elements.memoryDetail.appendChild(summary);
 
-        if (groups.length === 0) {
+        if (total === 0) {
             appendEmpty(elements.memoryDetail, '没有群记忆');
+            state.memoryRenderedView = 'group_index';
             return;
         }
 
-        const list = document.createElement('div');
-        list.className = 'memory-group-index';
-        groups.forEach(function (group) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'memory-group-card';
-            const groupName = document.createElement('strong');
-            groupName.textContent = '群 ' + group.group_id;
-            const preview = document.createElement('small');
-            preview.textContent = group.preview || '（空）';
-            button.append(groupName, preview);
-            button.addEventListener('click', function () {
-                loadMemorySection('group', null, 0, group.group_id);
+        if (entries.length === 0) {
+            appendEmpty(elements.memoryDetail, '当前页没有群记忆');
+        } else {
+            const list = document.createElement('div');
+            list.className = 'memory-group-index';
+            entries.forEach(function (group) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'memory-group-card';
+                const groupName = document.createElement('strong');
+                groupName.textContent = '群 ' + group.group_id;
+                const preview = document.createElement('small');
+                preview.textContent = group.preview || '（空）';
+                button.append(groupName, preview);
+                button.addEventListener('click', function () {
+                    loadMemorySection('group', null, 0, group.group_id);
+                });
+                list.appendChild(button);
             });
-            list.appendChild(button);
-        });
-        elements.memoryDetail.appendChild(list);
-        if (state.overview.groups_truncated) {
-            appendEmpty(elements.memoryDetail, '群数量较多，仅显示前 ' + groups.length + ' 个');
+            elements.memoryDetail.appendChild(list);
+        }
+
+        if (total > MEMORY_PAGE_SIZE || offset > 0) {
+            const pager = document.createElement('div');
+            pager.className = 'pager';
+            const previous = document.createElement('button');
+            previous.type = 'button';
+            previous.className = 'button small secondary';
+            previous.textContent = '上一页';
+            previous.disabled = offset <= 0;
+            previous.addEventListener('click', function () {
+                loadMemorySection(
+                    'group_index',
+                    null,
+                    Math.max(0, offset - MEMORY_PAGE_SIZE),
+                    null
+                );
+            });
+            const status = document.createElement('span');
+            status.className = 'muted';
+            status.textContent = String(Math.min(offset + entries.length, total)) + ' / ' + String(total);
+            const next = document.createElement('button');
+            next.type = 'button';
+            next.className = 'button small secondary';
+            next.textContent = '下一页';
+            next.disabled = !hasMore;
+            next.addEventListener('click', function () {
+                loadMemorySection('group_index', null, nextOffset, null);
+            });
+            pager.append(previous, status, next);
+            elements.memoryDetail.appendChild(pager);
         }
         state.memoryRenderedView = 'group_index';
     }
@@ -2686,6 +2824,21 @@ noscript {
             NoneType: 'null JSON',
         };
         return labels[kind] || ('JSON · ' + String(kind || '未知类型'));
+    }
+
+    function memorySectionDetailText(section) {
+        const kind = section.kind || 'str';
+        const count = Number(section.count) || 0;
+        if (kind === 'dict') {
+            return '字典 · ' + String(count) + ' 项';
+        }
+        if (kind === 'list') {
+            return '列表 · ' + String(count) + ' 项';
+        }
+        if (kind === 'str') {
+            return '文本 · ' + String(count) + ' 字';
+        }
+        return memoryKindText(kind);
     }
 
     function memoryKindHint(kind) {
@@ -3854,7 +4007,7 @@ noscript {
                     ? requestedOptions.image_types
                     : [];
             }
-        } else {
+        } else if (scope !== 'group_index') {
             payload.group_id = groupId;
         }
         const ticket = state.requestTickets.memory + 1;
@@ -3879,6 +4032,10 @@ noscript {
     }
 
     function renderMemorySection(data, query) {
+        if (query.scope === 'group_index') {
+            renderGroupMemoryIndex(data, query);
+            return;
+        }
         elements.memoryDetail.replaceChildren();
         const headingRow = document.createElement('div');
         headingRow.className = 'memory-heading-row';
@@ -4113,14 +4270,23 @@ noscript {
             closeMemoryEditor(true);
             try {
                 await loadOverview(state.selectedBot);
-                if (state.memoryQuery && state.memoryQuery.scope !== 'group_index') {
-                    await loadMemorySection(
-                        state.memoryQuery.scope,
-                        state.memoryQuery.section,
-                        state.memoryQuery.offset || 0,
-                        state.memoryQuery.group_id,
-                        memoryListOptionsFromQuery(state.memoryQuery, isImageCacheQuery(state.memoryQuery))
-                    );
+                if (state.memoryQuery) {
+                    if (state.memoryQuery.scope === 'group_index') {
+                        await loadMemorySection(
+                            'group_index',
+                            null,
+                            state.memoryGroupIndexOffset || 0,
+                            null
+                        );
+                    } else {
+                        await loadMemorySection(
+                            state.memoryQuery.scope,
+                            state.memoryQuery.section,
+                            state.memoryQuery.offset || 0,
+                            state.memoryQuery.group_id,
+                            memoryListOptionsFromQuery(state.memoryQuery, isImageCacheQuery(state.memoryQuery))
+                        );
+                    }
                 }
                 setMemoryControlsLocked(true);
             } catch (error) {
@@ -4159,6 +4325,7 @@ noscript {
         }
         state.memoryDirty = false;
         state.memoryEditorOpen = false;
+        const memoryQuery = state.memoryQuery;
         setBusy(true);
         try {
             await loadOverview(state.selectedBot);
@@ -4168,14 +4335,23 @@ noscript {
         } finally {
             setBusy(false);
         }
-        if (state.memoryQuery && state.memoryQuery.scope !== 'group_index') {
-            await loadMemorySection(
-                state.memoryQuery.scope,
-                state.memoryQuery.section,
-                state.memoryQuery.offset || 0,
-                state.memoryQuery.group_id,
-                memoryListOptionsFromQuery(state.memoryQuery, isImageCacheQuery(state.memoryQuery))
-            );
+        if (memoryQuery) {
+            if (memoryQuery.scope === 'group_index') {
+                await loadMemorySection(
+                    'group_index',
+                    null,
+                    state.memoryGroupIndexOffset || 0,
+                    null
+                );
+            } else {
+                await loadMemorySection(
+                    memoryQuery.scope,
+                    memoryQuery.section,
+                    memoryQuery.offset || 0,
+                    memoryQuery.group_id,
+                    memoryListOptionsFromQuery(memoryQuery, isImageCacheQuery(memoryQuery))
+                );
+            }
         }
         showToast('记忆已刷新');
     }
