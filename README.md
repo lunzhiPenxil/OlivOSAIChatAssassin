@@ -31,7 +31,7 @@
 ## 用法
 最新版本已经适配 OlivOS WebUI，请结合 WebUI 界面使用
 
-![webui-display](resource\webui-display.png)
+![webui-display](resource/webui-display.png)
 
 ### 参考人格
 
