@@ -665,7 +665,9 @@ def _image_cache_file_info(filename, directory_index=None):
             return {'status': 'invalid', 'size': 0}, None
         cached = directory_index.get(_image_cache_name_key(filename))
         if cached is None:
-            return {'status': 'missing', 'size': 0}, _safe_image_cache_path(filename)
+            # 列表接口只需要命中状态，不需要为每条缺失档案重复解析磁盘路径。
+            # 生产记忆可能包含数万条已被用户删除的文件记录，逐条 realpath 会显著放大高负载超时风险。
+            return {'status': 'missing', 'size': 0}, None
         return {'status': 'available', 'size': cached['size']}, cached['path']
     else:
         path = _safe_image_cache_path(filename)

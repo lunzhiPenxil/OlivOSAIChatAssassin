@@ -466,6 +466,66 @@ select[aria-invalid="true"] {
     top: 18px;
 }
 
+.memory-loading-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 6;
+    display: flex;
+    width: fit-content;
+    max-width: min(calc(100% - 20px), 260px);
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+    border-radius: 999px;
+    color: var(--text);
+    background: color-mix(in srgb, var(--surface) 92%, var(--accent-soft));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.memory-loading-text {
+    min-width: 0;
+    overflow: hidden;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+}
+
+.memory-loading-spinner {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: memory-loading-spin 0.8s linear infinite;
+}
+
+.memory-detail.memory-is-loading {
+    cursor: progress;
+}
+
+.memory-detail.memory-is-loading .memory-heading-row {
+    padding-right: 180px;
+}
+
+@keyframes memory-loading-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .memory-loading-spinner {
+        animation: none;
+    }
+}
+
 .memory-sidebar h3 {
     margin: 0 0 10px;
     font-size: 0.92rem;
@@ -722,6 +782,12 @@ select[aria-invalid="true"] {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0);
+}
+
+.memory-detail.memory-is-loading .memory-edit-button {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-2px);
 }
 
 .memory-entry-list {
@@ -1561,7 +1627,11 @@ noscript {
         saveMemory: 'OlivOSAIChatAssassin_WebUI_SaveMemory',
     };
     const API_VERSION = 1;
-    const REQUEST_TIMEOUT = 10000;
+    const REQUEST_TIMEOUT = 20000;
+    const MEMORY_REQUEST_TIMEOUT = 90000;
+    const MEMORY_IMAGE_REQUEST_TIMEOUT = 60000;
+    const MEMORY_IMAGE_CONCURRENCY = 4;
+    const MEMORY_LOADING_ELAPSED_STEP = 5000;
     const MEMORY_PAGE_SIZE = 50;
     const MEMORY_SEARCH_LIMIT = 200;
     const MEMORY_IMAGE_CACHE_LIMIT = 80;
@@ -1594,6 +1664,15 @@ noscript {
         memoryQuery: null,
         memoryRevision: '',
         memoryDirty: false,
+        memoryLoading: false,
+        memoryActiveTicket: 0,
+        memoryRenderedView: '',
+        memoryQueuedLoad: null,
+        memoryLoadingStartedAt: 0,
+        memoryLoadingMessage: '',
+        memoryLoadingTimer: 0,
+        memoryImageQueue: [],
+        memoryImageActiveCount: 0,
         memoryEditorOpen: false,
         memoryEditorContext: null,
         memoryImageViewerOpen: false,
@@ -1727,7 +1806,7 @@ noscript {
         window.setInterval(function () {
             if (
                 !state.visible || document.hidden || state.busy || state.dirty ||
-                state.memoryEditorOpen || !state.selectedBot
+                state.memoryLoading || state.memoryEditorOpen || !state.selectedBot
             ) {
                 return;
             }
@@ -1758,7 +1837,7 @@ noscript {
             state.visible = message.visible === true;
             if (
                 state.visible && state.selectedBot && !state.dirty &&
-                !state.busy && !state.memoryEditorOpen
+                !state.busy && !state.memoryLoading && !state.memoryEditorOpen
             ) {
                 loadOverview(state.selectedBot).catch(function () {
                     return undefined;
@@ -1929,9 +2008,15 @@ noscript {
         state.memoryQuery = null;
         state.memoryRevision = '';
         state.memoryDirty = false;
+        state.memoryLoading = false;
+        state.memoryActiveTicket = 0;
+        state.memoryRenderedView = '';
+        state.memoryQueuedLoad = null;
+        state.memoryImageQueue.length = 0;
         state.memoryEditorOpen = false;
         state.requestTickets.memory += 1;
         state.dirty = false;
+        setMemoryLoading(false, false);
         hideBanner();
         clearFieldErrors();
         renderConfigWarnings([]);
@@ -1985,7 +2070,9 @@ noscript {
     async function loadOverview(botHash) {
         const ticket = state.requestTickets.overview + 1;
         state.requestTickets.overview = ticket;
-        const response = await callApi(EVENTS.memoryOverview, {bot_hash: botHash});
+        const response = await callApi(EVENTS.memoryOverview, {bot_hash: botHash}, {
+            timeout: MEMORY_REQUEST_TIMEOUT,
+        });
         if (ticket !== state.requestTickets.overview || botHash !== state.selectedBot) {
             return false;
         }
@@ -2162,6 +2249,7 @@ noscript {
 
     function setBusy(value) {
         state.busy = Boolean(value);
+        syncMemoryControlLocks();
         elements.botSelect.disabled = state.busy || state.bots.length === 0;
         elements.refreshButton.disabled = state.busy || !state.selectedBot;
         elements.memoryRefreshButton.disabled = state.busy || !state.selectedBot;
@@ -2518,20 +2606,24 @@ noscript {
         state.memoryDirty = false;
         state.memoryEditorOpen = false;
         state.requestTickets.memory += 1;
+        state.memoryQueuedLoad = null;
         state.memoryQuery = {scope: 'group_index'};
+        setMemoryLoading(false, false);
         markMemorySelection('group_index', null);
         renderGroupMemoryIndex();
     }
 
     function renderGroupMemoryIndex() {
+        elements.memoryDetail.replaceChildren();
+        state.memoryRenderedView = '';
         if (!state.overview) {
+            appendEmpty(elements.memoryDetail, '正在读取群记忆索引，请稍候…');
             return;
         }
         const groups = Array.isArray(state.overview.groups) ? state.overview.groups : [];
         const groupCount = typeof state.overview.group_count === 'number'
             ? state.overview.group_count
             : groups.length;
-        elements.memoryDetail.replaceChildren();
 
         const headingRow = document.createElement('div');
         headingRow.className = 'memory-heading-row';
@@ -2570,6 +2662,7 @@ noscript {
         if (state.overview.groups_truncated) {
             appendEmpty(elements.memoryDetail, '群数量较多，仅显示前 ' + groups.length + ' 个');
         }
+        state.memoryRenderedView = 'group_index';
     }
 
     function appendEmpty(parent, text) {
@@ -2667,7 +2760,7 @@ noscript {
             bot_hash: botHash,
             filename: filename,
             variant: variant,
-        }, {timeout: 30000});
+        }, {timeout: MEMORY_IMAGE_REQUEST_TIMEOUT});
         if (botHash !== state.selectedBot) {
             throw new Error('账号已切换，请重新预览');
         }
@@ -2692,6 +2785,34 @@ noscript {
         if (state.memoryImageObserver) {
             state.memoryImageObserver.disconnect();
         }
+        state.memoryImageQueue.length = 0;
+    }
+
+    function drainMemoryImageQueue() {
+        while (
+            state.memoryImageActiveCount < MEMORY_IMAGE_CONCURRENCY &&
+            state.memoryImageQueue.length > 0
+        ) {
+            const task = state.memoryImageQueue.shift();
+            if (!task || !task.target || !task.target.isConnected) {
+                continue;
+            }
+            state.memoryImageActiveCount += 1;
+            Promise.resolve()
+                .then(task.load)
+                .catch(function () {
+                    return undefined;
+                })
+                .finally(function () {
+                    state.memoryImageActiveCount = Math.max(0, state.memoryImageActiveCount - 1);
+                    drainMemoryImageQueue();
+                });
+        }
+    }
+
+    function scheduleMemoryImageLoad(target, loader) {
+        state.memoryImageQueue.push({target: target, load: loader});
+        drainMemoryImageQueue();
     }
 
     function observeMemoryImagePreview(target, loader) {
@@ -2714,28 +2835,30 @@ noscript {
             image.src = cached;
             return;
         }
-        requestMemoryImage(entry.key, 'thumbnail').then(function (data) {
-            if (!button.isConnected || !data.data_url) {
-                return;
-            }
-            cacheMemoryImagePreview(cacheKey, data.data_url);
-            image.addEventListener('load', function () {
-                loading.hidden = true;
-                image.hidden = false;
-            }, {once: true});
-            image.src = data.data_url;
-        }).catch(function (error) {
-            if (!button.isConnected) {
-                return;
-            }
-            if (error && error.code === 'image_missing') {
-                entry.image = Object.assign({}, entry.image || {}, {status: 'missing', size: 0});
-                statusBadge.textContent = '缓存已删除';
-                statusBadge.classList.add('warning');
-                loading.textContent = '缓存已删除';
-            } else {
-                loading.textContent = memoryImageErrorText(error);
-            }
+        scheduleMemoryImageLoad(button, function () {
+            return requestMemoryImage(entry.key, 'thumbnail').then(function (data) {
+                if (!button.isConnected || !data.data_url) {
+                    return;
+                }
+                cacheMemoryImagePreview(cacheKey, data.data_url);
+                image.addEventListener('load', function () {
+                    loading.hidden = true;
+                    image.hidden = false;
+                }, {once: true});
+                image.src = data.data_url;
+            }).catch(function (error) {
+                if (!button.isConnected) {
+                    return;
+                }
+                if (error && error.code === 'image_missing') {
+                    entry.image = Object.assign({}, entry.image || {}, {status: 'missing', size: 0});
+                    statusBadge.textContent = '缓存已删除';
+                    statusBadge.classList.add('warning');
+                    loading.textContent = '缓存已删除';
+                } else {
+                    loading.textContent = memoryImageErrorText(error);
+                }
+            });
         });
     }
 
@@ -2863,7 +2986,7 @@ noscript {
     }
 
     function openImageEditor(entry, trigger) {
-        if (state.busy || state.memoryEditorOpen || state.memoryImageViewerOpen) {
+        if (state.busy || state.memoryLoading || state.memoryEditorOpen || state.memoryImageViewerOpen) {
             return;
         }
         const status = memoryImageStatus(entry);
@@ -3076,7 +3199,10 @@ noscript {
     }
 
     function openMemoryEditor(options) {
-        if (state.busy || state.memoryEditorOpen || !options || typeof options.buildRequest !== 'function') {
+        if (
+            state.busy || state.memoryLoading || state.memoryEditorOpen ||
+            !options || typeof options.buildRequest !== 'function'
+        ) {
             return;
         }
         const mode = options.mode === 'image' ? 'image' : 'text';
@@ -3226,7 +3352,7 @@ noscript {
 
     async function saveMemoryEditor() {
         const context = state.memoryEditorContext;
-        if (!state.memoryEditorOpen || !context || state.busy) {
+        if (!state.memoryEditorOpen || !context || state.busy || state.memoryLoading) {
             return;
         }
         let value = null;
@@ -3266,6 +3392,136 @@ noscript {
 
     function isImageCacheQuery(query) {
         return Boolean(query && isImageCacheSection(query.scope, query.section));
+    }
+
+    function memoryViewKey(query) {
+        if (!query || typeof query !== 'object') {
+            return '';
+        }
+        if (query.scope === 'global') {
+            return 'global:' + String(query.section || '');
+        }
+        if (query.scope === 'group') {
+            return 'group:' + String(query.group_id || '');
+        }
+        return typeof query.scope === 'string' ? query.scope : '';
+    }
+
+    function hasRenderedMemoryContent() {
+        if (!state.memoryRenderedView) {
+            return false;
+        }
+        return Array.from(elements.memoryDetail.children).some(function (child) {
+            return !child.classList.contains('memory-loading-indicator');
+        });
+    }
+
+    function memoryLoadingMessage(query, retained, queued) {
+        if (queued) {
+            return retained ? '等待当前读取完成…' : '正在等待读取…';
+        }
+        if (!retained) {
+            return '正在加载…';
+        }
+        return state.memoryRenderedView === memoryViewKey(query)
+            ? '正在更新…'
+            : '正在加载…';
+    }
+
+    function setMemoryMutationControlsLocked(locked) {
+        elements.memoryDetail.querySelectorAll('.memory-edit-button').forEach(function (control) {
+            lockMemoryControl(control, locked);
+        });
+        [elements.memoryModalSave, elements.imageViewerEdit].forEach(function (control) {
+            if (control) {
+                lockMemoryControl(control, locked);
+            }
+        });
+    }
+
+    function syncMemoryControlLocks() {
+        if (state.busy) {
+            setMemoryControlsLocked(true);
+            return;
+        }
+        setMemoryControlsLocked(false);
+        if (state.memoryLoading) {
+            setMemoryMutationControlsLocked(true);
+        }
+    }
+
+    function updateMemoryLoadingText() {
+        const indicator = elements.memoryDetail.querySelector('.memory-loading-indicator');
+        const text = indicator ? indicator.querySelector('.memory-loading-text') : null;
+        if (!text || !state.memoryLoadingStartedAt) {
+            return;
+        }
+        const elapsedSeconds = Math.floor(
+            (Date.now() - state.memoryLoadingStartedAt) / MEMORY_LOADING_ELAPSED_STEP
+        ) * (MEMORY_LOADING_ELAPSED_STEP / 1000);
+        const base = state.memoryLoadingMessage || '正在读取记忆…';
+        text.textContent = elapsedSeconds > 0
+            ? base + ' · 已等待 ' + String(elapsedSeconds) + ' 秒'
+            : base;
+    }
+
+    function stopMemoryLoadingTicker() {
+        if (state.memoryLoadingTimer) {
+            window.clearInterval(state.memoryLoadingTimer);
+        }
+        state.memoryLoadingTimer = 0;
+        state.memoryLoadingStartedAt = 0;
+        state.memoryLoadingMessage = '';
+    }
+
+    function setMemoryLoading(loading, retained, message) {
+        const active = Boolean(loading);
+        state.memoryLoading = active;
+        elements.memoryDetail.classList.toggle('memory-is-loading', active);
+        if (active) {
+            elements.memoryDetail.setAttribute('aria-busy', 'true');
+        } else {
+            elements.memoryDetail.removeAttribute('aria-busy');
+        }
+        let indicator = elements.memoryDetail.querySelector('.memory-loading-indicator');
+        if (!active) {
+            if (indicator) {
+                indicator.remove();
+            }
+            stopMemoryLoadingTicker();
+            syncMemoryControlLocks();
+            return;
+        }
+        if (!state.memoryLoadingStartedAt) {
+            state.memoryLoadingStartedAt = Date.now();
+        }
+        if (typeof message === 'string' && message) {
+            state.memoryLoadingMessage = message;
+        }
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'memory-loading-indicator';
+            indicator.setAttribute('role', 'status');
+            indicator.setAttribute('aria-live', 'polite');
+            const spinner = document.createElement('span');
+            spinner.className = 'memory-loading-spinner';
+            spinner.setAttribute('aria-hidden', 'true');
+            const text = document.createElement('span');
+            text.className = 'memory-loading-text';
+            indicator.append(spinner, text);
+        }
+        const text = indicator.querySelector('.memory-loading-text');
+        if (text) {
+            text.textContent = state.memoryLoadingMessage ||
+                (retained ? '正在更新…' : '正在读取记忆…');
+        }
+        if (indicator.parentNode !== elements.memoryDetail) {
+            elements.memoryDetail.prepend(indicator);
+        }
+        if (!state.memoryLoadingTimer) {
+            state.memoryLoadingTimer = window.setInterval(updateMemoryLoadingText, 1000);
+        }
+        syncMemoryControlLocks();
     }
 
     function defaultMemoryListOptions(imageCache) {
@@ -3507,6 +3763,61 @@ noscript {
         return controls;
     }
 
+    function startQueuedMemoryLoad() {
+        if (state.memoryActiveTicket !== 0) {
+            return;
+        }
+        const queued = state.memoryQueuedLoad;
+        state.memoryQueuedLoad = null;
+        if (!queued || queued.ticket !== state.requestTickets.memory) {
+            setMemoryLoading(false, false);
+            return;
+        }
+        runMemorySectionLoad(queued.payload, queued.requestedOptions, queued.ticket);
+    }
+
+    async function runMemorySectionLoad(payload, requestedOptions, ticket) {
+        state.memoryActiveTicket = ticket;
+        const retained = hasRenderedMemoryContent();
+        if (!retained) {
+            elements.memoryDetail.replaceChildren();
+            state.memoryRenderedView = '';
+        }
+        setMemoryLoading(true, retained, memoryLoadingMessage(payload, retained, false));
+        try {
+            const response = await callApi(EVENTS.memorySection, payload, {
+                timeout: MEMORY_REQUEST_TIMEOUT,
+            });
+            if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
+                return false;
+            }
+            state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
+            renderMemorySection(response.data || {}, payload);
+            state.memoryRenderedView = memoryViewKey(payload);
+            if (requestedOptions.focusSearch) {
+                focusMemorySearch(requestedOptions.searchSelection);
+            }
+            return true;
+        } catch (error) {
+            if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
+                return false;
+            }
+            if (retained && hasRenderedMemoryContent()) {
+                showToast('加载失败，已保留当前内容：' + errorMessage(error), true);
+            } else {
+                elements.memoryDetail.replaceChildren();
+                state.memoryRenderedView = '';
+                appendEmpty(elements.memoryDetail, errorMessage(error));
+            }
+            return false;
+        } finally {
+            if (state.memoryActiveTicket === ticket) {
+                state.memoryActiveTicket = 0;
+                startQueuedMemoryLoad();
+            }
+        }
+    }
+
     async function loadMemorySection(scope, section, offset, groupId, listOptions) {
         if (!state.selectedBot) {
             return false;
@@ -3514,12 +3825,13 @@ noscript {
         if (!confirmDiscardMemoryEdits()) {
             return false;
         }
+        if (state.memoryEditorOpen) {
+            closeMemoryEditor(true);
+        }
         closeImageViewer();
         clearMemoryImageObservers();
         state.memoryDirty = false;
         state.memoryEditorOpen = false;
-        const ticket = state.requestTickets.memory + 1;
-        state.requestTickets.memory = ticket;
         const imageCache = isImageCacheSection(scope, section);
         const requestedOptions = Object.assign(defaultMemoryListOptions(imageCache), listOptions || {});
         const payload = {
@@ -3542,30 +3854,25 @@ noscript {
         } else {
             payload.group_id = groupId;
         }
+        const ticket = state.requestTickets.memory + 1;
+        state.requestTickets.memory = ticket;
         state.memoryQuery = payload;
         markMemorySelection(scope, section);
-        elements.memoryDetail.replaceChildren();
-        const loading = document.createElement('p');
-        loading.className = 'muted';
-        loading.textContent = '正在读取记忆…';
-        elements.memoryDetail.appendChild(loading);
-        try {
-            const response = await callApi(EVENTS.memorySection, payload);
-            if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
-                return;
-            }
-            state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
-            renderMemorySection(response.data || {}, payload);
-            if (requestedOptions.focusSearch) {
-                focusMemorySearch(requestedOptions.searchSelection);
-            }
-        } catch (error) {
-            if (ticket !== state.requestTickets.memory || state.selectedBot !== payload.bot_hash) {
-                return;
-            }
-            elements.memoryDetail.replaceChildren();
-            appendEmpty(elements.memoryDetail, errorMessage(error));
+        if (state.memoryActiveTicket !== 0) {
+            state.memoryQueuedLoad = {
+                payload: payload,
+                requestedOptions: requestedOptions,
+                ticket: ticket,
+            };
+            const retained = hasRenderedMemoryContent();
+            setMemoryLoading(
+                true,
+                retained,
+                memoryLoadingMessage(payload, retained, true)
+            );
+            return false;
         }
+        return runMemorySectionLoad(payload, requestedOptions, ticket);
     }
 
     function renderMemorySection(data, query) {
@@ -3782,7 +4089,7 @@ noscript {
     }
 
     async function saveMemory(request, successMessage) {
-        if (!state.selectedBot || state.busy) {
+        if (!state.selectedBot || state.busy || state.memoryLoading) {
             return false;
         }
         if (!state.memoryRevision) {
@@ -3796,7 +4103,9 @@ noscript {
                 bot_hash: state.selectedBot,
                 expected_revision: state.memoryRevision,
             }, request);
-            const response = await callApi(EVENTS.saveMemory, payload);
+            const response = await callApi(EVENTS.saveMemory, payload, {
+                timeout: MEMORY_REQUEST_TIMEOUT,
+            });
             state.memoryRevision = typeof response.revision === 'string' ? response.revision : '';
             closeMemoryEditor(true);
             try {
