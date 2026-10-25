@@ -2847,6 +2847,10 @@ noscript {
         return MEMORY_SECTION_ORDER.includes(String(name));
     }
 
+    function isMemorySectionEditable(scope, section) {
+        return scope !== 'global' || isSpecialMemorySection(section);
+    }
+
     function appendMemorySectionButton(container, section, nested) {
         const sectionName = String(section.name);
         const button = document.createElement('button');
@@ -4773,6 +4777,7 @@ noscript {
             renderGroupMemoryIndex(data, query);
             return;
         }
+        const sectionEditable = isMemorySectionEditable(query.scope, query.section);
         elements.memoryDetail.replaceChildren();
         const headingRow = document.createElement('div');
         headingRow.className = 'memory-heading-row';
@@ -4791,6 +4796,13 @@ noscript {
         }
         elements.memoryDetail.appendChild(headingRow);
 
+        if (!sectionEditable) {
+            const hint = document.createElement('p');
+            hint.className = 'muted memory-edit-hint';
+            hint.textContent = '此分类在 WebUI 中只读；如需修改，请直接编辑记忆 JSON 文件。';
+            elements.memoryDetail.appendChild(hint);
+        }
+
         if (data.image_cache && data.kind === 'invalid') {
             appendEmpty(
                 elements.memoryDetail,
@@ -4802,7 +4814,7 @@ noscript {
         if (data.scope === 'group' || data.kind === 'text') {
             const text = typeof data.value === 'string' ? data.value : '';
             const kind = data.value_kind || 'str';
-            const editable = data.editable !== false && !data.truncated;
+            const editable = sectionEditable && data.editable !== false && !data.truncated;
             const label = query.scope === 'group' ? '群记忆内容' : query.section + ' 内容';
             if (editable) {
                 const hint = document.createElement('p');
@@ -4843,7 +4855,7 @@ noscript {
             );
         } else {
             const hasEditable = entries.some(function (entry) {
-                return entry.editable !== false && !entry.truncated;
+                return sectionEditable && entry.editable !== false && !entry.truncated;
             });
             if (hasEditable) {
                 const hint = document.createElement('p');
@@ -4878,7 +4890,7 @@ noscript {
                 kind.textContent = memoryKindText(entry.kind || 'str');
                 header.append(term, kind);
                 row.appendChild(header);
-                const editable = entry.editable !== false && !entry.truncated;
+                const editable = sectionEditable && entry.editable !== false && !entry.truncated;
                 const card = createMemoryValueCard(entry.value || '', {
                     editable: editable,
                     kind: entry.kind || 'str',

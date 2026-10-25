@@ -1180,6 +1180,7 @@ def _handle_memory_section(payload, Proc):
     section_name = payload.get('section')
     if not isinstance(section_name, str) or not section_name or len(section_name) > 256:
         raise WebUIError('validation_error', 'section 无效')
+    section_editable = section_name in MEMORY_SPECIAL_SECTIONS
     global_memory = memory.get(GLOBAL_MEMORY_KEY, {})
     if not isinstance(global_memory, dict):
         raise WebUIError('not_found', '该全局记忆区块不存在')
@@ -1231,8 +1232,12 @@ def _handle_memory_section(payload, Proc):
         result = {
             'scope': 'global',
             'section': section_name,
+            'editable': section_editable,
         }
         result.update(_memory_dict_page(records, len(items), offset, limit, list_options))
+        if not section_editable:
+            for entry in result.get('entries', []):
+                entry['editable'] = False
         if section_name == RELATIONSHIP_SECTION:
             result['relationship'] = True
         return _ok(result, revision)
@@ -1245,7 +1250,7 @@ def _handle_memory_section(payload, Proc):
         'value': text,
         'value_kind': type(value).__name__,
         'truncated': truncated,
-        'editable': not truncated,
+        'editable': section_editable and not truncated,
     }, revision)
 
 
@@ -1432,6 +1437,12 @@ def _handle_save_memory(payload, Proc):
         memory_value = _validate_memory_value(payload.get('value'))
     elif scope == 'global':
         section_name = _validate_memory_name(payload.get('section'), 'section', 'section')
+        if section_name not in MEMORY_SPECIAL_SECTIONS:
+            raise WebUIError(
+                'read_only',
+                '该分类在 WebUI 中只读，请直接修改记忆 JSON 文件',
+                {'section': '该分类不支持 WebUI 编辑'},
+            )
         if section_name == IMAGE_CACHE_SECTION:
             if has_value or not has_entries:
                 raise WebUIError('validation_error', '图片缓存必须按条目提交 entries')
