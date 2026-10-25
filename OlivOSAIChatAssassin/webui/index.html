@@ -10,12 +10,14 @@
     --bg: #f5f6f8;
     --surface: #ffffff;
     --surface-soft: #eef1f5;
+    --popover: #ffffff;
     --border: #d8dde5;
     --text: #1f2937;
     --muted: #667085;
     --accent: #2563eb;
     --accent-strong: #1d4ed8;
     --accent-soft: #dbeafe;
+    --select-option-selected: #f1f5f9;
     --danger: #b42318;
     --danger-soft: #fee4e2;
     --warning: #b54708;
@@ -23,6 +25,7 @@
     --success: #067647;
     --success-soft: #dcfae6;
     --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    --menu-shadow: 0 10px 28px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.08);
     --radius: 14px;
 }
 
@@ -31,19 +34,22 @@
         --bg: #0f141b;
         --surface: #171e28;
         --surface-soft: #202936;
+        --popover: #0b1220;
         --border: #2e3a4a;
         --text: #e8edf4;
         --muted: #9aa8ba;
         --accent: #79a8ff;
         --accent-strong: #9dbfff;
         --accent-soft: #1d3357;
+        --select-option-selected: #2e3744;
         --danger: #ff9f98;
         --danger-soft: #451c1c;
-    --warning: #fec84b;
-    --warning-soft: #3b2b0a;
+        --warning: #fec84b;
+        --warning-soft: #3b2b0a;
         --success: #7ee2a8;
         --success-soft: #163927;
         --shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+        --menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.44), 0 2px 8px rgba(0, 0, 0, 0.28);
     }
 }
 
@@ -312,7 +318,7 @@ code {
     min-width: 0;
 }
 
-.field > span {
+.field > span:not(.select-shell) {
     font-weight: 600;
 }
 
@@ -351,13 +357,236 @@ textarea {
     font: inherit;
 }
 
+.select-shell {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-width: 0;
+}
+
+.select-shell > select {
+    display: block;
+}
+
+.select-chevron {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    display: flex;
+    width: 16px;
+    height: 16px;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: color 140ms ease;
+}
+
+.select-chevron::before {
+    width: 7px;
+    height: 7px;
+    border-right: 1.8px solid currentColor;
+    border-bottom: 1.8px solid currentColor;
+    content: "";
+    transform: rotate(45deg);
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+select.select-menu-open + .select-chevron::before {
+    transform: rotate(225deg);
+}
+
+select:disabled + .select-chevron {
+    opacity: 0.64;
+}
+
+select {
+    padding-right: 38px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--surface);
+    cursor: pointer;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+select:hover:not(:disabled) {
+    background-color: var(--select-option-selected);
+}
+
+select:active:not(:disabled) {
+    background-color: color-mix(in srgb, var(--select-option-selected) 82%, var(--border));
+}
+
+select.select-menu-open {
+    border-color: var(--accent);
+    background-color: var(--surface);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+select[aria-invalid="true"]:focus {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+select:disabled {
+    border-color: color-mix(in srgb, var(--border) 78%, var(--surface));
+    color: var(--muted);
+    background-color: var(--surface-soft);
+    opacity: 0.64;
+    cursor: not-allowed;
+}
+
+select option,
+select optgroup {
+    color: var(--text);
+    background-color: var(--surface);
+}
+
+select option:checked {
+    color: var(--text);
+    background-color: var(--select-option-selected);
+}
+
+select option:disabled {
+    color: var(--muted);
+}
+
+.select-menu {
+    position: fixed;
+    z-index: 1200;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    background: var(--popover);
+    box-shadow: var(--menu-shadow);
+    scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+    transform-origin: top center;
+    animation: select-menu-in 100ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.select-menu.opens-above {
+    transform-origin: bottom center;
+    animation-name: select-menu-in-up;
+}
+
+.select-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.select-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.select-menu::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 45%, transparent);
+    background-clip: padding-box;
+}
+
+.select-menu-option {
+    position: relative;
+    display: flex;
+    min-height: 32px;
+    align-items: center;
+    padding: 6px 32px 6px 12px;
+    overflow: hidden;
+    border-radius: 6px;
+    color: var(--text);
+    cursor: pointer;
+    text-overflow: ellipsis;
+    user-select: none;
+    white-space: nowrap;
+    transition: background-color 90ms ease, color 90ms ease;
+}
+
+.select-menu-option-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.select-menu-option::after {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    width: 10px;
+    height: 6px;
+    border-bottom: 2px solid currentColor;
+    border-left: 2px solid currentColor;
+    color: var(--accent);
+    content: "";
+    opacity: 0;
+    transform: translateY(-62%) rotate(-45deg) scale(0.72);
+    transition: opacity 90ms ease, transform 90ms ease;
+}
+
+.select-menu-option[aria-selected="true"]::after {
+    opacity: 1;
+    transform: translateY(-62%) rotate(-45deg) scale(1);
+}
+
+.select-menu-option[aria-selected="true"],
+.select-menu-option[data-active="true"] {
+    background: var(--select-option-selected);
+}
+
+.select-menu-option[aria-disabled="true"] {
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+.select-menu-group {
+    padding: 8px 10px 4px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+}
+
+@keyframes select-menu-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes select-menu-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 textarea {
     min-height: 78px;
     resize: vertical;
 }
 
 input:focus,
-select:focus,
 textarea:focus,
 button:focus-visible,
 .about-link-list a:focus-visible {
@@ -546,6 +775,24 @@ select[aria-invalid="true"] {
     .memory-loading-spinner {
         animation: none;
     }
+
+    select {
+        transition: none;
+    }
+
+    .select-chevron::before {
+        transition: none;
+    }
+
+    .select-menu {
+        animation: none;
+    }
+
+    .memory-chip,
+    .memory-other-arrow,
+    .memory-other-arrow::before {
+        transition: none;
+    }
 }
 
 .memory-sidebar h3 {
@@ -570,6 +817,7 @@ select[aria-invalid="true"] {
     font: inherit;
     text-align: left;
     cursor: pointer;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
 .memory-chip:hover,
@@ -600,8 +848,35 @@ select[aria-invalid="true"] {
 }
 
 .memory-other-arrow {
+    display: grid;
+    width: 19px;
+    height: 19px;
+    flex: none;
+    place-items: center;
+    border-radius: 6px;
     color: var(--muted);
-    font-size: 0.86rem;
+    background: var(--surface);
+    transition: background-color 140ms ease, color 140ms ease;
+}
+
+.memory-other-arrow::before {
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    content: "";
+    transform: rotate(-45deg);
+    transition: transform 150ms ease;
+}
+
+.memory-other-toggle:hover .memory-other-arrow,
+.memory-other-toggle.expanded .memory-other-arrow {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--surface) 78%, var(--accent-soft));
+}
+
+.memory-other-toggle.expanded .memory-other-arrow::before {
+    transform: rotate(45deg);
 }
 
 .memory-other-list {
@@ -657,7 +932,7 @@ select[aria-invalid="true"] {
     gap: 5px;
 }
 
-.memory-list-control > span {
+.memory-list-control > span:not(.select-shell) {
     color: var(--muted);
     font-size: 0.78rem;
     font-weight: 600;
@@ -667,6 +942,21 @@ select[aria-invalid="true"] {
 .memory-list-control select {
     min-height: 36px;
     padding: 7px 9px;
+}
+
+.memory-list-control select {
+    padding-right: 32px;
+}
+
+.memory-list-control .select-chevron {
+    right: 9px;
+    width: 14px;
+    height: 14px;
+}
+
+.memory-list-control .select-chevron::before {
+    width: 6px;
+    height: 6px;
 }
 
 .memory-search-row {
@@ -694,7 +984,7 @@ select[aria-invalid="true"] {
     border-radius: 9px;
 }
 
-.memory-list-control.check-field > span {
+.memory-list-control.check-field > span:not(.select-shell) {
     color: var(--text);
     font-size: 0.86rem;
     font-weight: 600;
@@ -1471,6 +1761,37 @@ noscript {
         max-height: 52vh;
     }
 }
+
+@media (forced-colors: active) {
+    select,
+    .memory-list-control select {
+        padding-right: 11px;
+        appearance: auto;
+        -webkit-appearance: auto;
+        background-image: none;
+    }
+
+    .select-menu {
+        border-color: CanvasText;
+        background: Canvas;
+        box-shadow: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .select-chevron {
+        display: none;
+    }
+
+    select:focus-visible {
+        outline: 2px solid Highlight;
+        outline-offset: 1px;
+    }
+
+    .select-menu-option[aria-selected="true"] {
+        outline: 1px solid Highlight;
+    }
+}
     </style>
 </head>
 <body>
@@ -1909,10 +2230,22 @@ noscript {
     const MAX_REQUEST_BYTES = 1024 * 1024;
     const AUTO_GROW_MAX_HEIGHT = 720;
     const AUTO_GROW_VIEWPORT_RATIO = 0.72;
+    const SELECT_MENU_MAX_HEIGHT = 320;
+    const SELECT_MENU_GAP = 4;
+    const SELECT_MENU_VIEWPORT_GAP = 8;
 
     const pendingRequests = new Map();
     const memoryImageLoaders = new WeakMap();
     let textareaResizeTimer = 0;
+    const selectMenuState = {
+        select: null,
+        menu: null,
+        items: [],
+        activeIndex: -1,
+        sequence: 0,
+        typeahead: '',
+        lastTypeaheadAt: 0,
+    };
     const state = {
         bots: [],
         selectedBot: null,
@@ -1948,6 +2281,7 @@ noscript {
         memoryImageViewerContext: null,
         memoryImagePreviewCache: new Map(),
         memoryImageObserver: null,
+        selectObserver: null,
         requestSequence: 0,
         requestTickets: {config: 0, overview: 0, memory: 0},
         botEpoch: 0,
@@ -1989,6 +2323,25 @@ noscript {
         ].forEach(function (id) {
             elements[id] = document.getElementById(id);
         });
+
+        enhanceCustomSelects(document);
+        if (window.MutationObserver) {
+            state.selectObserver = new MutationObserver(function (records) {
+                records.forEach(function (record) {
+                    record.addedNodes.forEach(function (node) {
+                        if (node.nodeType !== Node.ELEMENT_NODE) {
+                            return;
+                        }
+                        if (node.tagName === 'SELECT') {
+                            enhanceCustomSelect(node);
+                            return;
+                        }
+                        enhanceCustomSelects(node);
+                    });
+                });
+            });
+            state.selectObserver.observe(document.body, {childList: true, subtree: true});
+        }
 
         document.querySelectorAll('.tab-button').forEach(function (button) {
             button.addEventListener('click', function () {
@@ -2107,6 +2460,426 @@ noscript {
 
         state.ready = true;
         loadBootstrap();
+    }
+
+    function enhanceCustomSelects(root) {
+        root.querySelectorAll('select:not([multiple])').forEach(enhanceCustomSelect);
+    }
+
+    function ensureSelectShell(select) {
+        const parent = select.parentElement;
+        if (parent && parent.classList.contains('select-shell')) {
+            return;
+        }
+        const shell = document.createElement('span');
+        shell.className = 'select-shell';
+        const chevron = document.createElement('span');
+        chevron.className = 'select-chevron';
+        chevron.setAttribute('aria-hidden', 'true');
+        select.parentNode.insertBefore(shell, select);
+        shell.appendChild(select);
+        shell.appendChild(chevron);
+    }
+
+    function enhanceCustomSelect(select) {
+        if (!select || select.multiple || select.dataset.customSelectReady === '1') {
+            return;
+        }
+        select.dataset.customSelectReady = '1';
+        ensureSelectShell(select);
+        select.setAttribute('aria-haspopup', 'listbox');
+        select.setAttribute('aria-expanded', 'false');
+        select.addEventListener('pointerdown', function (event) {
+            if (event.button !== 0 || select.disabled) {
+                return;
+            }
+            event.preventDefault();
+            select.focus({preventScroll: true});
+            if (selectMenuState.select === select) {
+                closeSelectMenu();
+            } else {
+                openSelectMenu(select);
+            }
+        });
+        select.addEventListener('keydown', handleSelectKeydown);
+        select.addEventListener('blur', function () {
+            if (selectMenuState.select === select) {
+                closeSelectMenu();
+            }
+        });
+        const label = select.labels && select.labels[0];
+        if (label && label.dataset.customSelectLabelReady !== '1') {
+            label.dataset.customSelectLabelReady = '1';
+            label.addEventListener('click', function (event) {
+                if (event.target === select || select.disabled) {
+                    return;
+                }
+                event.preventDefault();
+                select.focus({preventScroll: true});
+                if (selectMenuState.select === select) {
+                    closeSelectMenu();
+                } else {
+                    openSelectMenu(select);
+                }
+            });
+        }
+        if (window.MutationObserver) {
+            const observer = new MutationObserver(function () {
+                if (select.disabled && selectMenuState.select === select) {
+                    closeSelectMenu();
+                }
+            });
+            observer.observe(select, {attributes: true, attributeFilter: ['disabled']});
+        }
+    }
+
+    function handleSelectKeydown(event) {
+        const select = event.currentTarget;
+        if (select.disabled || event.isComposing) {
+            return;
+        }
+        const open = selectMenuState.select === select;
+        if (
+            event.key.length === 1 && event.key !== ' ' &&
+            !event.ctrlKey && !event.metaKey && !event.altKey
+        ) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!open) {
+                openSelectMenu(select);
+            }
+            typeaheadSelectItem(event.key);
+            return;
+        }
+        if (!open) {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                openSelectMenu(select);
+            }
+            return;
+        }
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            event.stopPropagation();
+            moveSelectActive(1);
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            moveSelectActive(-1);
+        } else if (event.key === 'PageDown') {
+            event.preventDefault();
+            event.stopPropagation();
+            moveSelectActive(5);
+        } else if (event.key === 'PageUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            moveSelectActive(-5);
+        } else if (event.key === 'Home') {
+            event.preventDefault();
+            event.stopPropagation();
+            setSelectActiveIndex(firstEnabledSelectItem());
+        } else if (event.key === 'End') {
+            event.preventDefault();
+            event.stopPropagation();
+            setSelectActiveIndex(lastEnabledSelectItem());
+        } else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            selectActiveMenuItem();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            closeSelectMenu(true);
+        } else if (event.key === 'Tab') {
+            closeSelectMenu();
+        }
+    }
+
+    function typeaheadSelectItem(character) {
+        const now = Date.now();
+        if (now - selectMenuState.lastTypeaheadAt > 700) {
+            selectMenuState.typeahead = '';
+        }
+        selectMenuState.lastTypeaheadAt = now;
+        selectMenuState.typeahead += character.toLocaleLowerCase();
+        const query = selectMenuState.typeahead;
+        const items = selectMenuState.items;
+        if (!query || items.length === 0) {
+            return;
+        }
+        const start = selectMenuState.activeIndex >= 0
+            ? (selectMenuState.activeIndex + 1) % items.length
+            : 0;
+        for (let offset = 0; offset < items.length; offset += 1) {
+            const index = (start + offset) % items.length;
+            const item = items[index];
+            if (!item.disabled && item.option.textContent.trim().toLocaleLowerCase().startsWith(query)) {
+                setSelectActiveIndex(index);
+                return;
+            }
+        }
+    }
+
+    function openSelectMenu(select) {
+        if (!select || select.disabled) {
+            return;
+        }
+        closeSelectMenu();
+        const menu = document.createElement('div');
+        menu.id = 'customSelectMenu' + String(++selectMenuState.sequence);
+        menu.className = 'select-menu';
+        menu.setAttribute('role', 'listbox');
+        const label = select.labels && select.labels[0];
+        const labelText = label && label.querySelector(':scope > span');
+        if (labelText && labelText.textContent.trim()) {
+            menu.setAttribute('aria-label', labelText.textContent.trim());
+        }
+        const items = [];
+        let optionIndex = 0;
+        Array.from(select.children).forEach(function (child) {
+            if (child.tagName === 'OPTGROUP') {
+                const groupLabel = document.createElement('div');
+                groupLabel.className = 'select-menu-group';
+                groupLabel.setAttribute('role', 'presentation');
+                groupLabel.textContent = child.label || '';
+                menu.appendChild(groupLabel);
+                Array.from(child.children).forEach(function (option) {
+                    if (option.tagName === 'OPTION') {
+                        appendSelectMenuItem(menu, items, option, optionIndex, child.disabled);
+                        optionIndex += 1;
+                    }
+                });
+                return;
+            }
+            if (child.tagName === 'OPTION') {
+                appendSelectMenuItem(menu, items, child, optionIndex, false);
+                optionIndex += 1;
+            }
+        });
+        menu.addEventListener('pointerdown', function (event) {
+            event.preventDefault();
+        });
+        menu.style.visibility = 'hidden';
+        menu.style.maxHeight = SELECT_MENU_MAX_HEIGHT + 'px';
+        document.body.appendChild(menu);
+        selectMenuState.select = select;
+        selectMenuState.menu = menu;
+        selectMenuState.items = items;
+        selectMenuState.activeIndex = -1;
+        select.classList.add('select-menu-open');
+        select.setAttribute('aria-expanded', 'true');
+        select.setAttribute('aria-controls', menu.id);
+        const selectedIndex = items.findIndex(function (item) {
+            return item.option.selected && !item.disabled;
+        });
+        setSelectActiveIndex(selectedIndex >= 0 ? selectedIndex : firstEnabledSelectItem());
+        positionSelectMenu();
+        menu.style.visibility = '';
+        document.addEventListener('pointerdown', handleSelectOutsidePointerDown, true);
+        document.addEventListener('focusin', handleSelectFocusChange, true);
+        window.addEventListener('resize', positionSelectMenu);
+        window.addEventListener('scroll', handleSelectViewportScroll, true);
+        window.addEventListener('blur', handleSelectWindowBlur);
+    }
+
+    function appendSelectMenuItem(menu, items, option, index, groupDisabled) {
+        const disabled = groupDisabled || option.disabled;
+        const item = document.createElement('div');
+        item.id = menu.id + '-option-' + String(index);
+        item.className = 'select-menu-option';
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', option.selected ? 'true' : 'false');
+        item.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        const label = document.createElement('span');
+        label.className = 'select-menu-option-label';
+        label.textContent = option.textContent.trim() || option.value || '（空白选项）';
+        item.appendChild(label);
+        menu.appendChild(item);
+        const entry = {option: option, element: item, disabled: disabled};
+        const itemIndex = items.length;
+        items.push(entry);
+        if (!disabled) {
+            item.addEventListener('pointermove', function () {
+                if (selectMenuState.activeIndex !== itemIndex) {
+                    setSelectActiveIndex(itemIndex);
+                }
+            });
+            item.addEventListener('click', function () {
+                chooseSelectMenuItem(entry);
+            });
+        }
+    }
+
+    function setSelectActiveIndex(index) {
+        if (!selectMenuState.menu || index < 0 || index >= selectMenuState.items.length) {
+            return;
+        }
+        const item = selectMenuState.items[index];
+        if (!item || item.disabled) {
+            return;
+        }
+        selectMenuState.activeIndex = index;
+        selectMenuState.items.forEach(function (entry, entryIndex) {
+            entry.element.dataset.active = entryIndex === index ? 'true' : 'false';
+        });
+        selectMenuState.select.setAttribute('aria-activedescendant', item.element.id);
+        const menu = selectMenuState.menu;
+        const optionTop = item.element.offsetTop;
+        const optionBottom = optionTop + item.element.offsetHeight;
+        if (optionTop < menu.scrollTop) {
+            menu.scrollTop = optionTop;
+        } else if (optionBottom > menu.scrollTop + menu.clientHeight) {
+            menu.scrollTop = optionBottom - menu.clientHeight;
+        }
+    }
+
+    function moveSelectActive(delta) {
+        const items = selectMenuState.items;
+        if (items.length === 0) {
+            return;
+        }
+        let index = selectMenuState.activeIndex;
+        for (let count = 0; count < items.length; count += 1) {
+            index = (index + delta + items.length) % items.length;
+            if (!items[index].disabled) {
+                setSelectActiveIndex(index);
+                return;
+            }
+        }
+    }
+
+    function firstEnabledSelectItem() {
+        return selectMenuState.items.findIndex(function (item) {
+            return !item.disabled;
+        });
+    }
+
+    function lastEnabledSelectItem() {
+        for (let index = selectMenuState.items.length - 1; index >= 0; index -= 1) {
+            if (!selectMenuState.items[index].disabled) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    function selectActiveMenuItem() {
+        const item = selectMenuState.items[selectMenuState.activeIndex];
+        if (item && !item.disabled) {
+            chooseSelectMenuItem(item);
+        }
+    }
+
+    function chooseSelectMenuItem(item) {
+        const select = selectMenuState.select;
+        if (!select || !item || item.disabled) {
+            return;
+        }
+        const changed = select.selectedIndex !== item.option.index;
+        select.selectedIndex = item.option.index;
+        closeSelectMenu(true);
+        if (changed) {
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+        }
+    }
+
+    function positionSelectMenu() {
+        const select = selectMenuState.select;
+        const menu = selectMenuState.menu;
+        if (!select || !menu || !document.contains(select)) {
+            closeSelectMenu();
+            return;
+        }
+        const rect = select.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth) {
+            closeSelectMenu();
+            return;
+        }
+        const viewportWidth = Math.max(0, window.innerWidth - SELECT_MENU_VIEWPORT_GAP * 2);
+        const width = Math.min(Math.max(rect.width, 168), viewportWidth);
+        const left = Math.min(
+            Math.max(rect.left, SELECT_MENU_VIEWPORT_GAP),
+            Math.max(SELECT_MENU_VIEWPORT_GAP, window.innerWidth - width - SELECT_MENU_VIEWPORT_GAP)
+        );
+        menu.style.width = Math.round(width) + 'px';
+        menu.style.left = Math.round(left) + 'px';
+        menu.style.maxHeight = Math.min(
+            SELECT_MENU_MAX_HEIGHT,
+            Math.max(80, window.innerHeight - SELECT_MENU_VIEWPORT_GAP * 2)
+        ) + 'px';
+        menu.style.top = '0px';
+        const naturalHeight = menu.offsetHeight;
+        const availableBelow = window.innerHeight - rect.bottom - SELECT_MENU_GAP - SELECT_MENU_VIEWPORT_GAP;
+        const availableAbove = rect.top - SELECT_MENU_GAP - SELECT_MENU_VIEWPORT_GAP;
+        const opensAbove = naturalHeight > availableBelow && availableAbove > availableBelow;
+        const availableHeight = opensAbove ? availableAbove : availableBelow;
+        menu.classList.toggle('opens-above', opensAbove);
+        menu.style.maxHeight = Math.max(0, Math.min(SELECT_MENU_MAX_HEIGHT, availableHeight)) + 'px';
+        const finalHeight = menu.offsetHeight;
+        const top = opensAbove ? rect.top - SELECT_MENU_GAP - finalHeight : rect.bottom + SELECT_MENU_GAP;
+        menu.style.top = Math.round(Math.max(SELECT_MENU_VIEWPORT_GAP, top)) + 'px';
+    }
+
+    function handleSelectOutsidePointerDown(event) {
+        const select = selectMenuState.select;
+        const menu = selectMenuState.menu;
+        if (!select || !menu) {
+            return;
+        }
+        if (event.target === select || select.contains(event.target) || menu.contains(event.target)) {
+            return;
+        }
+        closeSelectMenu();
+    }
+
+    function handleSelectViewportScroll(event) {
+        if (event.target === selectMenuState.menu) {
+            return;
+        }
+        positionSelectMenu();
+    }
+
+    function handleSelectWindowBlur() {
+        closeSelectMenu();
+    }
+
+    function handleSelectFocusChange(event) {
+        const select = selectMenuState.select;
+        const menu = selectMenuState.menu;
+        if (!select || !menu) {
+            return;
+        }
+        if (event.target !== select && !menu.contains(event.target)) {
+            closeSelectMenu();
+        }
+    }
+
+    function closeSelectMenu(focusSelect) {
+        const select = selectMenuState.select;
+        if (select) {
+            select.classList.remove('select-menu-open');
+            select.setAttribute('aria-expanded', 'false');
+            select.removeAttribute('aria-controls');
+            select.removeAttribute('aria-activedescendant');
+        }
+        if (selectMenuState.menu && selectMenuState.menu.parentNode) {
+            selectMenuState.menu.parentNode.removeChild(selectMenuState.menu);
+        }
+        selectMenuState.select = null;
+        selectMenuState.menu = null;
+        selectMenuState.items = [];
+        selectMenuState.activeIndex = -1;
+        selectMenuState.typeahead = '';
+        selectMenuState.lastTypeaheadAt = 0;
+        document.removeEventListener('pointerdown', handleSelectOutsidePointerDown, true);
+        document.removeEventListener('focusin', handleSelectFocusChange, true);
+        window.removeEventListener('resize', positionSelectMenu);
+        window.removeEventListener('scroll', handleSelectViewportScroll, true);
+        window.removeEventListener('blur', handleSelectWindowBlur);
+        if (focusSelect && select && !select.disabled) {
+            select.focus({preventScroll: true});
+        }
     }
 
     function handleWindowMessage(event) {
@@ -2915,7 +3688,6 @@ noscript {
             list.hidden = !expanded;
             toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
             toggle.classList.toggle('expanded', expanded);
-            arrow.textContent = expanded ? '▾' : '▸';
         };
         toggle.addEventListener('click', function () {
             state.memoryOtherExpanded = !state.memoryOtherExpanded;
