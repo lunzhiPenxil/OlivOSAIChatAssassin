@@ -887,6 +887,67 @@ select[aria-invalid="true"] {
     margin-top: 8px;
 }
 
+.relationship-entry {
+    position: relative;
+}
+
+.relationship-entry .memory-entry-header {
+    padding-right: 88px;
+}
+
+.relationship-entry.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.relationship-identity {
+    min-width: 0;
+}
+
+.relationship-name {
+    display: block;
+    font-size: 1.05rem;
+    overflow-wrap: anywhere;
+}
+
+.relationship-name.empty {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.relationship-user-id {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+}
+
+.relationship-description {
+    margin: 10px 0 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.relationship-description.empty {
+    color: var(--muted);
+}
+
+.relationship-extra {
+    margin-top: 10px;
+}
+
+.relationship-extra summary {
+    color: var(--muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.relationship-extra pre {
+    margin-top: 6px;
+}
+
 .memory-image-entry {
     position: relative;
 }
@@ -1141,7 +1202,8 @@ body.memory-modal-open {
 }
 
 .memory-modal-editor[hidden],
-.memory-image-fields[hidden] {
+.memory-image-fields[hidden],
+.memory-relationship-fields[hidden] {
     display: none;
 }
 
@@ -1154,6 +1216,101 @@ body.memory-modal-open {
 .memory-image-fields textarea {
     min-height: 82px;
     resize: vertical;
+}
+
+.memory-relationship-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.memory-relationship-identity {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
+}
+
+.memory-relationship-identity span {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.memory-relationship-identity strong {
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 0.84rem;
+    overflow-wrap: anywhere;
+}
+
+.memory-relationship-alias-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.memory-relationship-alias-section[hidden],
+.memory-relationship-description-field[hidden] {
+    display: none;
+}
+
+.memory-relationship-alias-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.memory-relationship-alias-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.memory-relationship-alias-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.memory-relationship-alias-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.memory-relationship-alias-row .button {
+    flex: none;
+}
+
+.memory-relationship-description-field textarea,
+.memory-relationship-advanced textarea {
+    min-height: 82px;
+    resize: vertical;
+}
+
+.memory-relationship-note {
+    margin: -4px 0 0;
+    font-size: 0.8rem;
+}
+
+.memory-relationship-advanced {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-soft);
+}
+
+.memory-relationship-advanced summary {
+    color: var(--muted);
+    font-size: 0.84rem;
+    cursor: pointer;
+}
+
+.memory-relationship-advanced .field {
+    margin-top: 10px;
 }
 
 .memory-image-file-state {
@@ -1651,6 +1808,48 @@ noscript {
                         <input id="memoryImageType" type="text" maxlength="4096" spellcheck="false">
                     </label>
                 </div>
+                <div id="memoryRelationshipFields" class="memory-relationship-fields" hidden>
+                    <div class="memory-relationship-identity">
+                        <span>用户 ID</span>
+                        <strong id="memoryRelationshipUserId"></strong>
+                    </div>
+                    <label class="field" for="memoryRelationshipAliasMode">
+                        <span>昵称写法</span>
+                        <select id="memoryRelationshipAliasMode">
+                            <option value="single">单昵称（字符串）</option>
+                            <option value="multiple">多昵称（数组）</option>
+                            <option value="null">无昵称（null）</option>
+                            <option value="empty_list">空昵称数组（[]）</option>
+                        </select>
+                        <small class="muted">这里只设置列表第一项；关系描述和附加字段分别编辑。</small>
+                    </label>
+                    <div id="memoryRelationshipAliasSection" class="memory-relationship-alias-section">
+                        <div class="memory-relationship-alias-toolbar">
+                            <strong>昵称</strong>
+                            <button id="memoryRelationshipAddAlias" class="button small secondary" type="button" hidden>添加昵称</button>
+                        </div>
+                        <div id="memoryRelationshipAliases" class="memory-relationship-alias-list"></div>
+                    </div>
+                    <label class="check-field" for="memoryRelationshipHasDescription">
+                        <input id="memoryRelationshipHasDescription" type="checkbox">
+                        <span>包含关系描述字段</span>
+                    </label>
+                    <div id="memoryRelationshipDescriptionField" class="memory-relationship-description-field">
+                        <label class="field" for="memoryRelationshipDescription">
+                            <span>关系描述</span>
+                            <textarea id="memoryRelationshipDescription" rows="4" spellcheck="false"></textarea>
+                        </label>
+                    </div>
+                    <p id="memoryRelationshipDescriptionNote" class="muted memory-relationship-note"></p>
+                    <details id="memoryRelationshipAdvanced" class="memory-relationship-advanced">
+                        <summary id="memoryRelationshipAdvancedSummary">附加字段（可选，JSON 数组）</summary>
+                        <label class="field" for="memoryRelationshipExtras">
+                            <span>第二项之后的附加数据</span>
+                            <textarea id="memoryRelationshipExtras" rows="3" spellcheck="false"></textarea>
+                            <small class="muted">属于兼容扩展区；保持“[]”表示不添加。昵称和关系描述无需手写列表 JSON。</small>
+                        </label>
+                    </details>
+                </div>
                 <p id="memoryModalHint" class="muted memory-modal-hint"></p>
             </div>
             <footer class="memory-modal-actions">
@@ -1778,7 +1977,13 @@ noscript {
             'memoryModalEditor', 'memoryModalHint', 'memoryModalClose',
             'memoryModalCancel', 'memoryModalSave', 'memoryImageFields',
             'memoryImageFileState', 'memoryImageContent', 'memoryImageIntent',
-            'memoryImageType', 'imageViewer', 'imageViewerTitle', 'imageViewerMeta',
+            'memoryImageType', 'memoryRelationshipFields', 'memoryRelationshipUserId',
+            'memoryRelationshipAliasMode', 'memoryRelationshipAliasSection',
+            'memoryRelationshipAliases', 'memoryRelationshipAddAlias',
+            'memoryRelationshipHasDescription', 'memoryRelationshipDescriptionField',
+            'memoryRelationshipDescription', 'memoryRelationshipDescriptionNote',
+            'memoryRelationshipAdvanced', 'memoryRelationshipAdvancedSummary',
+            'memoryRelationshipExtras', 'imageViewer', 'imageViewerTitle', 'imageViewerMeta',
             'imageViewerStatus', 'imageViewerImage', 'imageViewerHeaderClose',
             'imageViewerEdit', 'imageViewerClose', 'toast',
         ].forEach(function (id) {
@@ -1824,6 +2029,18 @@ noscript {
         elements.memoryModalSave.addEventListener('click', saveMemoryEditor);
         elements.memoryModalEditor.addEventListener('input', handleMemoryEditorInput);
         elements.memoryImageFields.addEventListener('input', handleMemoryEditorInput);
+        elements.memoryRelationshipFields.addEventListener('input', handleMemoryEditorInput);
+        elements.memoryRelationshipAliasMode.addEventListener('change', handleRelationshipAliasModeChange);
+        elements.memoryRelationshipAddAlias.addEventListener('click', addRelationshipAliasInput);
+        elements.memoryRelationshipHasDescription.addEventListener('change', function () {
+            const visible = elements.memoryRelationshipHasDescription.checked;
+            elements.memoryRelationshipDescriptionField.hidden = !visible;
+            if (visible) {
+                resizeTextarea(elements.memoryRelationshipDescription);
+            }
+            updateRelationshipDescriptionNote();
+            state.memoryDirty = true;
+        });
         elements.memoryModal.addEventListener('keydown', handleMemoryModalKeydown);
         document.querySelectorAll('[data-memory-modal-close]').forEach(function (control) {
             control.addEventListener('click', function () {
@@ -2901,6 +3118,322 @@ noscript {
         return '该内容按 ' + memoryKindText(kind) + ' 编辑，保存前会校验 JSON 格式。';
     }
 
+    function relationshipFormatText(relationship) {
+        if (!relationship || relationship.recognized !== true) {
+            return '非常规写法';
+        }
+        const labels = {
+            single_alias: '单昵称',
+            multiple_aliases: '多昵称',
+            description_only: '仅关系描述',
+        };
+        let label = labels[relationship.format] || '人物关系';
+        const extraFields = Number(relationship.extra_fields) || 0;
+        if (extraFields > 0) {
+            label += ' · 另有 ' + String(extraFields) + ' 项';
+        }
+        return label;
+    }
+
+    function relationshipEditorDescriptionText(value) {
+        if (typeof value === 'string') {
+            return value;
+        }
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch (error) {
+            return String(value);
+        }
+    }
+
+    function relationshipEditorValueKindText(value) {
+        if (value === null) {
+            return 'null';
+        }
+        if (Array.isArray(value)) {
+            return '数组';
+        }
+        const labels = {
+            string: '字符串',
+            number: '数字',
+            boolean: '布尔值',
+            object: '对象',
+        };
+        return labels[typeof value] || typeof value;
+    }
+
+    function relationshipEditorDraft(source) {
+        let parsed = null;
+        try {
+            parsed = JSON.parse(source);
+        } catch (error) {
+            return null;
+        }
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            return null;
+        }
+        const first = parsed[0];
+        let aliasMode = '';
+        let aliases = [];
+        if (typeof first === 'string') {
+            aliasMode = 'single';
+            aliases = [first];
+        } else if (first === null) {
+            aliasMode = 'null';
+        } else if (
+            Array.isArray(first) &&
+            first.every(function (alias) {
+                return typeof alias === 'string';
+            })
+        ) {
+            aliasMode = first.length ? 'multiple' : 'empty_list';
+            aliases = first.slice();
+        } else {
+            return null;
+        }
+        const hasDescription = parsed.length > 1;
+        const description = hasDescription ? parsed[1] : null;
+        const extras = parsed.slice(2);
+        return {
+            aliasMode: aliasMode,
+            aliases: aliases,
+            hasDescription: hasDescription,
+            description: description,
+            descriptionText: hasDescription ? relationshipEditorDescriptionText(description) : '',
+            extras: extras,
+            extrasText: JSON.stringify(extras, null, 2),
+        };
+    }
+
+    function relationshipAliasInputValues() {
+        return Array.from(
+            elements.memoryRelationshipAliases.querySelectorAll('input[data-relationship-alias]')
+        ).map(function (input) {
+            return input.value;
+        });
+    }
+
+    function appendRelationshipAliasRow(value, index, removable) {
+        const row = document.createElement('div');
+        row.className = 'memory-relationship-alias-row';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = typeof value === 'string' ? value : '';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.dataset.relationshipAlias = '1';
+        input.setAttribute('aria-label', '昵称 ' + String(index + 1));
+        row.appendChild(input);
+        if (removable) {
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'button small secondary';
+            remove.textContent = '删除';
+            remove.setAttribute('aria-label', '删除昵称 ' + String(index + 1));
+            remove.addEventListener('click', function () {
+                const values = relationshipAliasInputValues();
+                values.splice(index, 1);
+                if (values.length === 0) {
+                    values.push('');
+                }
+                renderRelationshipAliasEditor('multiple', values, Math.min(index, values.length - 1));
+                state.memoryDirty = true;
+            });
+            row.appendChild(remove);
+        }
+        elements.memoryRelationshipAliases.appendChild(row);
+    }
+
+    function renderRelationshipAliasEditor(mode, aliases, focusIndex) {
+        const aliasSection = elements.memoryRelationshipAliasSection;
+        const addButton = elements.memoryRelationshipAddAlias;
+        elements.memoryRelationshipAliases.replaceChildren();
+        const hidesAliases = mode === 'null' || mode === 'empty_list';
+        aliasSection.hidden = hidesAliases;
+        addButton.hidden = mode !== 'multiple';
+        if (hidesAliases) {
+            return;
+        }
+        let values = Array.isArray(aliases) ? aliases.slice() : [];
+        if (mode === 'single') {
+            values = [values.length ? values[0] : ''];
+        } else if (mode === 'multiple' && values.length === 0) {
+            values = [''];
+        }
+        values.forEach(function (value, index) {
+            appendRelationshipAliasRow(value, index, mode === 'multiple');
+        });
+        if (typeof focusIndex === 'number') {
+            const inputs = elements.memoryRelationshipAliases.querySelectorAll('input[data-relationship-alias]');
+            const target = inputs[Math.max(0, Math.min(focusIndex, inputs.length - 1))];
+            if (target) {
+                target.focus();
+                target.setSelectionRange(target.value.length, target.value.length);
+            }
+        }
+    }
+
+    function addRelationshipAliasInput() {
+        const values = relationshipAliasInputValues();
+        values.push('');
+        renderRelationshipAliasEditor('multiple', values, values.length - 1);
+        state.memoryDirty = true;
+    }
+
+    function handleRelationshipAliasModeChange() {
+        let aliases = relationshipAliasInputValues();
+        const mode = elements.memoryRelationshipAliasMode.value;
+        if (mode === 'single') {
+            aliases = [aliases.length ? aliases[0] : ''];
+        } else if (mode === 'multiple' && aliases.length === 0) {
+            aliases = [''];
+        }
+        renderRelationshipAliasEditor(mode, aliases, 0);
+        state.memoryDirty = true;
+    }
+
+    function updateRelationshipDescriptionNote() {
+        const context = state.memoryEditorContext;
+        const draft = context && context.relationshipDraft;
+        if (!draft) {
+            elements.memoryRelationshipDescriptionNote.textContent = '';
+            return;
+        }
+        if (!elements.memoryRelationshipHasDescription.checked) {
+            elements.memoryRelationshipDescriptionNote.textContent = draft.extras.length
+                ? '存在附加字段；保存时需保留关系描述位，可填写空描述后再保存。'
+                : '保存时将省略列表第二项。';
+            return;
+        }
+        if (!draft.hasDescription) {
+            elements.memoryRelationshipDescriptionNote.textContent =
+                '原条目没有关系描述；当前内容会写入列表第二项。';
+            return;
+        }
+        if (typeof draft.description !== 'string') {
+            const kind = relationshipEditorValueKindText(draft.description);
+            elements.memoryRelationshipDescriptionNote.textContent =
+                elements.memoryRelationshipDescription.value === draft.descriptionText
+                    ? '原描述类型为 ' + kind + '；未修改时保留原类型，修改后按字符串保存。'
+                    : '描述已修改；保存时按字符串写入。';
+            return;
+        }
+        elements.memoryRelationshipDescriptionNote.textContent = '';
+    }
+
+    function fillRelationshipEditor(draft, options) {
+        elements.memoryRelationshipUserId.textContent = options.userId || '—';
+        elements.memoryRelationshipAliasMode.value = draft.aliasMode;
+        renderRelationshipAliasEditor(draft.aliasMode, draft.aliases, null);
+        elements.memoryRelationshipHasDescription.checked = draft.hasDescription;
+        elements.memoryRelationshipDescription.value = draft.descriptionText;
+        elements.memoryRelationshipDescriptionField.hidden = !draft.hasDescription;
+        elements.memoryRelationshipExtras.value = draft.extrasText;
+        elements.memoryRelationshipExtras.removeAttribute('aria-invalid');
+        elements.memoryRelationshipAdvancedSummary.textContent = draft.extras.length
+            ? '附加字段（' + String(draft.extras.length) + ' 项，JSON 数组）'
+            : '附加字段（可选，JSON 数组）';
+        elements.memoryRelationshipAdvanced.open = false;
+        updateRelationshipDescriptionNote();
+    }
+
+    function resetRelationshipEditor() {
+        elements.memoryRelationshipUserId.textContent = '';
+        elements.memoryRelationshipAliasMode.value = 'single';
+        elements.memoryRelationshipAliases.replaceChildren();
+        elements.memoryRelationshipAliasSection.hidden = false;
+        elements.memoryRelationshipAddAlias.hidden = true;
+        elements.memoryRelationshipHasDescription.checked = false;
+        elements.memoryRelationshipDescription.value = '';
+        elements.memoryRelationshipDescription.removeAttribute('aria-invalid');
+        elements.memoryRelationshipDescriptionField.hidden = false;
+        elements.memoryRelationshipDescriptionNote.textContent = '';
+        elements.memoryRelationshipExtras.value = '[]';
+        elements.memoryRelationshipExtras.removeAttribute('aria-invalid');
+        elements.memoryRelationshipAdvancedSummary.textContent = '附加字段（可选，JSON 数组）';
+        elements.memoryRelationshipAdvanced.open = false;
+    }
+
+    function collectRelationshipEditorValue(context) {
+        const draft = context.relationshipDraft;
+        if (!draft) {
+            throw new Error('人物关系编辑数据缺失，请关闭窗口后重试');
+        }
+        const mode = elements.memoryRelationshipAliasMode.value;
+        const aliasInputs = Array.from(
+            elements.memoryRelationshipAliases.querySelectorAll('input[data-relationship-alias]')
+        );
+        aliasInputs.forEach(function (input) {
+            input.removeAttribute('aria-invalid');
+        });
+        let first = null;
+        if (mode === 'single') {
+            const alias = aliasInputs.length ? aliasInputs[0].value : '';
+            if (!alias.trim()) {
+                if (aliasInputs.length) {
+                    aliasInputs[0].setAttribute('aria-invalid', 'true');
+                    aliasInputs[0].focus();
+                }
+                throw new Error('单昵称写法必须填写一个昵称');
+            }
+            first = alias;
+        } else if (mode === 'multiple') {
+            const aliases = aliasInputs.map(function (input) {
+                return input.value;
+            }).filter(function (alias) {
+                return alias.trim().length > 0;
+            });
+            if (aliases.length === 0) {
+                if (aliasInputs.length) {
+                    aliasInputs[0].setAttribute('aria-invalid', 'true');
+                    aliasInputs[0].focus();
+                }
+                throw new Error('多昵称写法至少需要填写一个昵称');
+            }
+            first = aliases;
+        } else if (mode === 'empty_list') {
+            first = [];
+        } else {
+            first = null;
+        }
+
+        const includeDescription = elements.memoryRelationshipHasDescription.checked;
+        const result = [first];
+        if (includeDescription) {
+            const description = elements.memoryRelationshipDescription.value;
+            if (draft.hasDescription && description === draft.descriptionText) {
+                result.push(draft.description);
+            } else {
+                result.push(description);
+            }
+        }
+
+        const extrasText = elements.memoryRelationshipExtras.value.trim();
+        let extras = [];
+        elements.memoryRelationshipExtras.removeAttribute('aria-invalid');
+        if (extrasText) {
+            try {
+                extras = JSON.parse(extrasText);
+            } catch (error) {
+                elements.memoryRelationshipExtras.setAttribute('aria-invalid', 'true');
+                elements.memoryRelationshipExtras.focus();
+                throw new Error('附加字段必须是有效的 JSON 数组');
+            }
+            if (!Array.isArray(extras)) {
+                elements.memoryRelationshipExtras.setAttribute('aria-invalid', 'true');
+                elements.memoryRelationshipExtras.focus();
+                throw new Error('附加字段必须是 JSON 数组');
+            }
+        }
+        if (!includeDescription && extras.length > 0) {
+            throw new Error('存在附加字段时必须保留关系描述位；可填写空描述');
+        }
+        extras.forEach(function (extra) {
+            result.push(extra);
+        });
+        return result;
+    }
+
     function formatBytes(bytes) {
         const size = Number(bytes);
         if (!Number.isFinite(size) || size < 0) {
@@ -3194,6 +3727,115 @@ noscript {
         return row;
     }
 
+    function createRelationshipEntry(entry, query) {
+        const relationship = entry.relationship && typeof entry.relationship === 'object'
+            ? entry.relationship
+            : {};
+        const recognized = relationship.recognized === true;
+        const aliases = Array.isArray(relationship.aliases)
+            ? relationship.aliases.filter(function (alias) {
+                return typeof alias === 'string' && alias.length > 0;
+            })
+            : [];
+        const description = typeof relationship.description === 'string'
+            ? relationship.description
+            : '';
+        const extraFields = Number(relationship.extra_fields) || 0;
+        const row = document.createElement('article');
+        row.className = 'memory-entry relationship-entry';
+        const header = document.createElement('div');
+        header.className = 'memory-entry-header';
+        const identity = document.createElement('div');
+        identity.className = 'relationship-identity';
+        const name = document.createElement('strong');
+        name.className = 'relationship-name';
+        if (!aliases.length) {
+            name.classList.add('empty');
+        }
+        name.textContent = aliases.length
+            ? aliases.join(' / ')
+            : (recognized ? '未记录昵称' : '未识别的条目写法');
+        const userId = document.createElement('small');
+        userId.className = 'relationship-user-id';
+        userId.textContent = '用户 ID · ' + entry.key;
+        identity.append(name, userId);
+        const kind = document.createElement('small');
+        kind.className = 'memory-entry-kind';
+        kind.textContent = relationshipFormatText(relationship);
+        header.append(identity, kind);
+        row.appendChild(header);
+
+        if (recognized) {
+            const descriptionNode = document.createElement('p');
+            descriptionNode.className = 'relationship-description';
+            if (!description) {
+                descriptionNode.classList.add('empty');
+            }
+            descriptionNode.textContent = description || '未记录关系描述';
+            row.appendChild(descriptionNode);
+        } else {
+            const raw = document.createElement('pre');
+            raw.className = 'relationship-raw';
+            raw.textContent = entry.value || '（空）';
+            row.appendChild(raw);
+        }
+
+        if (recognized && extraFields > 0) {
+            const details = document.createElement('details');
+            details.className = 'relationship-extra';
+            const summary = document.createElement('summary');
+            summary.textContent = '查看原始 JSON';
+            const raw = document.createElement('pre');
+            raw.textContent = entry.value || '[]';
+            details.append(summary, raw);
+            row.appendChild(details);
+        }
+
+        if (entry.truncated) {
+            const note = document.createElement('small');
+            note.className = 'muted memory-entry-note';
+            note.textContent = '内容过长，已截断显示；为避免覆盖完整内容，当前不可编辑。';
+            row.appendChild(note);
+        } else if (relationship.aliases_truncated || relationship.description_truncated) {
+            const note = document.createElement('small');
+            note.className = 'muted memory-entry-note';
+            note.textContent = '部分预览内容已截断；编辑时可查看完整 JSON。';
+            row.appendChild(note);
+        }
+
+        if (entry.editable !== false && !entry.truncated) {
+            const edit = createMemoryEditButton(entry.value || '', {
+                mode: recognized ? 'relationship' : 'text',
+                relationshipSource: entry.value || '',
+                userId: entry.key,
+                kind: entry.kind || 'list',
+                label: '人物关系 ' + entry.key,
+                title: '编辑 · 人物关系 / ' + entry.key,
+                meta: relationshipFormatText(relationship) + (recognized ? ' · 结构化编辑' : ' · 原始内容编辑'),
+                hint: recognized
+                    ? '使用结构化表单编辑昵称和关系描述；附加扩展数据在末尾单独展开。'
+                    : '该条目不是标准人物关系写法，仍使用原始内容编辑。',
+                buildRequest: function (value) {
+                    return {
+                        scope: 'global',
+                        section: query.section,
+                        entries: [{key: entry.key, value: value}],
+                    };
+                },
+                successMessage: '人物关系已保存',
+            });
+            row.appendChild(edit);
+        }
+
+        row.addEventListener('click', function (event) {
+            if (event.target.closest('button, input, textarea, a, summary')) {
+                return;
+            }
+            toggleMemoryValueCard(row);
+        });
+        return row;
+    }
+
     function openImageEditor(entry, trigger) {
         if (state.busy || state.memoryLoading || state.memoryEditorOpen || state.memoryImageViewerOpen) {
             return;
@@ -3366,7 +4008,7 @@ noscript {
     function toggleMemoryValueCard(card) {
         const wasSelected = card.classList.contains('selected');
         elements.memoryDetail.querySelectorAll(
-            '.memory-value-card.selected, .memory-image-entry.selected'
+            '.memory-value-card.selected, .memory-image-entry.selected, .relationship-entry.selected'
         ).forEach(function (item) {
             item.classList.remove('selected');
         });
@@ -3375,16 +4017,7 @@ noscript {
         }
     }
 
-    function createMemoryValueCard(text, options) {
-        const card = document.createElement('div');
-        card.className = 'memory-value-card';
-        const preview = document.createElement('pre');
-        preview.textContent = text || '（空）';
-        card.appendChild(preview);
-        if (!options.editable) {
-            return card;
-        }
-        card.classList.add('editable');
+    function createMemoryEditButton(text, options) {
         const edit = document.createElement('button');
         edit.type = 'button';
         edit.className = 'button small secondary memory-edit-button';
@@ -3397,6 +4030,20 @@ noscript {
                 trigger: edit,
             }));
         });
+        return edit;
+    }
+
+    function createMemoryValueCard(text, options) {
+        const card = document.createElement('div');
+        card.className = 'memory-value-card';
+        const preview = document.createElement('pre');
+        preview.textContent = text || '（空）';
+        card.appendChild(preview);
+        if (!options.editable) {
+            return card;
+        }
+        card.classList.add('editable');
+        const edit = createMemoryEditButton(text, options);
         card.appendChild(edit);
         card.addEventListener('click', function (event) {
             if (event.target.closest('.memory-edit-button')) {
@@ -3414,9 +4061,21 @@ noscript {
         ) {
             return;
         }
-        const mode = options.mode === 'image' ? 'image' : 'text';
+        let mode = 'text';
+        if (options.mode === 'image') {
+            mode = 'image';
+        } else if (options.mode === 'relationship') {
+            mode = 'relationship';
+        }
         const value = typeof options.value === 'string' ? options.value : '';
         const kind = options.kind || 'str';
+        let relationshipDraft = null;
+        if (mode === 'relationship') {
+            relationshipDraft = relationshipEditorDraft(options.relationshipSource || value);
+            if (!relationshipDraft) {
+                mode = 'text';
+            }
+        }
         const imageFields = {
             content: options.fields && typeof options.fields.content === 'string' ? options.fields.content : '',
             intent: options.fields && typeof options.fields.intent === 'string' ? options.fields.intent : '',
@@ -3428,6 +4087,7 @@ noscript {
             label: options.label || '记忆内容',
             originalValue: value,
             originalImageFields: Object.assign({}, imageFields),
+            relationshipDraft: relationshipDraft,
             trigger: options.trigger || document.activeElement,
         });
         state.memoryDirty = false;
@@ -3435,8 +4095,8 @@ noscript {
         elements.memoryModalTitle.textContent = options.title || ('编辑' + state.memoryEditorContext.label);
         elements.memoryModalMeta.textContent = options.meta || memoryKindText(kind);
         elements.memoryModalHint.textContent = options.hint || memoryKindHint(kind);
-        elements.memoryModalEditor.hidden = mode === 'image';
-        elements.memoryModalEditor.value = mode === 'image' ? '' : value;
+        elements.memoryModalEditor.hidden = mode !== 'text';
+        elements.memoryModalEditor.value = mode === 'text' ? value : '';
         elements.memoryModalEditor.removeAttribute('aria-invalid');
         elements.memoryImageFields.hidden = mode !== 'image';
         elements.memoryImageFileState.hidden = mode !== 'image' || !options.fileState;
@@ -3445,6 +4105,11 @@ noscript {
         elements.memoryImageContent.value = imageFields.content;
         elements.memoryImageIntent.value = imageFields.intent;
         elements.memoryImageType.value = imageFields.type;
+        resetRelationshipEditor();
+        elements.memoryRelationshipFields.hidden = mode !== 'relationship';
+        if (mode === 'relationship') {
+            fillRelationshipEditor(relationshipDraft, options);
+        }
         elements.memoryModalSave.textContent = '保存';
         elements.memoryModalSave.disabled = false;
         elements.memoryModal.hidden = false;
@@ -3453,6 +4118,14 @@ noscript {
             if (mode === 'image') {
                 elements.memoryImageContent.focus();
                 elements.memoryImageContent.setSelectionRange(0, 0);
+            } else if (mode === 'relationship') {
+                const aliasInput = elements.memoryRelationshipAliases.querySelector('input[data-relationship-alias]');
+                if (aliasInput) {
+                    aliasInput.focus();
+                    aliasInput.setSelectionRange(aliasInput.value.length, aliasInput.value.length);
+                } else {
+                    elements.memoryRelationshipDescription.focus();
+                }
             } else {
                 elements.memoryModalEditor.focus();
                 elements.memoryModalEditor.setSelectionRange(value.length, value.length);
@@ -3484,6 +4157,11 @@ noscript {
             state.memoryDirty = imageEditorFieldsChanged(context.originalImageFields);
             return;
         }
+        if (context.mode === 'relationship') {
+            state.memoryDirty = true;
+            updateRelationshipDescriptionNote();
+            return;
+        }
         elements.memoryModalEditor.removeAttribute('aria-invalid');
         state.memoryDirty = elements.memoryModalEditor.value !== context.originalValue;
     }
@@ -3512,6 +4190,8 @@ noscript {
         elements.memoryImageContent.value = '';
         elements.memoryImageIntent.value = '';
         elements.memoryImageType.value = '';
+        resetRelationshipEditor();
+        elements.memoryRelationshipFields.hidden = true;
         elements.memoryModalSave.textContent = '保存';
         if (!state.memoryImageViewerOpen) {
             document.body.classList.remove('memory-modal-open');
@@ -3540,7 +4220,7 @@ noscript {
         }
         const controls = Array.from(
             elements.memoryModal.querySelectorAll(
-                'button:not(:disabled), textarea:not(:disabled), input:not(:disabled)'
+                'button:not(:disabled), textarea:not(:disabled), input:not(:disabled), select:not(:disabled)'
             )
         ).filter(function (control) {
             return !control.closest('[hidden]');
@@ -3566,9 +4246,13 @@ noscript {
         }
         let value = null;
         try {
-            value = context.mode === 'image'
-                ? collectImageEditorFields()
-                : parseMemoryEditorValue(elements.memoryModalEditor, context.kind, context.label);
+            if (context.mode === 'image') {
+                value = collectImageEditorFields();
+            } else if (context.mode === 'relationship') {
+                value = collectRelationshipEditorValue(context);
+            } else {
+                value = parseMemoryEditorValue(elements.memoryModalEditor, context.kind, context.label);
+            }
         } catch (error) {
             showToast(error.message, true);
             return;
@@ -4166,7 +4850,9 @@ noscript {
                 hint.className = 'muted memory-edit-hint';
                 hint.textContent = data.image_cache
                     ? '缩略图会在进入可视区域后按需加载；点击缩略图查看大图，缓存文件缺失时档案仍可编辑。'
-                    : '悬停或单击内容后，点击右侧“编辑”按钮，逐条修改并保存。';
+                    : (data.relationship
+                        ? '按用户 ID 展示；兼容单昵称、多昵称、无昵称和关系描述缺省等写法。'
+                        : '悬停或单击内容后，点击右侧“编辑”按钮，逐条修改并保存。');
                 elements.memoryDetail.appendChild(hint);
             }
             const list = document.createElement('div');
@@ -4174,6 +4860,10 @@ noscript {
             entries.forEach(function (entry) {
                 if (data.image_cache) {
                     list.appendChild(createImageCacheEntry(entry, query));
+                    return;
+                }
+                if (data.relationship) {
+                    list.appendChild(createRelationshipEntry(entry, query));
                     return;
                 }
                 const row = document.createElement('article');
@@ -4296,7 +4986,7 @@ noscript {
         elements.memoryDetail.querySelectorAll('textarea, input, select, button').forEach(function (control) {
             lockMemoryControl(control, locked);
         });
-        elements.memoryModal.querySelectorAll('textarea, input, button').forEach(function (control) {
+        elements.memoryModal.querySelectorAll('textarea, input, select, button').forEach(function (control) {
             lockMemoryControl(control, locked);
         });
         elements.imageViewer.querySelectorAll('button').forEach(function (control) {

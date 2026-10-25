@@ -38,7 +38,9 @@ MEMORY_SORT_NAME = 'name'
 MEMORY_ORDER_ASC = 'asc'
 MEMORY_ORDER_DESC = 'desc'
 IMAGE_CACHE_SECTION = '图片缓存'
-MEMORY_SPECIAL_SECTIONS = ('用户侧写', '人物关系', '知识缓存', '知识搜索', IMAGE_CACHE_SECTION)
+RELATIONSHIP_SECTION = '人物关系'
+RELATIONSHIP_DESCRIPTION_LIMIT = 4096
+MEMORY_SPECIAL_SECTIONS = ('用户侧写', RELATIONSHIP_SECTION, '知识缓存', '知识搜索', IMAGE_CACHE_SECTION)
 IMAGE_CACHE_FIELDS = ('content', 'intent', 'type')
 IMAGE_CACHE_FIELD_LIMIT = 4096
 IMAGE_TYPE_CONTAINS_FILTERS = ('表情包', '截图', '照片')
@@ -763,6 +765,77 @@ def _dict_memory_records(items):
     return records
 
 
+def _relationship_memory_value(value):
+    relationship = {
+        'recognized': False,
+        'format': 'unrecognized',
+        'aliases': [],
+        'description': '',
+        'description_kind': '',
+        'extra_fields': 0,
+        'aliases_truncated': False,
+        'description_truncated': False,
+    }
+    if not isinstance(value, list) or not value:
+        return relationship
+    first = value[0]
+    if isinstance(first, str):
+        aliases = [first]
+        format_name = 'single_alias'
+    elif first is None:
+        aliases = []
+        format_name = 'description_only'
+    elif isinstance(first, list) and all(isinstance(alias, str) for alias in first):
+        aliases = first
+        format_name = 'multiple_aliases' if first else 'description_only'
+    else:
+        return relationship
+
+    relationship['recognized'] = True
+    relationship['format'] = format_name
+    bounded_aliases = []
+    for alias in aliases:
+        text, truncated = _display_memory_value(alias, limit=MEMORY_NAME_LIMIT)
+        bounded_aliases.append(text)
+        relationship['aliases_truncated'] = relationship['aliases_truncated'] or truncated
+    relationship['aliases'] = bounded_aliases
+    if len(value) > 1:
+        description = value[1]
+        relationship['description_kind'] = type(description).__name__
+        text, truncated = _display_memory_value(description, limit=RELATIONSHIP_DESCRIPTION_LIMIT)
+        relationship['description'] = text
+        relationship['description_truncated'] = truncated
+    relationship['extra_fields'] = max(0, len(value) - 2)
+    return relationship
+
+
+def _relationship_memory_records(items):
+    records = []
+    for index, (key, value) in enumerate(items):
+        key_text = str(key)
+        text, truncated = _display_memory_value(value)
+        relationship = _relationship_memory_value(value)
+        aliases = relationship['aliases']
+        entry = {
+            'key': key_text,
+            'kind': type(value).__name__,
+            'value': text,
+            'truncated': truncated,
+            'editable': not truncated,
+            'relationship': relationship,
+        }
+        sort_text = ' / '.join(aliases) if aliases else key_text
+        search_parts = [key_text, text, relationship['description']] + aliases
+        records.append({
+            'index': index,
+            'key': key_text,
+            'entry': entry,
+            'sort_text': sort_text.casefold(),
+            'search_text': '\n'.join(search_parts).casefold(),
+        })
+    return records
+
+
 def _prepare_memory_records(records, options, image_cache=False):
     search = options['search'].casefold()
     if search:
@@ -790,7 +863,7 @@ def _prepare_memory_records(records, options, image_cache=False):
 
         records = [record for record in records if type_matches(record)]
     if options['sort'] == MEMORY_SORT_NAME:
-        records.sort(key=lambda record: (record['key'].casefold(), record['index']))
+        records.sort(key=lambda record: (record.get('sort_text') or record['key'].casefold(), record['index']))
     if options['order'] == MEMORY_ORDER_DESC:
         records.reverse()
     if image_cache and options['cached_first']:
@@ -1149,12 +1222,19 @@ def _handle_memory_section(payload, Proc):
     if isinstance(value, dict):
         list_options = _memory_list_options(payload)
         items = list(value.items())
-        records = _prepare_memory_records(_dict_memory_records(items), list_options)
+        records_factory = (
+            _relationship_memory_records
+            if section_name == RELATIONSHIP_SECTION
+            else _dict_memory_records
+        )
+        records = _prepare_memory_records(records_factory(items), list_options)
         result = {
             'scope': 'global',
             'section': section_name,
         }
         result.update(_memory_dict_page(records, len(items), offset, limit, list_options))
+        if section_name == RELATIONSHIP_SECTION:
+            result['relationship'] = True
         return _ok(result, revision)
 
     text, truncated = _display_memory_value(value)
