@@ -349,6 +349,89 @@ code {
     accent-color: var(--accent);
 }
 
+@supports selector(:has(*)) {
+    .check-field {
+        position: relative;
+        overflow: hidden;
+        --memory-check-left: 18px;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 180ms ease, border-color 180ms ease,
+            box-shadow 180ms ease, transform 120ms ease;
+    }
+
+    .memory-list-control.check-field {
+        --memory-check-left: 16px;
+    }
+
+    .check-field::before {
+        display: grid;
+        width: 20px;
+        height: 20px;
+        flex: none;
+        place-items: center;
+        content: "";
+        border: 1.5px solid color-mix(in srgb, var(--muted) 58%, var(--border));
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--surface) 82%, transparent);
+        transition: background-color 160ms ease, border-color 160ms ease,
+            transform 160ms ease;
+    }
+
+    .check-field::after {
+        position: absolute;
+        top: 50%;
+        left: var(--memory-check-left);
+        width: 8px;
+        height: 4px;
+        content: "";
+        border-bottom: 1.8px solid #ffffff;
+        border-left: 1.8px solid #ffffff;
+        opacity: 0;
+        transform: translateY(-62%) rotate(-45deg) scale(0.35);
+        transition: opacity 120ms ease, transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .check-field:active {
+        transform: scale(0.985);
+    }
+
+    .check-field:focus-within {
+        outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+        outline-offset: 2px;
+    }
+
+    .check-field:has(input[type="checkbox"]:checked) {
+        border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+        background: var(--accent-soft);
+        box-shadow: 0 7px 20px -18px var(--accent),
+            inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+
+    .check-field:has(input[type="checkbox"]:checked)::before {
+        border-color: var(--accent);
+        background: var(--accent);
+        animation: memory-check-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .check-field:has(input[type="checkbox"]:checked)::after {
+        opacity: 1;
+        transform: translateY(-62%) rotate(-45deg) scale(1);
+    }
+
+    .check-field input[type="checkbox"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        opacity: 0;
+        pointer-events: none;
+    }
+}
+
 input,
 select,
 textarea {
@@ -1029,30 +1112,94 @@ select[aria-invalid="true"] {
 }
 
 .memory-image-type-option {
+    position: relative;
     display: inline-flex;
     flex: none;
-    min-height: 36px;
+    min-height: 38px;
     align-items: center;
-    gap: 7px;
-    padding: 7px 12px;
+    gap: 8px;
+    padding: 8px 12px;
+    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
     font-size: 0.84rem;
+    font-weight: 600;
     white-space: nowrap;
     cursor: pointer;
+    --memory-check-left: 18px;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 180ms ease, border-color 180ms ease,
+        box-shadow 180ms ease, transform 120ms ease;
+}
+
+.memory-image-type-option::before {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    flex: none;
+    place-items: center;
+    content: "";
+    border: 1.5px solid color-mix(in srgb, var(--muted) 58%, var(--border));
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    transition: background-color 160ms ease, border-color 160ms ease,
+        transform 160ms ease;
+}
+
+.memory-image-type-option::after {
+    position: absolute;
+    top: 50%;
+    left: var(--memory-check-left);
+    width: 8px;
+    height: 4px;
+    content: "";
+    border-bottom: 1.8px solid #ffffff;
+    border-left: 1.8px solid #ffffff;
+    opacity: 0;
+    transform: translateY(-62%) rotate(-45deg) scale(0.35);
+    transition: opacity 120ms ease, transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.memory-image-type-option:active {
+    transform: scale(0.985);
+}
+
+.memory-image-type-option:focus-within {
+    outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+    outline-offset: 2px;
 }
 
 .memory-image-type-option.selected {
-    border-color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
     background: var(--accent-soft);
+    box-shadow: 0 7px 20px -18px var(--accent),
+        inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.memory-image-type-option.selected::before {
+    border-color: var(--accent);
+    background: var(--accent);
+    animation: memory-check-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.memory-image-type-option.selected::after {
+    opacity: 1;
+    transform: translateY(-62%) rotate(-45deg) scale(1);
 }
 
 .memory-image-type-option input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     min-height: 0;
     margin: 0;
     padding: 0;
-    accent-color: var(--accent);
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 0;
+    pointer-events: none;
 }
 
 .memory-list-summary {
@@ -2260,13 +2407,14 @@ noscript {
     .memory-image-type-options {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 6px;
+        gap: 8px;
     }
 
     .memory-image-type-option {
-        min-height: 44px;
-        justify-content: center;
-        padding: 7px 9px;
+        min-height: 46px;
+        gap: 9px;
+        padding: 10px 12px;
+        border-radius: 13px;
     }
 
     .memory-list-summary {
@@ -2505,6 +2653,32 @@ noscript {
     }
 }
 
+@keyframes memory-check-in {
+    0% {
+        transform: scale(0.82);
+    }
+
+    60% {
+        transform: scale(1.08);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .memory-image-type-option,
+    .memory-image-type-option::before,
+    .memory-image-type-option::after,
+    .check-field,
+    .check-field::before,
+    .check-field::after {
+        animation: none;
+        transition: none;
+    }
+}
+
 @media (forced-colors: active) {
     select,
     .memory-list-control select {
@@ -2533,6 +2707,24 @@ noscript {
 
     .select-menu-option[aria-selected="true"] {
         outline: 1px solid Highlight;
+    }
+
+    .memory-image-type-option::before,
+    .memory-image-type-option::after,
+    .check-field::before,
+    .check-field::after {
+        display: none;
+    }
+
+    .memory-image-type-option input[type="checkbox"],
+    .check-field input[type="checkbox"] {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip-path: none;
+        opacity: 1;
+        pointer-events: auto;
     }
 }
     </style>
