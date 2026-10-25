@@ -4,6 +4,8 @@ import io
 import json
 import math
 import os
+import threading
+import time
 import unicodedata
 from urllib.parse import urlsplit
 
@@ -39,12 +41,20 @@ IMAGE_CACHE_SECTION = '图片缓存'
 IMAGE_CACHE_FIELDS = ('content', 'intent', 'type')
 IMAGE_CACHE_FIELD_LIMIT = 4096
 IMAGE_THUMBNAIL_MAX_SIZE = (480, 360)
+IMAGE_CACHE_INDEX_TTL = 5.0
 MAX_IMAGE_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_REQUEST_BYTES = 1024 * 1024
 WEBUI_ASSET_FILES = ('webui/index.html',)
 
 _manifest_cache = None
 _webui_asset_cache = None
+_image_cache_index_lock = threading.Lock()
+_image_cache_index_state = {
+    'directory': '',
+    'signature': None,
+    'built_at': 0.0,
+    'index': {},
+}
 
 
 class WebUIError(Exception):
@@ -592,33 +602,68 @@ def _image_cache_name_key(filename):
     return unicodedata.normalize('NFC', filename).casefold()
 
 
+def _image_cache_directory_signature(image_dir):
+    try:
+        info = os.stat(image_dir)
+    except OSError:
+        return None
+    return (info.st_mtime_ns, info.st_ctime_ns, info.st_size)
+
+
+def _build_image_cache_directory_index(image_dir):
+    index = {}
+    try:
+        entries = os.scandir(image_dir)
+    except OSError:
+        return index
+    with entries:
+        for entry in entries:
+            name = entry.name
+            if not _is_safe_image_cache_name(name):
+                continue
+            try:
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                file_stat = entry.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            index.setdefault(_image_cache_name_key(name), {
+                'path': os.path.join(image_dir, name),
+                'size': file_stat.st_size,
+            })
+    return index
+
+
 def _image_cache_directory_index():
     image_dir = os.path.abspath(OlivOSAIChatAssassin.data.gImageDir)
-    try:
-        names = os.listdir(image_dir)
-    except OSError:
+    signature = _image_cache_directory_signature(image_dir)
+    if signature is None:
         return {}
-    index = {}
-    for name in names:
-        path = _safe_image_cache_path(name)
-        if path is None:
-            continue
-        try:
-            if not os.path.isfile(path):
-                continue
-        except OSError:
-            continue
-        index.setdefault(_image_cache_name_key(name), path)
-    return index
+    now = time.monotonic()
+    with _image_cache_index_lock:
+        state = _image_cache_index_state
+        if (
+            state['directory'] == image_dir
+            and state['signature'] == signature
+            and now - state['built_at'] < IMAGE_CACHE_INDEX_TTL
+        ):
+            return state['index']
+        index = _build_image_cache_directory_index(image_dir)
+        state['directory'] = image_dir
+        state['signature'] = signature
+        state['built_at'] = now
+        state['index'] = index
+        return index
 
 
 def _image_cache_file_info(filename, directory_index=None):
     if directory_index is not None:
         if not _is_safe_image_cache_name(filename):
             return {'status': 'invalid', 'size': 0}, None
-        path = directory_index.get(_image_cache_name_key(filename))
-        if path is None:
+        cached = directory_index.get(_image_cache_name_key(filename))
+        if cached is None:
             return {'status': 'missing', 'size': 0}, _safe_image_cache_path(filename)
+        return {'status': 'available', 'size': cached['size']}, cached['path']
     else:
         path = _safe_image_cache_path(filename)
         if path is None:
@@ -915,7 +960,7 @@ def _handle_memory_overview(payload, Proc):
 
     groups = []
     group_keys = [key for key in memory.keys() if key != GLOBAL_MEMORY_KEY]
-    group_keys.sort(key=str)
+    group_keys.reverse()
     for group_id in group_keys[:MEMORY_GROUP_LIMIT]:
         value = memory[group_id]
         text, truncated = _display_memory_value(value, limit=200)
@@ -944,7 +989,7 @@ def _memory_list_options(payload, image_cache=False):
     sort = payload.get('sort', MEMORY_SORT_DEFAULT)
     if sort not in (MEMORY_SORT_DEFAULT, MEMORY_SORT_NAME):
         raise WebUIError('validation_error', '排序方式无效', {'sort': '必须是 default 或 name'})
-    order = payload.get('order', MEMORY_ORDER_ASC)
+    order = payload.get('order', MEMORY_ORDER_DESC)
     if order not in (MEMORY_ORDER_ASC, MEMORY_ORDER_DESC):
         raise WebUIError('validation_error', '排序方向无效', {'order': '必须是 asc 或 desc'})
     search = payload.get('search', '')
@@ -1177,7 +1222,7 @@ def _handle_memory_image(payload, Proc):
         if not isinstance(image_cache, dict) or filename not in image_cache:
             raise WebUIError('not_found', '图片缓存档案不存在')
 
-    file_info, path = _image_cache_file_info(filename, _image_cache_directory_index())
+    file_info, path = _image_cache_file_info(filename)
     if file_info['status'] == 'invalid' or path is None:
         raise WebUIError('image_invalid', '图片缓存文件路径无效')
     if file_info['status'] == 'missing':

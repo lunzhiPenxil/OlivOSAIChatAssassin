@@ -3233,7 +3233,7 @@ noscript {
     function defaultMemoryListOptions(imageCache) {
         return {
             sort: 'default',
-            order: 'asc',
+            order: 'desc',
             search: '',
             cached_first: imageCache === true,
         };
@@ -3246,7 +3246,7 @@ noscript {
         }
         return {
             sort: query.sort === 'name' ? 'name' : 'default',
-            order: query.order === 'desc' ? 'desc' : 'asc',
+            order: query.order === 'asc' ? 'asc' : 'desc',
             search: typeof query.search === 'string' ? query.search : '',
             cached_first: typeof query.cached_first === 'boolean'
                 ? query.cached_first
