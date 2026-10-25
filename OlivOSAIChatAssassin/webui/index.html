@@ -1624,6 +1624,42 @@ body.memory-modal-open {
     resize: vertical;
 }
 
+.memory-image-edit-preview {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+}
+
+.memory-image-thumb.memory-image-edit-thumb {
+    width: 132px;
+    min-height: 98px;
+    max-height: 118px;
+    flex: 0 0 132px;
+    padding: 4px;
+    border-radius: 10px;
+}
+
+.memory-image-thumb.memory-image-edit-thumb img {
+    width: 100%;
+    height: 100%;
+    max-height: 108px;
+    object-fit: contain;
+}
+
+.memory-image-edit-summary {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+
+.memory-image-edit-summary .memory-image-file-state {
+    flex: 1;
+}
+
+
 .memory-relationship-fields {
     display: flex;
     flex-direction: column;
@@ -2403,6 +2439,21 @@ noscript {
         min-height: 96px;
     }
 
+    .memory-image-edit-preview {
+        gap: 10px;
+    }
+
+    .memory-image-thumb.memory-image-edit-thumb {
+        width: 112px;
+        min-height: 94px;
+        max-height: 108px;
+        flex-basis: 112px;
+    }
+
+    .memory-image-thumb.memory-image-edit-thumb img {
+        max-height: 98px;
+    }
+
     .image-viewer-card {
         max-height: calc(100vh - env(safe-area-inset-top, 0px));
         max-height: calc(100dvh - env(safe-area-inset-top, 0px));
@@ -2820,7 +2871,15 @@ noscript {
                 </div>
                 <textarea id="memoryModalEditor" class="memory-modal-editor" spellcheck="false" aria-label="记忆内容"></textarea>
                 <div id="memoryImageFields" class="memory-image-fields" hidden>
-                    <div id="memoryImageFileState" class="memory-image-file-state"></div>
+                    <div class="memory-image-edit-preview">
+                        <button id="memoryImageEditorThumb" class="memory-image-thumb memory-image-edit-thumb" type="button" aria-label="查看缓存原图" hidden>
+                            <img id="memoryImageEditorThumbImage" alt="" hidden>
+                            <span id="memoryImageEditorThumbStatus">加载缩略图…</span>
+                        </button>
+                        <div class="memory-image-edit-summary">
+                            <div id="memoryImageFileState" class="memory-image-file-state"></div>
+                        </div>
+                    </div>
                     <label class="field" for="memoryImageContent">
                         <span>内容描述 content</span>
                         <textarea id="memoryImageContent" rows="3" maxlength="4096" spellcheck="false"></textarea>
@@ -3022,7 +3081,9 @@ noscript {
             'memoryCreateValueTypeField', 'memoryEditorValueType',
             'memoryModalEditor', 'memoryModalHint', 'memoryModalClose',
             'memoryModalCancel', 'memoryModalSave', 'memoryImageFields',
-            'memoryImageFileState', 'memoryImageContent', 'memoryImageIntent',
+            'memoryImageFileState', 'memoryImageEditorThumb', 'memoryImageEditorThumbImage',
+            'memoryImageEditorThumbStatus',
+            'memoryImageContent', 'memoryImageIntent',
             'memoryImageType', 'memoryRelationshipFields', 'memoryRelationshipUserId',
             'memoryRelationshipIdentity',
             'memoryRelationshipAliasMode', 'memoryRelationshipAliasSection',
@@ -3093,6 +3154,7 @@ noscript {
             closeMemoryEditor(false);
         });
         elements.memoryModalSave.addEventListener('click', saveMemoryEditor);
+        elements.memoryImageEditorThumb.addEventListener('click', openImageEditorPreview);
         elements.memoryCreateFields.addEventListener('input', handleMemoryEditorInput);
         elements.memoryCreateFields.addEventListener('change', handleMemoryEditorInput);
         elements.memoryModalEditor.addEventListener('input', handleMemoryEditorInput);
@@ -5121,6 +5183,109 @@ noscript {
         state.memoryImageObserver.observe(target);
     }
 
+    function memoryImageEntryAvailable(entry) {
+        return Boolean(entry && entry.image && entry.image.status === 'available');
+    }
+
+    function memoryImageEditorStatusText(entry) {
+        if (memoryImageEntryAvailable(entry)) {
+            return '缓存可用，点击缩略图可查看原图。';
+        }
+        return memoryImageStatus(entry).label + '，缓存档案仍可浏览和编辑。';
+    }
+
+    function resetMemoryImageEditorPreview(entry) {
+        const available = memoryImageEntryAvailable(entry);
+        const content = entry && entry.fields && entry.fields.content ? entry.fields.content : '';
+        elements.memoryImageEditorThumb.hidden = !available;
+        elements.memoryImageEditorThumbImage.hidden = true;
+        elements.memoryImageEditorThumbImage.removeAttribute('src');
+        elements.memoryImageEditorThumbImage.onload = null;
+        elements.memoryImageEditorThumbImage.onerror = null;
+        elements.memoryImageEditorThumbImage.alt = content
+            ? '缓存图片：' + content
+            : '缓存图片 ' + (entry ? entry.key : '');
+        elements.memoryImageEditorThumbStatus.hidden = false;
+        elements.memoryImageEditorThumbStatus.textContent = available ? '加载缩略图…' : '缓存不可用';
+        elements.memoryImageEditorThumb.setAttribute(
+            'aria-label',
+            '查看 ' + (entry ? entry.key : '缓存图片') + ' 原图'
+        );
+        elements.memoryImageFileState.textContent = memoryImageEditorStatusText(entry);
+        elements.memoryImageFileState.classList.toggle('warning', !available);
+    }
+
+    function setMemoryImageEditorPreviewError(entry, message) {
+        elements.memoryImageEditorThumb.hidden = true;
+        elements.memoryImageEditorThumbImage.hidden = true;
+        elements.memoryImageEditorThumbImage.removeAttribute('src');
+        elements.memoryImageEditorThumbImage.onload = null;
+        elements.memoryImageEditorThumbImage.onerror = null;
+        elements.memoryImageEditorThumbStatus.hidden = false;
+        elements.memoryImageEditorThumbStatus.textContent = '缩略图不可用';
+        elements.memoryImageFileState.textContent = message;
+        elements.memoryImageFileState.classList.add('warning');
+    }
+
+    function showMemoryImageEditorThumbnail(entry, context, dataUrl) {
+        if (state.memoryEditorContext !== context || !memoryImageEntryAvailable(entry)) {
+            return;
+        }
+        const image = elements.memoryImageEditorThumbImage;
+        const loading = elements.memoryImageEditorThumbStatus;
+        image.onload = function () {
+            if (state.memoryEditorContext !== context) {
+                return;
+            }
+            loading.hidden = true;
+            image.hidden = false;
+        };
+        image.onerror = function () {
+            if (state.memoryEditorContext !== context) {
+                return;
+            }
+            setMemoryImageEditorPreviewError(
+                entry,
+                '缩略图无法显示，缓存档案仍可正常浏览和编辑。'
+            );
+        };
+        image.src = dataUrl;
+    }
+
+    function loadMemoryImageEditorThumbnail(entry, context) {
+        if (!memoryImageEntryAvailable(entry) || state.memoryEditorContext !== context) {
+            return;
+        }
+        const cacheKey = memoryImageCacheKey(entry);
+        const cached = state.memoryImagePreviewCache.get(cacheKey);
+        if (cached) {
+            showMemoryImageEditorThumbnail(entry, context, cached);
+            return;
+        }
+        scheduleMemoryImageLoad(elements.memoryImageEditorThumb, function () {
+            return requestMemoryImage(entry.key, 'thumbnail').then(function (data) {
+                if (state.memoryEditorContext !== context) {
+                    return;
+                }
+                if (!data.data_url) {
+                    throw new Error('插件没有返回缩略图内容');
+                }
+                cacheMemoryImagePreview(cacheKey, data.data_url);
+                showMemoryImageEditorThumbnail(entry, context, data.data_url);
+            }).catch(function (error) {
+                if (state.memoryEditorContext !== context) {
+                    return;
+                }
+                if (error && error.code === 'image_missing') {
+                    entry.image = Object.assign({}, entry.image || {}, {status: 'missing', size: 0});
+                    resetMemoryImageEditorPreview(entry);
+                    return;
+                }
+                setMemoryImageEditorPreviewError(entry, memoryImageErrorText(error));
+            });
+        });
+    }
+
     function loadMemoryImageThumbnail(entry, button, image, loading, statusBadge) {
         const cacheKey = memoryImageCacheKey(entry);
         const cached = state.memoryImagePreviewCache.get(cacheKey);
@@ -5490,6 +5655,14 @@ noscript {
         });
     }
 
+    function openImageEditorPreview() {
+        const context = state.memoryEditorContext;
+        if (!context || context.mode !== 'image' || !memoryImageEntryAvailable(context.imageEntry)) {
+            return;
+        }
+        openImageViewer(context.imageEntry, elements.memoryImageEditorThumb, {fromEditor: true});
+    }
+
     function openImageEditor(entry, trigger) {
         if (state.busy || state.memoryLoading || state.memoryEditorOpen || state.memoryImageViewerOpen) {
             return;
@@ -5508,8 +5681,7 @@ noscript {
             title: '编辑图片缓存 · ' + entry.key,
             meta: metaParts.join(' · '),
             hint: '按固定三字段保存；当前条目中的未知附加字段会原样保留。缓存文件被删除不影响档案编辑。',
-            fileState: status.label + (status.warning ? '，无法在页面内查看大图。' : '，可由缩略图打开原图。'),
-            fileStateWarning: status.warning,
+            imageEntry: entry,
             trigger: trigger,
             buildRequest: function (imageFields) {
                 return {
@@ -5522,14 +5694,17 @@ noscript {
         });
     }
 
-    async function openImageViewer(entry, trigger) {
-        if (state.busy || state.memoryEditorOpen || state.memoryImageViewerOpen) {
+    async function openImageViewer(entry, trigger, options) {
+        const fromEditor = Boolean(options && options.fromEditor) && state.memoryEditorOpen &&
+            state.memoryEditorContext && state.memoryEditorContext.imageEntry === entry;
+        if (state.busy || state.memoryImageViewerOpen || (state.memoryEditorOpen && !fromEditor)) {
             return;
         }
         const status = memoryImageStatus(entry);
         const context = {
             entry: entry,
             trigger: trigger || document.activeElement,
+            fromEditor: fromEditor,
         };
         state.memoryImageViewerOpen = true;
         state.memoryImageViewerContext = context;
@@ -5547,6 +5722,7 @@ noscript {
         elements.imageViewerStatus.hidden = false;
         elements.imageViewerStatus.classList.toggle('warning', status.warning);
         elements.imageViewerEdit.disabled = entry.editable === false;
+        elements.imageViewerEdit.hidden = fromEditor;
         elements.imageViewer.hidden = false;
         document.body.classList.add('memory-modal-open');
         window.requestAnimationFrame(function () {
@@ -5588,6 +5764,9 @@ noscript {
             }
             if (error && error.code === 'image_missing') {
                 entry.image = Object.assign({}, entry.image || {}, {status: 'missing', size: 0});
+                if (fromEditor) {
+                    resetMemoryImageEditorPreview(entry);
+                }
             }
             elements.imageViewerImage.hidden = true;
             elements.imageViewerStatus.hidden = false;
@@ -5608,6 +5787,7 @@ noscript {
         elements.imageViewer.hidden = true;
         elements.imageViewerImage.hidden = true;
         elements.imageViewerImage.removeAttribute('src');
+        elements.imageViewerEdit.hidden = false;
         elements.imageViewerStatus.hidden = false;
         elements.imageViewerStatus.classList.remove('warning');
         elements.imageViewerStatus.textContent = '正在读取缓存图片…';
@@ -5633,7 +5813,9 @@ noscript {
         }
         const controls = Array.from(
             elements.imageViewer.querySelectorAll('button:not(:disabled)')
-        );
+        ).filter(function (control) {
+            return !control.closest('[hidden]');
+        });
         if (controls.length === 0) {
             return;
         }
@@ -5650,7 +5832,7 @@ noscript {
 
     function editImageFromViewer() {
         const context = state.memoryImageViewerContext;
-        if (!context || !context.entry || context.entry.editable === false) {
+        if (!context || context.fromEditor || !context.entry || context.entry.editable === false) {
             return;
         }
         const entry = context.entry;
@@ -5851,9 +6033,13 @@ noscript {
         elements.memoryModalEditor.setAttribute('aria-label', options.editorLabel || '记忆内容');
         elements.memoryModalEditor.removeAttribute('aria-invalid');
         elements.memoryImageFields.hidden = mode !== 'image';
-        elements.memoryImageFileState.hidden = mode !== 'image' || !options.fileState;
-        elements.memoryImageFileState.textContent = options.fileState || '';
-        elements.memoryImageFileState.classList.toggle('warning', mode === 'image' && !!options.fileStateWarning);
+        elements.memoryImageFileState.hidden = mode !== 'image';
+        if (mode === 'image') {
+            resetMemoryImageEditorPreview(options.imageEntry || null);
+        } else {
+            elements.memoryImageFileState.textContent = '';
+            elements.memoryImageFileState.classList.remove('warning');
+        }
         elements.memoryImageContent.value = imageFields.content;
         elements.memoryImageIntent.value = imageFields.intent;
         elements.memoryImageType.value = imageFields.type;
@@ -5867,6 +6053,9 @@ noscript {
         elements.memoryModalSave.disabled = false;
         elements.memoryModal.hidden = false;
         document.body.classList.add('memory-modal-open');
+        if (mode === 'image' && options.imageEntry) {
+            loadMemoryImageEditorThumbnail(options.imageEntry, state.memoryEditorContext);
+        }
         window.requestAnimationFrame(function () {
             if (creating) {
                 elements.memoryEditorKey.focus();
@@ -5965,6 +6154,13 @@ noscript {
         elements.memoryImageFields.hidden = true;
         elements.memoryImageFileState.textContent = '';
         elements.memoryImageFileState.classList.remove('warning');
+        elements.memoryImageEditorThumb.hidden = true;
+        elements.memoryImageEditorThumbImage.hidden = true;
+        elements.memoryImageEditorThumbImage.removeAttribute('src');
+        elements.memoryImageEditorThumbImage.onload = null;
+        elements.memoryImageEditorThumbImage.onerror = null;
+        elements.memoryImageEditorThumbStatus.hidden = false;
+        elements.memoryImageEditorThumbStatus.textContent = '加载缩略图…';
         elements.memoryImageContent.value = '';
         elements.memoryImageIntent.value = '';
         elements.memoryImageType.value = '';
