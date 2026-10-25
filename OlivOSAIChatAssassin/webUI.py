@@ -40,7 +40,12 @@ MEMORY_ORDER_DESC = 'desc'
 IMAGE_CACHE_SECTION = '图片缓存'
 RELATIONSHIP_SECTION = '人物关系'
 RELATIONSHIP_DESCRIPTION_LIMIT = 4096
-MEMORY_SPECIAL_SECTIONS = ('用户侧写', RELATIONSHIP_SECTION, '知识缓存', '知识搜索', IMAGE_CACHE_SECTION)
+KNOWLEDGE_SEARCH_SECTION = '知识搜索'
+TEXT_ENTRY_SECTIONS = ('用户侧写', '知识缓存', KNOWLEDGE_SEARCH_SECTION)
+MEMORY_SPECIAL_SECTIONS = (
+    '用户侧写', RELATIONSHIP_SECTION, '知识缓存', KNOWLEDGE_SEARCH_SECTION, IMAGE_CACHE_SECTION,
+)
+MEMORY_ENTRY_SECTIONS = ('用户侧写', RELATIONSHIP_SECTION, '知识缓存', KNOWLEDGE_SEARCH_SECTION)
 IMAGE_CACHE_FIELDS = ('content', 'intent', 'type')
 IMAGE_CACHE_FIELD_LIMIT = 4096
 IMAGE_TYPE_CONTAINS_FILTERS = ('表情包', '截图', '照片')
@@ -726,6 +731,7 @@ def _image_cache_records(items, directory_index=None):
             'key': key_text,
             'kind': type(value).__name__,
             'editable': not truncated,
+            'deletable': False,
             'truncated': truncated,
             'legacy': legacy,
             'extra_fields': extra_count,
@@ -1157,6 +1163,7 @@ def _handle_memory_section(payload, Proc):
             'offset': offset,
             'next_offset': next_offset,
             'has_more': next_offset < len(group_keys),
+            'can_create': True,
         }, revision)
 
     if scope == 'group':
@@ -1173,6 +1180,7 @@ def _handle_memory_section(payload, Proc):
             'value_kind': type(memory[group_id]).__name__,
             'truncated': truncated,
             'editable': not truncated,
+            'can_delete': True,
         }, revision)
 
     if scope != 'global':
@@ -1184,7 +1192,8 @@ def _handle_memory_section(payload, Proc):
     global_memory = memory.get(GLOBAL_MEMORY_KEY, {})
     if not isinstance(global_memory, dict):
         raise WebUIError('not_found', '该全局记忆区块不存在')
-    if section_name in global_memory:
+    section_present = section_name in global_memory
+    if section_present:
         value = global_memory[section_name]
     elif section_name in MEMORY_SPECIAL_SECTIONS:
         value = {}
@@ -1198,6 +1207,8 @@ def _handle_memory_section(payload, Proc):
                 'kind': 'invalid',
                 'image_cache': True,
                 'editable': False,
+                'can_create': False,
+                'can_delete': False,
                 'warning': '图片缓存档案结构异常：该区块应为对象，当前无法逐条浏览。',
                 'metadata': _memory_metadata(value),
                 'entries': [],
@@ -1217,9 +1228,27 @@ def _handle_memory_section(payload, Proc):
             'scope': 'global',
             'section': section_name,
             'image_cache': True,
+            'can_create': False,
+            'can_delete': False,
         }
         result.update(_memory_dict_page(records, len(items), offset, limit, list_options, image_cache=True))
         return _ok(result, revision)
+    if section_name == KNOWLEDGE_SEARCH_SECTION and not isinstance(value, dict):
+        return _ok({
+            'scope': 'global',
+            'section': section_name,
+            'kind': 'invalid',
+            'editable': False,
+            'can_create': False,
+            'can_delete': False,
+            'warning': '知识搜索结构异常：该区块应为对象，请先修正记忆 JSON 文件。',
+            'metadata': _memory_metadata(value),
+            'entries': [],
+            'total': 0,
+            'offset': offset,
+            'next_offset': offset,
+            'has_more': False,
+        }, revision)
     if isinstance(value, dict):
         list_options = _memory_list_options(payload)
         items = list(value.items())
@@ -1233,10 +1262,13 @@ def _handle_memory_section(payload, Proc):
             'scope': 'global',
             'section': section_name,
             'editable': section_editable,
+            'can_create': section_editable and section_name in MEMORY_ENTRY_SECTIONS,
+            'can_delete': section_editable and section_name in MEMORY_ENTRY_SECTIONS,
         }
         result.update(_memory_dict_page(records, len(items), offset, limit, list_options))
-        if not section_editable:
-            for entry in result.get('entries', []):
+        for entry in result.get('entries', []):
+            entry['deletable'] = bool(result['can_delete'])
+            if not section_editable:
                 entry['editable'] = False
         if section_name == RELATIONSHIP_SECTION:
             result['relationship'] = True
@@ -1251,6 +1283,8 @@ def _handle_memory_section(payload, Proc):
         'value_kind': type(value).__name__,
         'truncated': truncated,
         'editable': section_editable and not truncated,
+        'can_create': False,
+        'can_delete': False,
     }, revision)
 
 
@@ -1423,6 +1457,13 @@ def _handle_save_memory(payload, Proc):
             {'expected_revision': '必须是当前记忆 revision'},
         )
 
+    action = payload.get('action', 'update')
+    if not isinstance(action, str) or action not in ('update', 'create', 'delete'):
+        raise WebUIError(
+            'validation_error',
+            'action 无效',
+            {'action': '必须是 update、create 或 delete'},
+        )
     scope = payload.get('scope')
     has_value = 'value' in payload
     has_entries = 'entries' in payload
@@ -1430,11 +1471,26 @@ def _handle_save_memory(payload, Proc):
     section_name = None
     memory_value = None
     entries = None
+    entry_key = None
     if scope == 'group':
-        if has_entries or not has_value:
-            raise WebUIError('validation_error', '群记忆必须提交 value')
         group_id = _validate_memory_name(payload.get('group_id'), 'group_id', 'group_id')
-        memory_value = _validate_memory_value(payload.get('value'))
+        if action in ('create', 'delete') and group_id == GLOBAL_MEMORY_KEY:
+            raise WebUIError(
+                'validation_error',
+                '群记忆键不能使用保留名称',
+                {'group_id': f'不能使用 {GLOBAL_MEMORY_KEY}'},
+            )
+        if action == 'delete':
+            if has_value or has_entries:
+                raise WebUIError('validation_error', '删除群记忆时不能提交 value 或 entries')
+        else:
+            if has_entries or not has_value:
+                raise WebUIError('validation_error', '群记忆必须提交 value')
+            memory_value = (
+                _validate_memory_text(payload.get('value'))
+                if action == 'create'
+                else _validate_memory_value(payload.get('value'))
+            )
     elif scope == 'global':
         section_name = _validate_memory_name(payload.get('section'), 'section', 'section')
         if section_name not in MEMORY_SPECIAL_SECTIONS:
@@ -1443,7 +1499,32 @@ def _handle_save_memory(payload, Proc):
                 '该分类在 WebUI 中只读，请直接修改记忆 JSON 文件',
                 {'section': '该分类不支持 WebUI 编辑'},
             )
-        if section_name == IMAGE_CACHE_SECTION:
+        if action in ('create', 'delete') and section_name == IMAGE_CACHE_SECTION:
+            raise WebUIError(
+                'unsupported_action',
+                '图片缓存仅支持修改已有档案，不支持新增或删除',
+                {'section': '图片缓存档案只能修改 content、intent 和 type'},
+            )
+        if action in ('create', 'delete') and section_name not in MEMORY_ENTRY_SECTIONS:
+            raise WebUIError(
+                'unsupported_action',
+                '该记忆区块不支持条目级新增或删除',
+                {'section': '只有用户侧写、人物关系、知识缓存和知识搜索支持新增或删除条目'},
+            )
+        if action == 'delete':
+            if has_value or has_entries:
+                raise WebUIError('validation_error', '删除记忆条目时不能提交 value 或 entries')
+            entry_key = _validate_memory_name(payload.get('key'), 'key', '记忆条目键')
+        elif action == 'create':
+            if has_entries or not has_value:
+                raise WebUIError('validation_error', '新增记忆条目必须提交 value')
+            entry_key = _validate_memory_name(payload.get('key'), 'key', '记忆条目键')
+            memory_value = (
+                _validate_memory_text(payload.get('value'))
+                if section_name in TEXT_ENTRY_SECTIONS
+                else _validate_memory_value(payload.get('value'))
+            )
+        elif section_name == IMAGE_CACHE_SECTION:
             if has_value or not has_entries:
                 raise WebUIError('validation_error', '图片缓存必须按条目提交 entries')
             entries = _validate_image_cache_entries(payload.get('entries'))
@@ -1461,6 +1542,16 @@ def _handle_save_memory(payload, Proc):
         if not isinstance(memory, dict):
             raise WebUIError('memory_invalid', '记忆文件根节点必须是对象')
         if scope == 'group':
+            if action == 'delete':
+                if group_id not in memory:
+                    raise WebUIError('not_found', '该群记忆不存在')
+                del memory[group_id]
+                return
+            if action == 'create':
+                if group_id in memory:
+                    raise WebUIError('already_exists', '该群记忆已存在')
+                memory[group_id] = memory_value
+                return
             if group_id not in memory:
                 raise WebUIError('not_found', '该群记忆不存在')
             current = memory[group_id]
@@ -1470,6 +1561,33 @@ def _handle_save_memory(payload, Proc):
             return
 
         global_memory = memory.get(GLOBAL_MEMORY_KEY)
+        if action == 'delete':
+            if not isinstance(global_memory, dict) or section_name not in global_memory:
+                raise WebUIError('not_found', '该全局记忆区块不存在')
+            current = global_memory[section_name]
+            if not isinstance(current, dict):
+                raise WebUIError('memory_invalid', '该记忆区块结构异常：应为对象')
+            if entry_key not in current:
+                raise WebUIError('not_found', f'记忆条目不存在: {entry_key}')
+            del current[entry_key]
+            return
+        if action == 'create':
+            if not isinstance(global_memory, dict):
+                if GLOBAL_MEMORY_KEY in memory:
+                    raise WebUIError('memory_invalid', '全局记忆结构异常：应为对象')
+                global_memory = {}
+                memory[GLOBAL_MEMORY_KEY] = global_memory
+            if section_name in global_memory:
+                current = global_memory[section_name]
+                if not isinstance(current, dict):
+                    raise WebUIError('memory_invalid', '该记忆区块结构异常：应为对象')
+            else:
+                current = {}
+                global_memory[section_name] = current
+            if entry_key in current:
+                raise WebUIError('already_exists', f'记忆条目已存在: {entry_key}')
+            current[entry_key] = memory_value
+            return
         if not isinstance(global_memory, dict) or section_name not in global_memory:
             raise WebUIError('not_found', '该全局记忆区块不存在')
         current = global_memory[section_name]
@@ -1489,6 +1607,8 @@ def _handle_save_memory(payload, Proc):
             return
         if section_name == IMAGE_CACHE_SECTION:
             raise WebUIError('memory_invalid', '图片缓存档案结构异常：该区块应为对象')
+        if section_name == KNOWLEDGE_SEARCH_SECTION:
+            raise WebUIError('memory_invalid', '知识搜索结构异常：该区块应为对象，请先修正记忆 JSON 文件')
         if not has_value:
             raise WebUIError('validation_error', '该记忆区块是文本，请提交 value')
         if isinstance(current, str) and not isinstance(memory_value, str):
@@ -1507,11 +1627,13 @@ def _handle_save_memory(payload, Proc):
             '记忆已被其他操作修改，请刷新记忆后重试',
             {'current_revision': exc.current_revision},
         )
-    result = {'scope': scope}
+    result = {'scope': scope, 'action': action}
     if group_id is not None:
         result['group_id'] = group_id
     if section_name is not None:
         result['section'] = section_name
+    if entry_key is not None:
+        result['key'] = entry_key
     return _ok(result, revision)
 
 
