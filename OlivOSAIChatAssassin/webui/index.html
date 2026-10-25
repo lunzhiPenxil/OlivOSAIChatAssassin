@@ -2574,8 +2574,9 @@ noscript {
             remaining.push(section);
         });
         const ordered = MEMORY_SECTION_ORDER
-            .map(function (name) { return prioritized.get(name); })
-            .filter(Boolean);
+            .map(function (name) {
+                return prioritized.get(name) || {name: name, kind: 'dict', count: 0};
+            });
         return ordered.concat(remaining);
     }
 

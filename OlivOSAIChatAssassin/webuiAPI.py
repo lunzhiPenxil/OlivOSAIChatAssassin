@@ -38,6 +38,7 @@ MEMORY_SORT_NAME = 'name'
 MEMORY_ORDER_ASC = 'asc'
 MEMORY_ORDER_DESC = 'desc'
 IMAGE_CACHE_SECTION = '图片缓存'
+MEMORY_SPECIAL_SECTIONS = ('用户侧写', '人物关系', '知识缓存', '知识搜索', IMAGE_CACHE_SECTION)
 IMAGE_CACHE_FIELDS = ('content', 'intent', 'type')
 IMAGE_CACHE_FIELD_LIMIT = 4096
 IMAGE_TYPE_CONTAINS_FILTERS = ('表情包', '截图', '照片')
@@ -1107,9 +1108,14 @@ def _handle_memory_section(payload, Proc):
     if not isinstance(section_name, str) or not section_name or len(section_name) > 256:
         raise WebUIError('validation_error', 'section 无效')
     global_memory = memory.get(GLOBAL_MEMORY_KEY, {})
-    if not isinstance(global_memory, dict) or section_name not in global_memory:
+    if not isinstance(global_memory, dict):
         raise WebUIError('not_found', '该全局记忆区块不存在')
-    value = global_memory[section_name]
+    if section_name in global_memory:
+        value = global_memory[section_name]
+    elif section_name in MEMORY_SPECIAL_SECTIONS:
+        value = {}
+    else:
+        raise WebUIError('not_found', '该全局记忆区块不存在')
     if section_name == IMAGE_CACHE_SECTION:
         if not isinstance(value, dict):
             return _ok({
