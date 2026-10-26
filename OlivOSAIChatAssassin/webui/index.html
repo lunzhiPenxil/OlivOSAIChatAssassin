@@ -614,6 +614,9 @@ select option:disabled {
 .select-menu {
     position: fixed;
     z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    row-gap: 3px;
     overflow-x: hidden;
     overflow-y: auto;
     padding: 4px;
@@ -652,6 +655,7 @@ select option:disabled {
 .select-menu-option {
     position: relative;
     display: flex;
+    flex: 0 0 auto;
     min-height: 32px;
     align-items: center;
     padding: 6px 32px 6px 12px;
@@ -703,6 +707,7 @@ select option:disabled {
 }
 
 .select-menu-group {
+    flex: 0 0 auto;
     padding: 8px 10px 4px;
     color: var(--muted);
     font-size: 0.72rem;
