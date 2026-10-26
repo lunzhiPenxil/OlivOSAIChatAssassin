@@ -315,6 +315,70 @@ code {
     grid-column: span 2;
 }
 
+.extra-config-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.extra-config-heading .form-note {
+    margin: 0;
+}
+
+.extra-config-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.extra-config-field {
+    padding: 14px;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, var(--surface));
+    border-radius: 11px;
+    background: var(--surface-soft);
+}
+
+.extra-config-field-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.48fr) auto;
+    align-items: end;
+    gap: 12px;
+}
+
+.extra-config-field-value {
+    margin-top: 12px;
+}
+
+.extra-config-field-value textarea {
+    min-height: 88px;
+}
+
+.extra-config-null {
+    display: flex;
+    min-height: 42px;
+    align-items: center;
+    padding: 0 12px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    background: var(--surface);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.extra-config-empty {
+    margin: 0;
+    padding: 14px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    text-align: center;
+}
+
+.extra-config-empty[hidden] {
+    display: none;
+}
+
 .field {
     display: flex;
     flex-direction: column;
@@ -2128,6 +2192,25 @@ noscript {
         gap: 12px;
     }
 
+    .extra-config-heading {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .extra-config-heading .button {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .extra-config-field-head {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .extra-config-field-head .button {
+        min-height: 44px;
+    }
+
     .span-2 {
         grid-column: auto;
     }
@@ -2985,6 +3068,16 @@ noscript {
                             </label>
                         </div>
                     </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend>额外字段</legend>
+                        <div class="extra-config-heading">
+                            <p class="muted form-note">这里显示配置文件里不属于插件默认配置的顶层字段。可以修改值、选择 JSON 类型，也可以新增或删除字段。</p>
+                            <button id="extraConfigAddButton" class="button small secondary" type="button">新增字段</button>
+                        </div>
+                        <div id="extraConfigFields" class="extra-config-fields"></div>
+                        <p id="extraConfigEmpty" class="muted extra-config-empty">当前没有额外字段。</p>
+                    </fieldset>
                 </form>
             </section>
 
@@ -3188,6 +3281,14 @@ noscript {
     const KNOWLEDGE_SEARCH_SECTION = '知识搜索';
     const TEXT_ONLY_CREATE_SECTIONS = ['用户侧写', '知识缓存', KNOWLEDGE_SEARCH_SECTION];
     const IMAGE_TYPE_FILTERS = ['表情包', '截图', '照片', '其它'];
+    const EXTRA_FIELD_TYPES = [
+        {value: 'string', label: '字符串'},
+        {value: 'number', label: '数字'},
+        {value: 'boolean', label: '布尔值'},
+        {value: 'object', label: '对象'},
+        {value: 'array', label: '数组'},
+        {value: 'null', label: '空值'},
+    ];
     const MEMORY_SECTION_ORDER = [
         '用户侧写', '人物关系', '知识缓存', KNOWLEDGE_SEARCH_SECTION, IMAGE_CACHE_SECTION
     ];
@@ -3225,6 +3326,10 @@ noscript {
         conflict: false,
         clearSecrets: new Set(),
         dirtyFields: new Set(),
+        extraFields: null,
+        knownConfigFields: [],
+        extraConfigRows: [],
+        extraConfigRemoved: new Set(),
         memoryQuery: null,
         memoryOtherExpanded: false,
         memoryGroupIndexOffset: 0,
@@ -3271,7 +3376,8 @@ noscript {
             'replyKeywords', 'ignorePrefixes', 'historySizeMin', 'historySize', 'historyDynamic',
             'historyDynamicSize', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
             'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
-            'saveButton', 'memoryRefreshButton', 'memorySectionList',
+            'saveButton', 'extraConfigFields', 'extraConfigAddButton', 'extraConfigEmpty',
+            'memoryRefreshButton', 'memorySectionList',
             'memoryDetail', 'memoryModal', 'memoryModalEyebrow', 'memoryModalTitle', 'memoryModalMeta',
             'memoryCreateFields', 'memoryCreateKeyLabel', 'memoryEditorKey',
             'memoryCreateValueTypeField', 'memoryEditorValueType',
@@ -3398,6 +3504,10 @@ noscript {
             fillConfigForm();
             showToast('已恢复为最近一次加载的设置');
         });
+        elements.extraConfigAddButton.addEventListener('click', addExtraConfigField);
+        elements.extraConfigFields.addEventListener('input', handleExtraConfigInput);
+        elements.extraConfigFields.addEventListener('change', handleExtraConfigChange);
+        elements.extraConfigFields.addEventListener('click', handleExtraConfigClick);
         elements.saveButton.addEventListener('click', saveConfig);
         elements.bannerAction.addEventListener('click', function () {
             if (state.selectedBot) {
@@ -4094,6 +4204,12 @@ noscript {
         }
         state.config = response.data && response.data.config ? response.data.config : {};
         state.secrets = response.data && response.data.secrets ? response.data.secrets : {};
+        state.extraFields = response.data && Array.isArray(response.data.extra_fields)
+            ? response.data.extra_fields
+            : null;
+        state.knownConfigFields = response.data && Array.isArray(response.data.known_fields)
+            ? response.data.known_fields
+            : [];
         state.revision = typeof response.revision === 'string' ? response.revision : '';
         renderConfigWarnings(response.data && response.data.warnings);
         fillConfigForm();
@@ -4164,6 +4280,8 @@ noscript {
         setValue('ocrModel', ocrConfig.model);
         setSelectValue('ocrMode', ocrConfig.mode, 'base64');
         setValue('ocrQueueSize', ocrConfig.queue_size);
+        rebuildExtraConfigRows();
+        renderExtraConfigFields();
 
         elements.apiKey.value = '';
         elements.ocrApiKey.value = '';
@@ -4173,6 +4291,395 @@ noscript {
         clearFieldErrors();
         setDirty(false);
         scheduleTextareaResize();
+    }
+
+    function extraFieldTypeFromValue(value) {
+        if (value === null) {
+            return 'null';
+        }
+        if (Array.isArray(value)) {
+            return 'array';
+        }
+        if (typeof value === 'number') {
+            return 'number';
+        }
+        if (typeof value === 'boolean') {
+            return 'boolean';
+        }
+        if (typeof value === 'string') {
+            return 'string';
+        }
+        return 'object';
+    }
+
+    function normalizeExtraFieldType(type, value) {
+        const normalized = typeof type === 'string' ? type : '';
+        const supported = EXTRA_FIELD_TYPES.some(function (item) {
+            return item.value === normalized;
+        });
+        return supported ? normalized : extraFieldTypeFromValue(value);
+    }
+
+    function extraFieldText(value, type) {
+        if (type === 'null' || value === null || typeof value === 'undefined') {
+            return '';
+        }
+        if (type === 'object' || type === 'array') {
+            try {
+                return JSON.stringify(value, null, 2);
+            } catch (error) {
+                return type === 'array' ? '[]' : '{}';
+            }
+        }
+        return String(value);
+    }
+
+    function rebuildExtraConfigRows() {
+        const config = state.config || {};
+        let fields = state.extraFields;
+        if (!Array.isArray(fields)) {
+            const known = new Set(state.knownConfigFields);
+            fields = Object.keys(config)
+                .filter(function (name) {
+                    return !known.has(name);
+                })
+                .map(function (name) {
+                    return {name: name, type: extraFieldTypeFromValue(config[name])};
+                });
+        }
+        state.extraConfigRows = fields.map(function (field) {
+            const name = typeof field.name === 'string' ? field.name : '';
+            const value = config[name];
+            const type = normalizeExtraFieldType(field.type, value);
+            return {
+                originalName: name || null,
+                name: name,
+                type: type,
+                text: extraFieldText(value, type),
+            };
+        });
+        state.extraConfigRemoved.clear();
+    }
+
+    function renderExtraConfigFields() {
+        const container = elements.extraConfigFields;
+        container.replaceChildren();
+        elements.extraConfigEmpty.hidden = state.extraConfigRows.length > 0;
+        state.extraConfigRows.forEach(function (row, index) {
+            container.appendChild(createExtraConfigField(row, index));
+        });
+        enhanceCustomSelects(container);
+        scheduleTextareaResize();
+    }
+
+    function createExtraConfigField(row, index) {
+        const card = document.createElement('div');
+        card.className = 'extra-config-field';
+        card.dataset.extraFieldRow = String(index);
+
+        const head = document.createElement('div');
+        head.className = 'extra-config-field-head';
+
+        const nameField = document.createElement('label');
+        nameField.className = 'field';
+        const nameLabel = document.createElement('span');
+        nameLabel.textContent = '字段名';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = row.name;
+        nameInput.placeholder = '例如 feature_flag';
+        nameInput.dataset.extraKind = 'name';
+        if (row.name) {
+            nameInput.dataset.field = row.name;
+        }
+        nameField.append(nameLabel, nameInput);
+
+        const typeField = document.createElement('label');
+        typeField.className = 'field';
+        const typeLabel = document.createElement('span');
+        typeLabel.textContent = '类型';
+        const typeSelect = document.createElement('select');
+        typeSelect.dataset.extraKind = 'type';
+        EXTRA_FIELD_TYPES.forEach(function (item) {
+            const option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+            typeSelect.appendChild(option);
+        });
+        typeSelect.value = row.type;
+        typeField.append(typeLabel, typeSelect);
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'button small danger';
+        removeButton.textContent = '删除';
+        removeButton.dataset.extraAction = 'remove';
+        head.append(nameField, typeField, removeButton);
+
+        card.append(head, createExtraConfigValueField(row));
+        return card;
+    }
+
+    function createExtraConfigValueField(row) {
+        const field = document.createElement('label');
+        field.className = 'field extra-config-field-value';
+        const label = document.createElement('span');
+        label.textContent = '值';
+        field.appendChild(label);
+
+        if (row.type === 'string' || row.type === 'object' || row.type === 'array') {
+            const textarea = document.createElement('textarea');
+            textarea.rows = row.type === 'string' ? 3 : 6;
+            textarea.spellcheck = row.type === 'string';
+            textarea.value = row.text;
+            textarea.dataset.extraKind = 'value';
+            if (row.name) {
+                textarea.dataset.field = row.name;
+            }
+            if (row.type === 'object' || row.type === 'array') {
+                textarea.classList.add('extra-config-json');
+                textarea.placeholder = row.type === 'object' ? '{}' : '[]';
+            }
+            textarea.addEventListener('input', function () {
+                resizeTextarea(textarea);
+            });
+            field.appendChild(textarea);
+        } else if (row.type === 'number') {
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.step = 'any';
+            input.value = row.text;
+            input.dataset.extraKind = 'value';
+            if (row.name) {
+                input.dataset.field = row.name;
+            }
+            field.appendChild(input);
+        } else if (row.type === 'boolean') {
+            const select = document.createElement('select');
+            select.dataset.extraKind = 'value';
+            ['true', 'false'].forEach(function (value) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                select.appendChild(option);
+            });
+            select.value = row.text === 'true' ? 'true' : 'false';
+            field.appendChild(select);
+        } else {
+            const nullValue = document.createElement('div');
+            nullValue.className = 'extra-config-null';
+            nullValue.textContent = 'null（空值）';
+            field.appendChild(nullValue);
+        }
+        return field;
+    }
+
+    function handleExtraConfigInput(event) {
+        const control = event.target.closest('[data-extra-kind]');
+        if (!control || control.dataset.extraKind === 'type') {
+            return;
+        }
+        const card = control.closest('[data-extra-field-row]');
+        if (!card) {
+            return;
+        }
+        const row = state.extraConfigRows[Number(card.dataset.extraFieldRow)];
+        if (!row) {
+            return;
+        }
+        if (control.dataset.extraKind === 'name') {
+            row.name = control.value;
+            if (control.value.trim()) {
+                control.dataset.field = control.value.trim();
+            } else {
+                delete control.dataset.field;
+            }
+        } else {
+            row.text = control.value;
+        }
+        setDirty(true);
+    }
+
+    function handleExtraConfigChange(event) {
+        const control = event.target.closest('[data-extra-kind="type"]');
+        if (!control) {
+            handleExtraConfigInput(event);
+            return;
+        }
+        const card = control.closest('[data-extra-field-row]');
+        if (!card) {
+            return;
+        }
+        const index = Number(card.dataset.extraFieldRow);
+        const row = state.extraConfigRows[index];
+        if (!row) {
+            return;
+        }
+        row.text = coerceExtraFieldText(row.text, row.type, control.value);
+        row.type = control.value;
+        renderExtraConfigFields();
+        setDirty(true);
+    }
+
+    function handleExtraConfigClick(event) {
+        const button = event.target.closest('[data-extra-action="remove"]');
+        if (!button) {
+            return;
+        }
+        const card = button.closest('[data-extra-field-row]');
+        if (!card) {
+            return;
+        }
+        removeExtraConfigField(Number(card.dataset.extraFieldRow));
+    }
+
+    function addExtraConfigField() {
+        state.extraConfigRows.push({
+            originalName: null,
+            name: '',
+            type: 'string',
+            text: '',
+        });
+        renderExtraConfigFields();
+        setDirty(true);
+        const cards = elements.extraConfigFields.querySelectorAll('[data-extra-field-row]');
+        const lastCard = cards[cards.length - 1];
+        if (lastCard) {
+            const input = lastCard.querySelector('[data-extra-kind="name"]');
+            if (input) {
+                input.focus({preventScroll: true});
+            }
+            lastCard.scrollIntoView({block: 'nearest'});
+        }
+    }
+
+    function removeExtraConfigField(index) {
+        const row = state.extraConfigRows[index];
+        if (!row) {
+            return;
+        }
+        if (row.originalName) {
+            state.extraConfigRemoved.add(row.originalName);
+        }
+        state.extraConfigRows.splice(index, 1);
+        renderExtraConfigFields();
+        setDirty(true);
+    }
+
+    function coerceExtraFieldText(text, fromType, toType) {
+        if (toType === 'null') {
+            return '';
+        }
+        if (toType === 'string') {
+            return text;
+        }
+        if (toType === 'number') {
+            const number = Number(text.trim());
+            return Number.isFinite(number) ? String(number) : '0';
+        }
+        if (toType === 'boolean') {
+            return text.trim().toLowerCase() === 'true' ? 'true' : 'false';
+        }
+        let parsed;
+        try {
+            parsed = JSON.parse(text);
+        } catch (error) {
+            parsed = undefined;
+        }
+        if (toType === 'object') {
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? JSON.stringify(parsed, null, 2)
+                : '{}';
+        }
+        return Array.isArray(parsed) ? JSON.stringify(parsed, null, 2) : '[]';
+    }
+
+    function parseExtraFieldValue(type, text) {
+        if (type === 'string') {
+            return text;
+        }
+        if (type === 'null') {
+            return null;
+        }
+        if (type === 'boolean') {
+            return text === 'true';
+        }
+        if (type === 'number') {
+            const raw = text.trim();
+            if (!raw) {
+                throw new Error('数字不能为空');
+            }
+            const value = Number(raw);
+            if (!Number.isFinite(value)) {
+                throw new Error('必须是有限数字');
+            }
+            return value;
+        }
+        let value;
+        try {
+            value = JSON.parse(text);
+        } catch (error) {
+            throw new Error('JSON 格式无效');
+        }
+        if (type === 'object') {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+                throw new Error('必须是 JSON 对象');
+            }
+        } else if (!Array.isArray(value)) {
+            throw new Error('必须是 JSON 数组');
+        }
+        return value;
+    }
+
+    function setExtraConfigPatchValue(patch, name, value) {
+        Object.defineProperty(patch, name, {
+            value: value,
+            enumerable: true,
+            configurable: true,
+            writable: true,
+        });
+    }
+
+    function collectExtraConfigFields(patch) {
+        const errors = {};
+        const presentNames = new Set();
+        const removedNames = new Set(state.extraConfigRemoved);
+        const knownNames = new Set(state.knownConfigFields);
+        state.extraConfigRows.forEach(function (row, index) {
+            const name = row.name.trim();
+            const field = name || '额外字段 #' + String(index + 1);
+            if (!name) {
+                errors[field] = '字段名不能为空';
+                return;
+            }
+            if (knownNames.has(name)) {
+                errors[name] = '不能与插件内置配置项重名';
+                return;
+            }
+            if (presentNames.has(name)) {
+                errors[name] = '字段名重复';
+                return;
+            }
+            try {
+                setExtraConfigPatchValue(patch, name, parseExtraFieldValue(row.type, row.text));
+            } catch (error) {
+                errors[name] = error instanceof Error ? error.message : '值无效';
+                return;
+            }
+            presentNames.add(name);
+            if (row.originalName && row.originalName !== name) {
+                removedNames.add(row.originalName);
+            }
+        });
+        const removeFields = Array.from(removedNames).filter(function (name) {
+            return !presentNames.has(name);
+        });
+        if (Object.keys(errors).length > 0) {
+            const error = new Error('额外字段校验失败');
+            error.fields = errors;
+            throw error;
+        }
+        return removeFields;
     }
 
     function setValue(id, value) {
@@ -4362,9 +4869,11 @@ noscript {
         if (Object.keys(ocrPatch).length > 0) {
             patch.ocr_api = ocrPatch;
         }
+        const removeFields = collectExtraConfigFields(patch);
         return {
             patch: patch,
             clear_secrets: clearSecrets,
+            remove_fields: removeFields,
         };
     }
 
@@ -4404,7 +4913,14 @@ noscript {
             showToast('请先修正表单中的必填项或范围错误', true);
             return;
         }
-        const requestData = collectConfigPatch();
+        let requestData;
+        try {
+            requestData = collectConfigPatch();
+        } catch (error) {
+            showFieldErrors(error);
+            showToast(errorMessage(error), true);
+            return;
+        }
         setBusy(true);
         try {
             const response = await callApi(EVENTS.saveConfig, {
@@ -4412,9 +4928,16 @@ noscript {
                 expected_revision: state.revision,
                 patch: requestData.patch,
                 clear_secrets: requestData.clear_secrets,
+                remove_fields: requestData.remove_fields,
             });
             state.config = response.data && response.data.config ? response.data.config : {};
             state.secrets = response.data && response.data.secrets ? response.data.secrets : {};
+            state.extraFields = response.data && Array.isArray(response.data.extra_fields)
+                ? response.data.extra_fields
+                : null;
+            state.knownConfigFields = response.data && Array.isArray(response.data.known_fields)
+                ? response.data.known_fields
+                : [];
             state.revision = typeof response.revision === 'string' ? response.revision : '';
             state.conflict = false;
             renderConfigWarnings(response.data && response.data.warnings);

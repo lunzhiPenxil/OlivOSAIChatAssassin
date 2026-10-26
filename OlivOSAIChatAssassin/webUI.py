@@ -293,6 +293,46 @@ def _config_warnings(config: dict):
     return warnings
 
 
+def _json_config_type(value):
+    if value is None:
+        return 'null'
+    if type(value) is bool:
+        return 'boolean'
+    if type(value) in (int, float):
+        return 'number'
+    if isinstance(value, str):
+        return 'string'
+    if isinstance(value, list):
+        return 'array'
+    if isinstance(value, dict):
+        return 'object'
+    return 'unknown'
+
+
+def _extra_config_fields(config: dict):
+    known_fields = set(OlivOSAIChatAssassin.data.configDefault.keys())
+    return [
+        {
+            'name': key,
+            'type': _json_config_type(value),
+        }
+        for key, value in config.items()
+        if key not in known_fields
+    ]
+
+
+def _config_payload(config: dict, bot_hash: str):
+    public_config, secrets = _public_config(config)
+    return {
+        'config': public_config,
+        'secrets': secrets,
+        'warnings': _config_warnings(config),
+        'source': OlivOSAIChatAssassin.data.gData.config_source(bot_hash),
+        'extra_fields': _extra_config_fields(config),
+        'known_fields': list(OlivOSAIChatAssassin.data.configDefault.keys()),
+    }
+
+
 def _add_field_error(errors, field, message):
     errors[field] = message
 
@@ -355,6 +395,35 @@ def _validate_string_list(value, field, errors):
     return result
 
 
+def _validate_extra_config_value(value, field, errors):
+    if value is None or type(value) in (bool, str, int):
+        return copy.deepcopy(value)
+    if type(value) is float:
+        if not math.isfinite(value):
+            _add_field_error(errors, field, '必须是有限数字')
+            return None
+        return value
+    if isinstance(value, list):
+        result = []
+        for index, item in enumerate(value):
+            result.append(
+                _validate_extra_config_value(item, f'{field}.{index}', errors)
+            )
+        return result
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            if not isinstance(key, str) or not key:
+                _add_field_error(errors, field, 'JSON 对象的键必须是非空字符串')
+                continue
+            result[key] = _validate_extra_config_value(
+                item, f'{field}.{key}', errors
+            )
+        return result
+    _add_field_error(errors, field, '必须是可序列化的 JSON 值')
+    return None
+
+
 def _validate_ocr_patch(value, errors):
     if not isinstance(value, dict):
         _add_field_error(errors, 'ocr_api', '必须是对象')
@@ -414,8 +483,11 @@ def _validate_config_patch(patch: dict):
     result = {}
     allowed = set(OlivOSAIChatAssassin.data.configDefault.keys())
     for key, value in patch.items():
+        if not isinstance(key, str) or not key:
+            _add_field_error(errors, str(key), '配置字段名必须是非空字符串')
+            continue
         if key not in allowed:
-            _add_field_error(errors, key, '不支持的配置项')
+            result[key] = _validate_extra_config_value(value, key, errors)
             continue
         if key == 'api_key':
             checked = _validate_string(value, key, errors, allow_empty=True)
@@ -532,6 +604,27 @@ def _validate_config_patch(patch: dict):
                 result[key] = checked
     if errors:
         raise WebUIError('validation_error', '配置校验失败', errors)
+    return result
+
+
+def _validate_remove_fields(value):
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise WebUIError('validation_error', 'remove_fields 必须是列表')
+    errors = {}
+    result = []
+    known_fields = set(OlivOSAIChatAssassin.data.configDefault.keys())
+    for index, name in enumerate(value):
+        field = f'remove_fields.{index}'
+        if not isinstance(name, str) or not name:
+            _add_field_error(errors, field, '字段名必须是非空字符串')
+        elif name in known_fields:
+            _add_field_error(errors, field, '不能删除插件内置配置项')
+        elif name not in result:
+            result.append(name)
+    if errors:
+        raise WebUIError('validation_error', '额外字段删除参数无效', errors)
     return result
 
 
@@ -1001,13 +1094,7 @@ def _handle_bootstrap(payload, Proc):
 def _handle_get_config(payload, Proc):
     bot_hash, _bot_info = _require_bot(Proc, payload)
     config, revision = OlivOSAIChatAssassin.data.gData.snapshot_config(bot_hash)
-    public_config, secrets = _public_config(config)
-    return _ok({
-        'config': public_config,
-        'secrets': secrets,
-        'warnings': _config_warnings(config),
-        'source': OlivOSAIChatAssassin.data.gData.config_source(bot_hash),
-    }, revision)
+    return _ok(_config_payload(config, bot_hash), revision)
 
 
 def _handle_save_config(payload, Proc):
@@ -1023,6 +1110,7 @@ def _handle_save_config(payload, Proc):
             {'expected_revision': '必须是当前配置 revision'},
         )
     clean_patch = _validate_config_patch(patch)
+    remove_fields = _validate_remove_fields(payload.get('remove_fields'))
     clear_secrets = _validate_clear_secrets(payload.get('clear_secrets'), clean_patch)
     try:
         config, revision = OlivOSAIChatAssassin.data.gData.update_bot_config(
@@ -1030,6 +1118,7 @@ def _handle_save_config(payload, Proc):
             clean_patch,
             expected_revision,
             clear_secrets,
+            remove_fields,
         )
     except OlivOSAIChatAssassin.load.DataRevisionConflict as exc:
         raise WebUIError(
@@ -1037,13 +1126,7 @@ def _handle_save_config(payload, Proc):
             '配置文件已被其他操作修改，请刷新后重试',
             {'current_revision': exc.current_revision},
         )
-    public_config, secrets = _public_config(config)
-    return _ok({
-        'config': public_config,
-        'secrets': secrets,
-        'warnings': _config_warnings(config),
-        'source': OlivOSAIChatAssassin.data.gData.config_source(bot_hash),
-    }, revision)
+    return _ok(_config_payload(config, bot_hash), revision)
 
 
 def _memory_group_index_entries(memory, group_keys):

@@ -400,7 +400,8 @@ class DataManager:
         bot_hash: str,
         patch: dict,
         expected_revision: str,
-        clear_secrets=None
+        clear_secrets=None,
+        remove_fields=None
     ):
         self.getConfig(bot_hash)
         with self._config_lock:
@@ -413,6 +414,11 @@ class DataManager:
                 raise DataRevisionConflict(current_revision)
 
             new_config = self._deep_merge(self.config[bot_hash], patch)
+            for field, value in patch.items():
+                if field not in self.default_config:
+                    new_config[field] = copy.deepcopy(value)
+            for field in remove_fields or []:
+                new_config.pop(field, None)
             for secret_path in clear_secrets or []:
                 self._clear_path(new_config, secret_path)
 
