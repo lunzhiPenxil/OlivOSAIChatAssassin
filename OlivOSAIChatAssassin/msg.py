@@ -13,6 +13,14 @@ import OlivOS
 import OlivOSAIChatAssassin
 
 
+REPLY_FORMAT_RULES = '''
+- 只输出一个合法 JSON 对象，禁止输出 Markdown 代码块、解释、前后缀或纯文本回复
+- 顶层只能包含 "r" 字段，值为字符串数组，例如 {"r": ["消息一", "消息二"]}
+- 即使只回复一条消息也必须使用数组；不回复时只输出 {"r": []}
+- 纯文本、解释或格式不完整的输出会被丢弃并重试，不能作为群聊消息发送
+'''.strip()
+
+
 def _get_retry_count(lConfig) -> int:
     default = OlivOSAIChatAssassin.data.configDefault['retry_count']
     try:
@@ -587,6 +595,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
 
 # 当前任务
 ## 将回复内容输出至r的值中
+{REPLY_FORMAT_RULES}
 - 即便思考也要保证Json格式输出的完整，任何时候都要保证Json格式输出的完整
 - 当你不想参与对话时，你会令r的值的列表为空，这是你必须遵守的规则，你不需要每句话都回复，你需要按照你的心情来，但是当有人找你时尽量回复
 - 判断是否应该加入聊天进行回复
@@ -749,25 +758,50 @@ def img_handler(entry_data: dict, patch_data: dict[str, dict]) -> Tuple[dict, di
     return entry_res, patch_res
 
 
+def _unwrap_fenced_text(data_str: str) -> str:
+    text = data_str.strip().lstrip('\ufeff').strip()
+    if not text.startswith('```'):
+        return text
+    lines = text.splitlines()
+    if len(lines) >= 3 and lines[-1].strip() == '```':
+        return '\n'.join(lines[1:-1]).strip()
+    return text
+
+
 def get_json_message(data_str: str):
-    res_list = []
-    try:
-        data_dict = json.loads(data_str)
-        if (
-            type(data_dict) is dict
-            and 'r' in data_dict
-            and type(data_dict['r']) is list
-        ):
-            for i in data_dict['r']:
-                res_list.append(i)
-            OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
-        else:
-            res_list = None
-            OlivOSAIChatAssassin.logger.warn(f'DATA TYPE ERR: {data_str}')
-    except Exception:
-        res_list = None
+    if not isinstance(data_str, str):
+        return None
+    text = _unwrap_fenced_text(data_str)
+    if not text:
         OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {data_str}')
-    return res_list
+        return None
+    decoder = json.JSONDecoder()
+    flag_json_parsed = False
+    candidates = [text]
+    json_start = text.find('{')
+    while json_start >= 0:
+        candidates.append(text[json_start:])
+        json_start = text.find('{', json_start + 1)
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            data_dict, _end = decoder.raw_decode(candidate)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+        flag_json_parsed = True
+        reply_list = data_dict.get('r') if isinstance(data_dict, dict) else None
+        if (
+            isinstance(reply_list, list)
+            and all(isinstance(item, str) for item in reply_list)
+        ):
+            OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
+            return list(reply_list)
+    if flag_json_parsed:
+        OlivOSAIChatAssassin.logger.warn(f'DATA TYPE ERR: {data_str}')
+    else:
+        OlivOSAIChatAssassin.logger.warn(f'DATA ERR: {data_str}')
+    return None
 
 
 def send_message_force(bot_hash, send_type, target_id, message):
