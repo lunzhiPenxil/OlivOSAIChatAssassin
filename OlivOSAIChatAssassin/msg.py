@@ -13,6 +13,162 @@ import OlivOS
 import OlivOSAIChatAssassin
 
 
+def _get_retry_count(lConfig) -> int:
+    default = OlivOSAIChatAssassin.data.configDefault['retry_count']
+    try:
+        retry_count = int(lConfig.get('retry_count', default))
+    except (TypeError, ValueError):
+        retry_count = default
+    return max(1, retry_count)
+
+
+def _wait_retry_backoff(group_id: str, retry_delay: float) -> bool:
+    group_lock = OlivOSAIChatAssassin.data.gGroupLock.get(group_id)
+    wait_for_competitor = getattr(group_lock, 'wait_for_competitor', None)
+    if callable(wait_for_competitor):
+        OlivOSAIChatAssassin.logger.log(f'WAIT - {retry_delay:.2f} s')
+        return wait_for_competitor(retry_delay)
+    OlivOSAIChatAssassin.tools.sleep(retry_delay)
+    return False
+
+
+def _update_memory_from_ai_data(memory_data: dict, group_id: str, call_ai_data) -> bool:
+    if not isinstance(call_ai_data, dict):
+        OlivOSAIChatAssassin.logger.warn(
+            f'MEMORY FORMAT ERR - expected object, got {type(call_ai_data).__name__}'
+        )
+        return False
+
+    global_memory = memory_data.get('全局')
+    if global_memory is None:
+        global_memory = {}
+        memory_data['全局'] = global_memory
+    elif not isinstance(global_memory, dict):
+        OlivOSAIChatAssassin.logger.warn('MEMORY FORMAT ERR - 全局 is not an object')
+        return False
+
+    flag_changed = False
+    section_defs = (
+        ('k', '知识缓存', '[更新知识]'),
+        ('u', '用户侧写', '[更新侧写]'),
+    )
+    for payload_key, section_key, log_prefix in section_defs:
+        values = call_ai_data.get(payload_key)
+        if not isinstance(values, dict):
+            if payload_key in call_ai_data:
+                OlivOSAIChatAssassin.logger.warn(
+                    f'MEMORY FORMAT ERR - {payload_key} is not an object'
+                )
+            continue
+        section = global_memory.get(section_key)
+        if section is None:
+            section = {}
+            global_memory[section_key] = section
+            flag_changed = True
+        elif not isinstance(section, dict):
+            OlivOSAIChatAssassin.logger.warn(
+                f'MEMORY FORMAT ERR - {section_key} is not an object'
+            )
+            continue
+        for key, value in values.items():
+            if not isinstance(key, str) or not isinstance(value, str):
+                continue
+            if section.get(key) != value:
+                section[key] = value
+                flag_changed = True
+            OlivOSAIChatAssassin.logger.log(f'{log_prefix} - {key}\n{value}')
+
+    group_memory_data = call_ai_data.get('g')
+    if isinstance(group_memory_data, str) and group_memory_data.strip():
+        if memory_data.get(group_id) != group_memory_data:
+            memory_data[group_id] = group_memory_data
+            flag_changed = True
+        OlivOSAIChatAssassin.logger.log(f'[本群记忆]\n{group_memory_data}')
+    elif 'g' in call_ai_data:
+        OlivOSAIChatAssassin.logger.warn('MEMORY FORMAT ERR - g is not a non-empty string')
+
+    if not flag_changed:
+        OlivOSAIChatAssassin.logger.warn('MEMORY - NO VALID UPDATE')
+    return flag_changed
+
+
+def get_reply_list_with_retry(bot_hash: str, group_id: str, messages: list, messages_first_think: list):
+    lConfig = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+    retry_count = _get_retry_count(lConfig)
+    reply_list = None
+    reply_count = 0
+    flag_disable_thinking = False
+    flag_retry_canceled = False
+    last_failure = None
+
+    while reply_list is None and reply_count < retry_count:
+        reply_count += 1
+        OlivOSAIChatAssassin.logger.log(f'CALL AI - TRY [{reply_count}/{retry_count}]')
+        first_thinking = lConfig.get(
+            'first_thinking', OlivOSAIChatAssassin.data.configDefault['first_thinking']
+        )
+        flag_need_think = True
+        try:
+            if (
+                first_thinking is True
+                and OlivOSAIChatAssassin.tools.get_think(bot_hash, group_id)
+            ):
+                flag_need_think = False
+                first_thinking_res = OlivOSAIChatAssassin.webTools.call_ai(
+                    lConfig, messages_first_think,
+                    flag_thinking_override=False
+                )
+                first_thinking_str = str(first_thinking_res).upper()
+                if 'NEXT' in first_thinking_str:
+                    flag_need_think = True
+                elif 'SKIP' in first_thinking_str:
+                    flag_need_think = False
+                    reply_list = []
+                else:
+                    flag_need_think = True
+                if flag_need_think:
+                    OlivOSAIChatAssassin.logger.log(f'FIRST THINK - PASS - {first_thinking_res}')
+                else:
+                    OlivOSAIChatAssassin.logger.log(f'FIRST THINK - SKIP - {first_thinking_res}')
+                    reply_list = []
+
+            if flag_need_think:
+                call_kwargs = {'response_format_override': {'type': 'json_object'}}
+                if flag_disable_thinking:
+                    call_kwargs['flag_thinking_override'] = False
+                ai_res = OlivOSAIChatAssassin.webTools.call_ai(lConfig, messages, **call_kwargs)
+                reply_list = get_json_message(ai_res)
+                if reply_list is None:
+                    raise OlivOSAIChatAssassin.webTools.AICallFailure(
+                        'invalid reply JSON',
+                        retryable=True,
+                        kind='invalid_reply_json'
+                    )
+        except OlivOSAIChatAssassin.webTools.AICallFailure as exc:
+            last_failure = exc
+            if exc.kind in ('empty_content', 'incomplete', 'invalid_reply_json'):
+                flag_disable_thinking = True
+            if not exc.retryable or reply_count >= retry_count:
+                break
+            retry_delay = OlivOSAIChatAssassin.webTools.get_retry_delay(reply_count, exc.retry_after)
+            OlivOSAIChatAssassin.logger.warn(
+                f'API RETRY - [{reply_count + 1}/{retry_count}] wait {retry_delay:.2f} s - {exc}'
+            )
+            if _wait_retry_backoff(group_id, retry_delay):
+                flag_retry_canceled = True
+                OlivOSAIChatAssassin.logger.log('CALL AI - RETRY CANCELED - new message arrived')
+                break
+        except Exception as exc:
+            last_failure = exc
+            break
+
+    if flag_retry_canceled:
+        return None
+    if reply_list is None and last_failure is not None:
+        OlivOSAIChatAssassin.logger.warn(f'API FATAL: {last_failure}')
+    return reply_list
+
+
 def unity_group_message(plugin_event: OlivOS.API.Event, Proc):
     # 群消息事件入口
     group_id = str(plugin_event.data.group_id)
@@ -256,53 +412,25 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
                 reasoning_effort_override="max",
                 response_format_override={"type": "json_object"}
             )
+        except OlivOSAIChatAssassin.webTools.AICallFailure as exc:
+            OlivOSAIChatAssassin.logger.warn(f'MEMORY API ERR: {exc}')
+            return
+        try:
             call_ai_data = json.loads(call_ai_res)
-            knowledge_data: 'dict|None' = None
-            user_data: 'dict|None' = None
-            group_memory_data: 'str|None' = None
+        except (json.JSONDecodeError, TypeError) as exc:
+            OlivOSAIChatAssassin.logger.warn(f'MEMORY FORMAT ERR: {exc}')
+            return
+        try:
             with OlivOSAIChatAssassin.data.gMemoryLock:
-                if '全局' not in OlivOSAIChatAssassin.data.gData.getMemory(bot_hash):
-                    OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局'] = {}
-                if (
-                    'k' in call_ai_data
-                    and type(call_ai_data['k']) is dict
-                ):
-                    knowledge_data = call_ai_data['k']
-                if '知识缓存' not in OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局']:
-                    OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局']['知识缓存'] = {}
-                for k, v in knowledge_data.items():
-                    if (
-                        type(k) is str
-                        and type(v) is str
-                    ):
-                        OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局']['知识缓存'][k] = v
-                        OlivOSAIChatAssassin.logger.log(f'[更新知识] - {k}\n{v}')
-                if (
-                    'u' in call_ai_data
-                    and type(call_ai_data['u']) is dict
-                ):
-                    user_data = call_ai_data['u']
-                if '用户侧写' not in OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局']:
-                    OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局']['用户侧写'] = {}
-                for k, v in user_data.items():
-                    if (
-                        type(k) is str
-                        and type(v) is str
-                    ):
-                        OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)['全局']['用户侧写'][k] = v
-                        OlivOSAIChatAssassin.logger.log(f'[更新侧写] - {k}\n{v}')
-                if (
-                    'g' in call_ai_data
-                    and type(call_ai_data['g']) is str
-                ):
-                    group_memory_data = call_ai_data['g']
-                OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)[group_id] = group_memory_data
-                OlivOSAIChatAssassin.logger.log(
-                    f'[本群记忆]\n{OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)[group_id]}'
+                flag_memory_changed = _update_memory_from_ai_data(
+                    OlivOSAIChatAssassin.data.gData.getMemory(bot_hash),
+                    group_id,
+                    call_ai_data
                 )
-            OlivOSAIChatAssassin.load.write_memory(bot_hash=bot_hash)
-        except Exception as e:
-            OlivOSAIChatAssassin.logger.warn(f'API FATAL: {e}')
+            if flag_memory_changed:
+                OlivOSAIChatAssassin.load.write_memory(bot_hash=bot_hash)
+        except Exception as exc:
+            OlivOSAIChatAssassin.logger.warn(f'MEMORY UPDATE ERR: {exc}')
 
     # 设置任务
     thisMemoryC = {}
@@ -510,54 +638,9 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
         patch=messages_first_think_patch
     )
     # 调用 API
-    reply_list = None
-    reply_count = 0
-    retry_count = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get(
-        "retry_count", OlivOSAIChatAssassin.data.configDefault["retry_count"]
+    reply_list = get_reply_list_with_retry(
+        bot_hash, group_id, messages, messages_first_think
     )
-    try:
-        while (
-            reply_list is None
-            and reply_count < retry_count
-        ):
-            reply_count += 1
-            OlivOSAIChatAssassin.logger.log(f"CALL AI - TRY [{reply_count}/{retry_count}]")
-            first_thinking = (
-                OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
-                .get('first_thinking', OlivOSAIChatAssassin.data.configDefault['first_thinking'])
-            )
-            flag_need_think = True
-            if (
-                first_thinking is True
-                and OlivOSAIChatAssassin.tools.get_think(bot_hash, group_id)
-            ):
-                flag_need_think = False
-                first_thinking_res = OlivOSAIChatAssassin.webTools.call_ai(
-                    OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages_first_think,
-                    flag_thinking_override=False
-                )
-                first_thinking_str = str(first_thinking_res).upper()
-                if 'NEXT' in first_thinking_str:
-                    flag_need_think = True
-                elif 'SKIP' in first_thinking_str:
-                    flag_need_think = False
-                    reply_list = []
-                else:
-                    flag_need_think = True
-                if flag_need_think:
-                    OlivOSAIChatAssassin.logger.log(f"FIRST THINK - PASS - {first_thinking_res}")
-                else:
-                    OlivOSAIChatAssassin.logger.log(f"FIRST THINK - SKIP - {first_thinking_res}")
-                    reply_list = []
-            if flag_need_think:
-                reply_list = get_json_message(
-                    OlivOSAIChatAssassin.webTools.call_ai(
-                        OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), messages,
-                        response_format_override={"type": "json_object"}
-                    )
-                )
-    except Exception as e:
-        OlivOSAIChatAssassin.logger.warn(f'API FATAL: {e}')
     # 发送回复
     if reply_list is None:
         OlivOSAIChatAssassin.logger.log('NONE')

@@ -87,6 +87,23 @@ class SlackableFairLock:
         with self._lock:
             return self._isLast()
 
+    def wait_for_competitor(self, timeout: float) -> bool:
+        try:
+            timeout = max(0.0, float(timeout))
+        except (TypeError, ValueError):
+            timeout = 0.0
+        with self._lock:
+            if not self._held:
+                raise RuntimeError("wait for competitor on unlocked lock")
+            deadline = time.perf_counter() + timeout
+            while self._count <= 1:
+                remaining = deadline - time.perf_counter()
+                if remaining <= 0:
+                    return False
+                self._cond_slack.wait(timeout=remaining)
+            self._slack_count *= 2
+            return True
+
     def _getRemaining(self):
         now_timestamp = time.perf_counter()
         return float(

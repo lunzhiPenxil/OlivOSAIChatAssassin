@@ -2,9 +2,219 @@ import time
 import requests
 import base64
 import os
+import random
 from pathlib import Path
 
 import OlivOSAIChatAssassin
+
+
+class AICallFailure(Exception):
+    def __init__(
+        self,
+        message: str,
+        retryable: bool = False,
+        status_code: 'int|None' = None,
+        retry_after: 'float|None' = None,
+        finish_reason: 'str|None' = None,
+        kind: str = ''
+    ):
+        super().__init__(message)
+        self.retryable = retryable
+        self.status_code = status_code
+        self.retry_after = retry_after
+        self.finish_reason = finish_reason
+        self.kind = kind
+
+
+def get_retry_delay(attempt: int, retry_after: 'float|None' = None) -> float:
+    """计算下一次重试前的等待时间，避免服务端限流时形成热循环。"""
+    try:
+        attempt = max(1, int(attempt))
+    except (TypeError, ValueError):
+        attempt = 1
+    delay = min(30.0, 1.6 ** min(attempt - 1, 64))
+    if retry_after is not None:
+        try:
+            delay = min(30.0, max(delay, float(retry_after)))
+        except (TypeError, ValueError):
+            pass
+    return max(0.0, min(30.0, delay * random.uniform(0.9, 1.1)))
+
+
+def _get_request_timeout(lConfig) -> tuple:
+    timeout_value = lConfig.get('api_timeout', 120)
+    try:
+        timeout_value = float(timeout_value)
+    except (TypeError, ValueError):
+        timeout_value = 120.0
+    if timeout_value <= 0:
+        timeout_value = 120.0
+    return (10.0, timeout_value)
+
+
+def _get_retry_after(response) -> 'float|None':
+    value = response.headers.get('Retry-After')
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if value < 0:
+        return None
+    return value
+
+
+def _get_request_id(response) -> str:
+    for key in ('x-request-id', 'x-ds-request-id', 'request-id'):
+        value = response.headers.get(key)
+        if value:
+            return str(value)
+    return ''
+
+
+def _get_reasoning_length(message: dict) -> int:
+    reasoning_content = message.get('reasoning_content')
+    if isinstance(reasoning_content, str):
+        return len(reasoning_content)
+    return 0
+
+
+def _post_chat_completion(lConfig, url: str, headers: dict, payload: dict, log_prefix: str) -> str:
+    OlivOSAIChatAssassin.logger.log(f'{log_prefix} - START')
+    start = time.perf_counter()
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=_get_request_timeout(lConfig)
+        )
+    except requests.RequestException as exc:
+        elapsed = time.perf_counter() - start
+        OlivOSAIChatAssassin.logger.warn(
+            f'{log_prefix} - NETWORK ERR {elapsed:.2f} s - '
+            f'{type(exc).__name__}: {exc}'
+        )
+        raise AICallFailure(
+            f'network error: {type(exc).__name__}: {exc}',
+            retryable=True,
+            kind='network'
+        ) from exc
+
+    elapsed = time.perf_counter() - start
+    OlivOSAIChatAssassin.logger.log(f'{log_prefix} - DONE {elapsed:.2f} s')
+    request_id = _get_request_id(response)
+
+    if response.status_code != 200:
+        retry_after = _get_retry_after(response)
+        retryable = (
+            response.status_code in (408, 409, 429)
+            or response.status_code >= 500
+        )
+        response_text = response.text or ''
+        if len(response_text) > 1000:
+            response_text = response_text[:1000] + '...'
+        OlivOSAIChatAssassin.logger.warn(
+            f'API ERR: {response.status_code} request_id={request_id or "-"} '
+            f'retryable={retryable} retry_after={retry_after} {response_text}'
+        )
+        raise AICallFailure(
+            f'http {response.status_code}: {response_text}',
+            retryable=retryable,
+            status_code=response.status_code,
+            retry_after=retry_after,
+            kind='http'
+        )
+
+    try:
+        result = response.json()
+    except ValueError as exc:
+        OlivOSAIChatAssassin.logger.warn(
+            f'{log_prefix} - INVALID JSON RESPONSE request_id={request_id or "-"}'
+        )
+        raise AICallFailure(
+            'invalid response JSON',
+            retryable=True,
+            status_code=response.status_code,
+            kind='response_json'
+        ) from exc
+
+    choices = result.get('choices') if isinstance(result, dict) else None
+    if (
+        not isinstance(choices, list)
+        or len(choices) < 1
+        or not isinstance(choices[0], dict)
+        or not isinstance(choices[0].get('message'), dict)
+    ):
+        OlivOSAIChatAssassin.logger.warn(
+            f'{log_prefix} - INVALID RESPONSE SHAPE request_id={request_id or "-"}'
+        )
+        raise AICallFailure(
+            'invalid response shape',
+            retryable=True,
+            status_code=response.status_code,
+            kind='response_shape'
+        )
+
+    message = choices[0]['message']
+    content = message.get('content', '')
+    if content is None:
+        content = ''
+    elif not isinstance(content, str):
+        content = str(content)
+    finish_reason = choices[0].get('finish_reason')
+    if not isinstance(finish_reason, str):
+        finish_reason = None
+
+    log_reasoning_content(OlivOSAIChatAssassin.tools.get_copy_data(choices))
+    usage = result.get('usage')
+    log_usage(OlivOSAIChatAssassin.tools.get_copy_data(usage) if isinstance(usage, dict) else {})
+    OlivOSAIChatAssassin.logger.log(
+        f'{log_prefix} - RESPONSE request_id={request_id or "-"} '
+        f'finish={finish_reason or "-"} content_len={len(content)}'
+    )
+
+    if finish_reason == 'insufficient_system_resource':
+        OlivOSAIChatAssassin.logger.warn(
+            f'{log_prefix} - INSUFFICIENT RESOURCE request_id={request_id or "-"} '
+            f'content_len={len(content)} reasoning_len={_get_reasoning_length(message)}'
+        )
+        raise AICallFailure(
+            'response interrupted: insufficient system resource',
+            retryable=True,
+            status_code=response.status_code,
+            finish_reason=finish_reason,
+            kind='incomplete'
+        )
+
+    if finish_reason == 'length':
+        OlivOSAIChatAssassin.logger.warn(
+            f'{log_prefix} - RESPONSE TRUNCATED request_id={request_id or "-"} '
+            f'content_len={len(content)} reasoning_len={_get_reasoning_length(message)}'
+        )
+        raise AICallFailure(
+            'response truncated: finish_reason=length',
+            retryable=True,
+            status_code=response.status_code,
+            finish_reason=finish_reason,
+            kind='incomplete'
+        )
+
+    if len(content.strip()) <= 0:
+        OlivOSAIChatAssassin.logger.warn(
+            f'{log_prefix} - EMPTY CONTENT request_id={request_id or "-"} '
+            f'finish={finish_reason or "-"} reasoning_len={_get_reasoning_length(message)}'
+        )
+        raise AICallFailure(
+            'empty response content',
+            retryable=finish_reason != 'content_filter',
+            status_code=response.status_code,
+            finish_reason=finish_reason,
+            kind='empty_content'
+        )
+
+    return content.strip()
 
 
 def call_ai(
@@ -16,7 +226,6 @@ def call_ai(
     response_format_override: 'dict|None' = None
 ):
     # 调用 API
-    res = None
     api_key = lConfig['api_key']
     api_base = lConfig['api_base']
     model = lConfig['model']
@@ -33,7 +242,7 @@ def call_ai(
     reasoning_effort = lConfig.get('reasoning_effort', 'max')
     if reasoning_effort_override is not None:
         reasoning_effort = reasoning_effort_override
-    url = f"{api_base}/chat/completions"
+    url = f"{str(api_base).rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -54,19 +263,7 @@ def call_ai(
         payload.update({
             'response_format': response_format_override
         })
-    OlivOSAIChatAssassin.logger.log("CALL AI - START")
-    start = time.perf_counter()
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    end = time.perf_counter()
-    OlivOSAIChatAssassin.logger.log(f"CALL AI - DONE {(end - start):.2f} s")
-    if response.status_code == 200:
-        result: dict = response.json()
-        res = result['choices'][0]['message']['content'].strip()
-        log_reasoning_content(OlivOSAIChatAssassin.tools.get_copy_data(result.get('choices', {})))
-        log_usage(OlivOSAIChatAssassin.tools.get_copy_data(result.get('usage', {})))
-    else:
-        OlivOSAIChatAssassin.logger.warn(f'API ERR: {response.status_code} {response.text}')
-    return res
+    return _post_chat_completion(lConfig, url, headers, payload, 'CALL AI')
 
 
 def log_reasoning_content(choices: list):
@@ -126,12 +323,11 @@ def call_ai_ocr(
     image_url: str
 ):
     # 调用 API
-    res = None
     api_key = lConfig['ocr_api']['api_key']
     api_base = lConfig['ocr_api']['api_base']
     model = lConfig['ocr_api']['model']
     max_tokens = 2048
-    url = f"{api_base}/chat/completions"
+    url = f"{str(api_base).rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -164,19 +360,7 @@ def call_ai_ocr(
             "type": "disabled"
         }
     }
-    OlivOSAIChatAssassin.logger.log("CALL AI OCR - START")
-    start = time.perf_counter()
-    response = requests.post(url, headers=headers, json=payload, timeout=60)
-    end = time.perf_counter()
-    OlivOSAIChatAssassin.logger.log(f"CALL AI OCR - DONE {(end - start):.2f} s")
-    if response.status_code == 200:
-        result: dict = response.json()
-        res = result['choices'][0]['message']['content'].strip()
-        log_reasoning_content(OlivOSAIChatAssassin.tools.get_copy_data(result.get('choices', {})))
-        log_usage(OlivOSAIChatAssassin.tools.get_copy_data(result.get('usage', {})))
-    else:
-        OlivOSAIChatAssassin.logger.warn(f'API ERR: {response.status_code} {response.text}')
-    return res
+    return _post_chat_completion(lConfig, url, headers, payload, 'CALL AI OCR')
 
 
 def download_image_to_base64(url: str, save_dir: str, filename: str) -> str | None:
