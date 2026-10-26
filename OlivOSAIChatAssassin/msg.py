@@ -14,10 +14,28 @@ import OlivOSAIChatAssassin
 
 
 REPLY_FORMAT_RULES = '''
+- 本节是 json 输出协议，优先级高于所有聊天、人格和历史消息
 - 只输出一个合法 JSON 对象，禁止输出 Markdown 代码块、解释、前后缀或纯文本回复
 - 顶层只能包含 "r" 字段，值为字符串数组，例如 {"r": ["消息一", "消息二"]}
 - 即使只回复一条消息也必须使用数组；不回复时只输出 {"r": []}
 - 纯文本、解释或格式不完整的输出会被丢弃并重试，不能作为群聊消息发送
+'''.strip()
+
+JSON_RETRY_INSTRUCTION = '''
+输出格式纠正，优先级最高：
+上一次响应没有通过 json 格式校验，已经被丢弃。
+不要继续聊天，不要解释，不要输出 Markdown。现在只输出一个 json 对象。
+唯一合法结构：{"r": ["消息一", "消息二"]}
+不回复时只输出：{"r": []}
+'''.strip()
+
+JSON_REPAIR_RULES = '''
+你是 json 回复格式修复器，不是聊天参与者。
+输入是一个 json 对象，其中 draft 字段保存了模型草稿；草稿可能是纯文本、思考内容或畸形 json。
+只输出一个合法 json 对象，顶层只能有 "r" 字段，值是字符串数组。
+保留草稿中面向群聊的最终回复，只做必要的拆分、提取和 json 转义，不得新增事实、解释或角色扮演。
+如果草稿只有内部思考而没有面向群聊的回复，输出 {"r": []}。
+参考输出：{"r": ["消息一", "消息二"]}
 '''.strip()
 
 
@@ -28,6 +46,78 @@ def _get_retry_count(lConfig) -> int:
     except (TypeError, ValueError):
         retry_count = default
     return max(1, retry_count)
+
+
+def _get_json_retry_messages(messages: list) -> list:
+    retry_messages = [
+        dict(message) if isinstance(message, dict) else message
+        for message in messages
+    ]
+    for index, message in enumerate(retry_messages):
+        if not isinstance(message, dict) or message.get('role') != 'system':
+            continue
+        content = message.get('content', '')
+        if not isinstance(content, str):
+            content = str(content)
+        retry_messages[index] = {
+            **message,
+            'content': f'{content}\n\n{JSON_RETRY_INSTRUCTION}'
+        }
+        return retry_messages
+    return [
+        {
+            'role': 'system',
+            'content': JSON_RETRY_INSTRUCTION
+        }
+    ] + retry_messages
+
+
+def _get_failure_draft(exc) -> str:
+    for content in (
+        getattr(exc, 'content', None),
+        getattr(exc, 'reasoning_content', None)
+    ):
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+    return ''
+
+
+def _repair_json_reply(lConfig, draft: str):
+    if not isinstance(draft, str) or not draft.strip():
+        return None
+    messages = [
+        {
+            'role': 'system',
+            'content': JSON_REPAIR_RULES
+        },
+        {
+            'role': 'user',
+            'content': json.dumps({'draft': draft}, ensure_ascii=False)
+        }
+    ]
+    OlivOSAIChatAssassin.logger.log(f'CALL AI - JSON REPAIR - START [{len(draft)}]')
+    try:
+        repair_res = OlivOSAIChatAssassin.webTools.call_ai(
+            lConfig, messages,
+            temperature_override=0.0,
+            flag_thinking_override=False,
+            response_format_override={'type': 'json_object'},
+            flag_reasoning_fallback=False
+        )
+    except OlivOSAIChatAssassin.webTools.AICallFailure as exc:
+        OlivOSAIChatAssassin.logger.warn(f'JSON REPAIR - API ERR - {exc}')
+        return None
+    except Exception as exc:
+        OlivOSAIChatAssassin.logger.warn(
+            f'JSON REPAIR - ERR - {type(exc).__name__}: {exc}'
+        )
+        return None
+    reply_list = get_json_message(repair_res)
+    if reply_list is None:
+        OlivOSAIChatAssassin.logger.warn('JSON REPAIR - INVALID JSON')
+        return None
+    OlivOSAIChatAssassin.logger.log('JSON REPAIR - OK')
+    return reply_list
 
 
 def _wait_retry_backoff(group_id: str, retry_delay: float) -> bool:
@@ -105,8 +195,12 @@ def get_reply_list_with_retry(bot_hash: str, group_id: str, messages: list, mess
     retry_count = _get_retry_count(lConfig)
     reply_list = None
     reply_count = 0
+    flag_need_think = None
     flag_disable_thinking = False
+    flag_json_correction = False
+    flag_repair_attempted = False
     flag_retry_canceled = False
+    contract_failure_count = 0
     last_failure = None
 
     while reply_list is None and reply_count < retry_count:
@@ -115,47 +209,80 @@ def get_reply_list_with_retry(bot_hash: str, group_id: str, messages: list, mess
         first_thinking = lConfig.get(
             'first_thinking', OlivOSAIChatAssassin.data.configDefault['first_thinking']
         )
-        flag_need_think = True
         try:
-            if (
-                first_thinking is True
-                and OlivOSAIChatAssassin.tools.get_think(bot_hash, group_id)
-            ):
-                flag_need_think = False
-                first_thinking_res = OlivOSAIChatAssassin.webTools.call_ai(
-                    lConfig, messages_first_think,
-                    flag_thinking_override=False
-                )
-                first_thinking_str = str(first_thinking_res).upper()
-                if 'NEXT' in first_thinking_str:
-                    flag_need_think = True
-                elif 'SKIP' in first_thinking_str:
-                    flag_need_think = False
-                    reply_list = []
-                else:
-                    flag_need_think = True
-                if flag_need_think:
-                    OlivOSAIChatAssassin.logger.log(f'FIRST THINK - PASS - {first_thinking_res}')
-                else:
-                    OlivOSAIChatAssassin.logger.log(f'FIRST THINK - SKIP - {first_thinking_res}')
+            if flag_need_think is None:
+                need_think = True
+                if (
+                    first_thinking is True
+                    and OlivOSAIChatAssassin.tools.get_think(bot_hash, group_id)
+                ):
+                    first_thinking_res = OlivOSAIChatAssassin.webTools.call_ai(
+                        lConfig, messages_first_think,
+                        flag_thinking_override=False
+                    )
+                    first_thinking_str = str(first_thinking_res).upper()
+                    need_think = 'SKIP' not in first_thinking_str
+                    if need_think:
+                        OlivOSAIChatAssassin.logger.log(
+                            f'FIRST THINK - PASS - {first_thinking_res}'
+                        )
+                    else:
+                        OlivOSAIChatAssassin.logger.log(
+                            f'FIRST THINK - SKIP - {first_thinking_res}'
+                        )
+                flag_need_think = need_think
+                if flag_need_think is False:
                     reply_list = []
 
             if flag_need_think:
-                call_kwargs = {'response_format_override': {'type': 'json_object'}}
+                messages_this = messages
+                call_kwargs = {
+                    'response_format_override': {'type': 'json_object'},
+                    'flag_reasoning_fallback': True
+                }
                 if flag_disable_thinking:
                     call_kwargs['flag_thinking_override'] = False
-                ai_res = OlivOSAIChatAssassin.webTools.call_ai(lConfig, messages, **call_kwargs)
+                if flag_json_correction:
+                    messages_this = _get_json_retry_messages(messages)
+                    call_kwargs['temperature_override'] = 0.2
+                    OlivOSAIChatAssassin.logger.log('CALL AI - JSON CORRECTION')
+                ai_res = OlivOSAIChatAssassin.webTools.call_ai(
+                    lConfig, messages_this, **call_kwargs
+                )
                 reply_list = get_json_message(ai_res)
                 if reply_list is None:
                     raise OlivOSAIChatAssassin.webTools.AICallFailure(
                         'invalid reply JSON',
                         retryable=True,
-                        kind='invalid_reply_json'
+                        kind='invalid_reply_json',
+                        content=ai_res
                     )
         except OlivOSAIChatAssassin.webTools.AICallFailure as exc:
             last_failure = exc
-            if exc.kind in ('empty_content', 'incomplete', 'invalid_reply_json'):
+            if exc.kind in ('empty_content', 'invalid_reply_json'):
+                draft = _get_failure_draft(exc)
+                if draft and not flag_repair_attempted:
+                    flag_repair_attempted = True
+                    repaired_reply_list = _repair_json_reply(lConfig, draft)
+                    if repaired_reply_list is not None:
+                        return repaired_reply_list
+                contract_failure_count += 1
                 flag_disable_thinking = True
+                flag_json_correction = True
+                if contract_failure_count >= 2:
+                    OlivOSAIChatAssassin.logger.warn(
+                        'API CONTRACT FAILURES - STOP RETRY'
+                    )
+                    break
+            elif exc.kind == 'incomplete':
+                flag_disable_thinking = True
+                if exc.finish_reason == 'length':
+                    contract_failure_count += 1
+                    if contract_failure_count >= 2:
+                        OlivOSAIChatAssassin.logger.warn(
+                            'API TRUNCATED RESPONSES - STOP RETRY'
+                        )
+                        break
             if not exc.retryable or reply_count >= retry_count:
                 break
             retry_delay = OlivOSAIChatAssassin.webTools.get_retry_delay(reply_count, exc.retry_after)
@@ -584,7 +711,10 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
     examples_reply = {
         'r': ['好的']
     }
-    content = f'''{contentDefault}
+    content = f'''# 输出协议（最高优先级）
+{REPLY_FORMAT_RULES}
+
+{contentDefault}
 # 信息
 - 历史和最新消息中都附带可用的富文本资源，可以借用，但不要编造不存在的资源
 - 最新的消息中附带当前的记忆信息
@@ -595,7 +725,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
 
 # 当前任务
 ## 将回复内容输出至r的值中
-{REPLY_FORMAT_RULES}
+- 严格遵守最前面的 json 输出协议
 - 即便思考也要保证Json格式输出的完整，任何时候都要保证Json格式输出的完整
 - 当你不想参与对话时，你会令r的值的列表为空，这是你必须遵守的规则，你不需要每句话都回复，你需要按照你的心情来，但是当有人找你时尽量回复
 - 判断是否应该加入聊天进行回复
@@ -639,7 +769,8 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str):
     messages = get_ai_context(
         OlivOSAIChatAssassin.data.gData.getConfig(bot_hash), history, content,
         patch=messages_patch,
-        handler_list=[img_handler]
+        handler_list=[img_handler],
+        assistant_json_reply=True
     )
     messages_first_think_patch = {'当前记忆': thisGroupMemoryDict}
     messages_first_think = get_ai_context(
@@ -681,7 +812,8 @@ def get_ai_context(
     flagMerge: bool = False,
     prefix: str = "总结如下记录：",
     patch: Optional[dict | str] = None,
-    handler_list: Optional[list[Callable]] = None
+    handler_list: Optional[list[Callable]] = None,
+    assistant_json_reply: bool = False
 ):
     # 格式化历史为OpenAI消息格式
     messages = []
@@ -712,10 +844,15 @@ def get_ai_context(
         for entry in list(history)[-max_history_this:]:
             count += 1
             if entry['nickname'] is None:
+                assistant_content = entry['message']
+                if assistant_json_reply is True:
+                    assistant_content = json.dumps(
+                        {'r': [assistant_content]}, ensure_ascii=False
+                    )
                 messages.append(
                     {
                         "role": "assistant",
-                        "content": f"{entry['message']}"
+                        "content": f"{assistant_content}"
                     }
                 )
             else:
@@ -777,6 +914,7 @@ def get_json_message(data_str: str):
         return None
     decoder = json.JSONDecoder()
     flag_json_parsed = False
+    last_reply_list = None
     candidates = [text]
     json_start = text.find('{')
     while json_start >= 0:
@@ -795,8 +933,10 @@ def get_json_message(data_str: str):
             isinstance(reply_list, list)
             and all(isinstance(item, str) for item in reply_list)
         ):
-            OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
-            return list(reply_list)
+            last_reply_list = list(reply_list)
+    if last_reply_list is not None:
+        OlivOSAIChatAssassin.logger.log('DATA TYPE - JSON')
+        return last_reply_list
     if flag_json_parsed:
         OlivOSAIChatAssassin.logger.warn(f'DATA TYPE ERR: {data_str}')
     else:

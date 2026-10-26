@@ -16,7 +16,9 @@ class AICallFailure(Exception):
         status_code: 'int|None' = None,
         retry_after: 'float|None' = None,
         finish_reason: 'str|None' = None,
-        kind: str = ''
+        kind: str = '',
+        content: 'str|None' = None,
+        reasoning_content: 'str|None' = None
     ):
         super().__init__(message)
         self.retryable = retryable
@@ -24,6 +26,8 @@ class AICallFailure(Exception):
         self.retry_after = retry_after
         self.finish_reason = finish_reason
         self.kind = kind
+        self.content = content
+        self.reasoning_content = reasoning_content
 
 
 def get_retry_delay(attempt: int, retry_after: 'float|None' = None) -> float:
@@ -80,7 +84,14 @@ def _get_reasoning_length(message: dict) -> int:
     return 0
 
 
-def _post_chat_completion(lConfig, url: str, headers: dict, payload: dict, log_prefix: str) -> str:
+def _post_chat_completion(
+    lConfig,
+    url: str,
+    headers: dict,
+    payload: dict,
+    log_prefix: str,
+    flag_reasoning_fallback: bool = False
+) -> str:
     OlivOSAIChatAssassin.logger.log(f'{log_prefix} - START')
     start = time.perf_counter()
     try:
@@ -166,6 +177,9 @@ def _post_chat_completion(lConfig, url: str, headers: dict, payload: dict, log_p
     finish_reason = choices[0].get('finish_reason')
     if not isinstance(finish_reason, str):
         finish_reason = None
+    reasoning_content = message.get('reasoning_content')
+    if not isinstance(reasoning_content, str):
+        reasoning_content = ''
 
     log_reasoning_content(OlivOSAIChatAssassin.tools.get_copy_data(choices))
     usage = result.get('usage')
@@ -185,7 +199,9 @@ def _post_chat_completion(lConfig, url: str, headers: dict, payload: dict, log_p
             retryable=True,
             status_code=response.status_code,
             finish_reason=finish_reason,
-            kind='incomplete'
+            kind='incomplete',
+            content=content,
+            reasoning_content=reasoning_content
         )
 
     if finish_reason == 'length':
@@ -198,10 +214,22 @@ def _post_chat_completion(lConfig, url: str, headers: dict, payload: dict, log_p
             retryable=True,
             status_code=response.status_code,
             finish_reason=finish_reason,
-            kind='incomplete'
+            kind='incomplete',
+            content=content,
+            reasoning_content=reasoning_content
         )
 
     if len(content.strip()) <= 0:
+        if (
+            flag_reasoning_fallback
+            and finish_reason == 'stop'
+            and reasoning_content.strip()
+        ):
+            OlivOSAIChatAssassin.logger.warn(
+                f'{log_prefix} - EMPTY CONTENT - REASONING DRAFT '
+                f'request_id={request_id or "-"} reasoning_len={len(reasoning_content)}'
+            )
+            return reasoning_content.strip()
         OlivOSAIChatAssassin.logger.warn(
             f'{log_prefix} - EMPTY CONTENT request_id={request_id or "-"} '
             f'finish={finish_reason or "-"} reasoning_len={_get_reasoning_length(message)}'
@@ -211,7 +239,9 @@ def _post_chat_completion(lConfig, url: str, headers: dict, payload: dict, log_p
             retryable=finish_reason != 'content_filter',
             status_code=response.status_code,
             finish_reason=finish_reason,
-            kind='empty_content'
+            kind='empty_content',
+            content=content,
+            reasoning_content=reasoning_content
         )
 
     return content.strip()
@@ -223,7 +253,8 @@ def call_ai(
     temperature_override: 'float|None' = None,
     flag_thinking_override: 'bool|None' = None,
     reasoning_effort_override: 'str|None' = None,
-    response_format_override: 'dict|None' = None
+    response_format_override: 'dict|None' = None,
+    flag_reasoning_fallback: bool = False
 ):
     # 调用 API
     api_key = lConfig['api_key']
@@ -263,7 +294,10 @@ def call_ai(
         payload.update({
             'response_format': response_format_override
         })
-    return _post_chat_completion(lConfig, url, headers, payload, 'CALL AI')
+    return _post_chat_completion(
+        lConfig, url, headers, payload, 'CALL AI',
+        flag_reasoning_fallback=flag_reasoning_fallback
+    )
 
 
 def log_reasoning_content(choices: list):
