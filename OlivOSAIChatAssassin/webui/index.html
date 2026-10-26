@@ -2839,6 +2839,10 @@ noscript {
                                 <span>最大输出 Token</span>
                                 <input id="maxTokens" data-field="max_tokens" type="number" min="1" step="1" required>
                             </label>
+                            <label class="field" for="apiTimeout">
+                                <span>API 请求超时（秒）</span>
+                                <input id="apiTimeout" data-field="api_timeout" type="number" min="1" step="1" required>
+                            </label>
                             <label class="field" for="temperature">
                                 <span>Temperature</span>
                                 <input id="temperature" data-field="temperature" type="number" min="0" step="0.05" required>
@@ -3260,7 +3264,7 @@ noscript {
             'overviewAccount', 'overviewPlatform', 'overviewApi', 'overviewOcr', 'overviewGroups',
             'overviewKnowledge', 'overviewImageCache', 'overviewRevision', 'configForm', 'configErrors',
             'configWarnings', 'apiKey',
-            'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'temperature', 'thinkingEnabled',
+            'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'apiTimeout', 'temperature', 'thinkingEnabled',
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
             'recordKnowledge', 'mentionReply', 'replyProbability', 'retryCount',
             'searchKnowledgeDeepin', 'searchAgeing', 'maxMessageLength', 'enabledGroups',
@@ -4132,6 +4136,7 @@ noscript {
         setValue('apiBase', config.api_base);
         setValue('model', config.model);
         setValue('maxTokens', config.max_tokens);
+        setValue('apiTimeout', config.api_timeout);
         setValue('temperature', config.temperature);
         elements.thinkingEnabled.checked = thinking.type === 'enabled';
         setSelectValue('reasoningEffort', config.reasoning_effort, 'max');
@@ -4303,6 +4308,7 @@ noscript {
             api_base: function () { return elements.apiBase.value.trim(); },
             model: function () { return elements.model.value.trim(); },
             max_tokens: function () { return readInteger('maxTokens'); },
+            api_timeout: function () { return readNumber('apiTimeout'); },
             temperature: function () { return readNumber('temperature'); },
             thinking: function () {
                 return {type: elements.thinkingEnabled.checked ? 'enabled' : 'disabled'};

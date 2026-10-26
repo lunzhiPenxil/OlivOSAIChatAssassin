@@ -433,6 +433,10 @@ def _validate_config_patch(patch: dict):
             checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
+        elif key == 'api_timeout':
+            checked = _validate_number(value, key, errors, 1)
+            if checked is not None:
+                result[key] = checked
         elif key == 'temperature':
             checked = _validate_number(value, key, errors, 0)
             if checked is not None:

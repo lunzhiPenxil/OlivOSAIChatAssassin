@@ -46,6 +46,7 @@ configDefault = {
     'api_base': 'https://api.deepseek.com/v1',
     'model': 'deepseek-v4-flash',
     'max_tokens': 2048,
+    'api_timeout': 120,
     'temperature': 0.7,
     'thinking': {'type': 'disabled'},
     'reasoning_effort': 'max',
