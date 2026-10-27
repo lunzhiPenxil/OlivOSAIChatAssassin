@@ -254,13 +254,16 @@ def call_ai(
     flag_thinking_override: 'bool|None' = None,
     reasoning_effort_override: 'str|None' = None,
     response_format_override: 'dict|None' = None,
-    flag_reasoning_fallback: bool = False
+    flag_reasoning_fallback: bool = False,
+    max_tokens_override: 'int|None' = None,
 ):
     # 调用 API
     api_key = lConfig['api_key']
     api_base = lConfig['api_base']
     model = lConfig['model']
     max_tokens = lConfig.get('max_tokens', 1024)
+    if max_tokens_override is not None:
+        max_tokens = max_tokens_override
     temperature = lConfig.get('temperature', 0.7)
     thinking = lConfig.get('thinking', {'type': 'disabled'})
     if not (
