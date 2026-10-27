@@ -16,6 +16,7 @@ NAMESPACE = 'OlivOSAIChatAssassin'
 API_VERSION = 1
 
 EVENT_BOOTSTRAP = 'OlivOSAIChatAssassin_WebUI_Bootstrap'
+EVENT_ACTIVITY = 'OlivOSAIChatAssassin_WebUI_GetActivity'
 EVENT_GET_CONFIG = 'OlivOSAIChatAssassin_WebUI_GetConfig'
 EVENT_SAVE_CONFIG = 'OlivOSAIChatAssassin_WebUI_SaveConfig'
 EVENT_MEMORY_OVERVIEW = 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview'
@@ -1091,6 +1092,11 @@ def _handle_bootstrap(payload, Proc):
     })
 
 
+def _handle_activity(payload, Proc):
+    bot_hash, _bot_info = _require_bot(Proc, payload)
+    return _ok(OlivOSAIChatAssassin.activity.snapshot(bot_hash))
+
+
 def _handle_get_config(payload, Proc):
     bot_hash, _bot_info = _require_bot(Proc, payload)
     config, revision = OlivOSAIChatAssassin.data.gData.snapshot_config(bot_hash)
@@ -1726,6 +1732,7 @@ def _handle_save_memory(payload, Proc):
 
 _HANDLERS = {
     EVENT_BOOTSTRAP: _handle_bootstrap,
+    EVENT_ACTIVITY: _handle_activity,
     EVENT_GET_CONFIG: _handle_get_config,
     EVENT_SAVE_CONFIG: _handle_save_config,
     EVENT_MEMORY_OVERVIEW: _handle_memory_overview,

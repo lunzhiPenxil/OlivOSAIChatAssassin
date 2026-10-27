@@ -9,6 +9,7 @@ class Event:
 
     def init_after(plugin_event, Proc: OlivOS.pluginAPI.shallow):
         # 初始化后处理流程
+        OlivOSAIChatAssassin.activity.clear_all()
         bot_hash_list = list(Proc.Proc_data['bot_info_dict'].keys())
         OlivOSAIChatAssassin.load.load_init_after()
         OlivOSAIChatAssassin.load.load_logger(Proc)
@@ -29,7 +30,7 @@ class Event:
 
     def save(plugin_event, Proc):
         # 插件卸载时执行的保存流程
-        pass
+        OlivOSAIChatAssassin.activity.clear_all()
 
     def menu(plugin_event, Proc):
         # 插件菜单事件监听
