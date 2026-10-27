@@ -1030,14 +1030,14 @@ def _run_memory_extraction(
     group_id: str,
     activity_token=None,
     history_snapshot=None,
-) -> None:
+) -> str:
     start = time.perf_counter()
     if history_snapshot is None:
         history_snapshot = list(_get_history(bot_hash, group_id) or [])
     else:
         history_snapshot = list(history_snapshot)
     if not history_snapshot:
-        return
+        return activity.MEMORY_STATE_SKIPPED
     config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
     record_knowledge = config.get('record_knowledge', True)
     summary = (
@@ -1062,21 +1062,23 @@ def _run_memory_extraction(
         )
     except OlivOSAIChatAssassin.webTools.AICallFailure as exc:
         OlivOSAIChatAssassin.logger.warn(f'MEMORY API ERR: {exc}')
-        return
+        return activity.MEMORY_STATE_FAILED
     payload = _parse_memory_object(raw)
     if payload is None:
         OlivOSAIChatAssassin.logger.warn('MEMORY FORMAT ERR - one repair attempt')
         payload = _repair_memory_response(config, raw)
     if payload is None:
         OlivOSAIChatAssassin.logger.warn('MEMORY FORMAT ERR - preserve old values')
-        return
+        return activity.MEMORY_STATE_FAILED
     try:
         _apply_memory_data(bot_hash, group_id, payload, record_knowledge)
     except Exception as exc:
         OlivOSAIChatAssassin.logger.warn(f'MEMORY UPDATE ERR: {exc}')
+        return activity.MEMORY_STATE_FAILED
     OlivOSAIChatAssassin.logger.log(
         f'MEMORY EXTRACT - DONE {(time.perf_counter() - start):.2f} s'
     )
+    return activity.MEMORY_STATE_DONE
 
 
 class _MemoryTaskWorker:
@@ -1093,11 +1095,16 @@ class _MemoryTaskWorker:
         history_snapshot=None,
     ) -> int:
         key = _history_key(bot_hash, group_id)
+        replaced_tokens = []
         with self._condition:
-            if key in self._pending:
-                self._pending.pop(key, None)
+            replaced = self._pending.pop(key, None)
+            if replaced is not None:
+                replaced_tokens.append(replaced[0])
             elif len(self._pending) >= MEMORY_WORKER_QUEUE_LIMIT:
-                self._pending.pop(next(iter(self._pending)), None)
+                dropped_key = next(iter(self._pending))
+                dropped = self._pending.pop(dropped_key, None)
+                if dropped is not None:
+                    replaced_tokens.append(dropped[0])
             self._pending[key] = (
                 activity_token,
                 list(history_snapshot or []),
@@ -1114,7 +1121,14 @@ class _MemoryTaskWorker:
                 )
                 self._thread.start()
             self._condition.notify()
-            return len(self._pending)
+            queue_depth = len(self._pending)
+        for replaced_token in replaced_tokens:
+            if replaced_token is not None and replaced_token is not activity_token:
+                activity.memory_finished(
+                    replaced_token,
+                    activity.MEMORY_STATE_SKIPPED,
+                )
+        return queue_depth
 
     def queue_depth(self) -> int:
         with self._condition:
@@ -1128,17 +1142,21 @@ class _MemoryTaskWorker:
                 key = next(iter(self._pending))
                 activity_token, history_snapshot = self._pending.pop(key)
             bot_hash, group_id = key
+            memory_state = activity.MEMORY_STATE_FAILED
             try:
-                _run_memory_extraction(
+                memory_state = _run_memory_extraction(
                     bot_hash,
                     group_id,
                     activity_token,
                     history_snapshot=history_snapshot,
-                )
+                ) or activity.MEMORY_STATE_FAILED
             except Exception as exc:
                 OlivOSAIChatAssassin.logger.warn(
                     f'MEMORY WORKER - ERR [{type(exc).__name__}]'
                 )
+            finally:
+                if activity_token is not None:
+                    activity.memory_finished(activity_token, memory_state)
 
 
 _memory_worker = _MemoryTaskWorker()
@@ -1417,16 +1435,17 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
 
     # 自己的回复已经写入历史，立即冻结快照并并行启动记忆提炼。
     # worker 与拟人等待、实际发送并行，发送链路不 join 它。
-    memory_queue_depth = None
     try:
         memory_history_snapshot = list(_get_history(bot_hash, group_id) or [])
-        memory_queue_depth = _submit_memory_extraction(
+        activity.memory_started(activity_token)
+        _submit_memory_extraction(
             bot_hash,
             group_id,
             activity_token,
             history_snapshot=memory_history_snapshot,
         )
     except Exception as exc:
+        activity.memory_finished(activity_token, activity.MEMORY_STATE_FAILED)
         OlivOSAIChatAssassin.logger.warn(
             f'MEMORY WORKER - SUBMIT ERR [{type(exc).__name__}]'
         )
@@ -1438,14 +1457,6 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
         total_time_past=time.perf_counter() - total_start,
         activity_token=activity_token,
     )
-
-    if memory_queue_depth is not None:
-        activity.update(activity_token, stage=activity.STAGE_MEMORY_EXTRACT)
-        activity.note(
-            activity_token,
-            activity.STAGE_MEMORY_EXTRACT,
-            f'并行提炼中 · 队列 {memory_queue_depth}',
-        )
 
 
 def _get_history_role(entry: dict) -> str:

@@ -457,6 +457,112 @@ code {
     -webkit-line-clamp: 2;
 }
 
+.activity-parallel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: -2px 0 9px;
+    color: var(--muted);
+    font-size: 0.7rem;
+}
+
+.activity-parallel-label {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.activity-parallel-task {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 0.7rem;
+    line-height: 1.35;
+}
+
+.activity-parallel-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--muted);
+}
+
+.activity-parallel-name {
+    color: var(--text);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.activity-parallel-state {
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.activity-parallel-time {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.activity-parallel-task.is-running {
+    border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+    background: var(--accent-soft);
+}
+
+.activity-parallel-task.is-running .activity-parallel-dot {
+    background: var(--accent);
+    animation: activity-pulse 1800ms ease-in-out infinite;
+}
+
+.activity-parallel-task.is-running .activity-parallel-state {
+    color: var(--accent-strong);
+}
+
+.activity-parallel-task.is-done {
+    border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+    background: var(--success-soft);
+}
+
+.activity-parallel-task.is-done .activity-parallel-dot {
+    background: var(--success);
+}
+
+.activity-parallel-task.is-done .activity-parallel-state {
+    color: var(--success);
+}
+
+.activity-parallel-task.is-failed {
+    border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+    background: var(--danger-soft);
+}
+
+.activity-parallel-task.is-failed .activity-parallel-dot {
+    background: var(--danger);
+}
+
+.activity-parallel-task.is-failed .activity-parallel-state {
+    color: var(--danger);
+}
+
+.activity-parallel-task.is-skipped {
+    border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+    background: var(--warning-soft);
+}
+
+.activity-parallel-task.is-skipped .activity-parallel-dot {
+    background: var(--warning);
+}
+
+.activity-parallel-task.is-skipped .activity-parallel-state {
+    color: var(--warning);
+}
+
 .activity-stream {
     display: grid;
     max-height: 96px;
@@ -2612,6 +2718,7 @@ body.memory-modal-open {
 @media (prefers-reduced-motion: reduce) {
     .activity-refresh.is-active .activity-refresh-dot,
     .activity-trace-item.is-active .activity-trace-dot,
+    .activity-parallel-task.is-running .activity-parallel-dot,
     .activity-fullscreen:not([hidden]) {
         animation: none;
     }
@@ -2744,6 +2851,15 @@ noscript {
     .activity-session-grid,
     .activity-fullscreen-grid {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .activity-parallel {
+        gap: 5px;
+    }
+
+    .activity-parallel-task {
+        max-width: 100%;
+        flex-wrap: wrap;
     }
 
     .activity-fullscreen-toggle {
@@ -4003,6 +4119,12 @@ noscript {
         backoff: '等待重试',
         sending: '发送回复',
         memory_extract: '整理记忆',
+    };
+    const ACTIVITY_MEMORY_META = {
+        running: {label: '与回复并行', className: 'is-running'},
+        done: {label: '已完成', className: 'is-done'},
+        failed: {label: '失败', className: 'is-failed'},
+        skipped: {label: '已跳过', className: 'is-skipped'},
     };
     const ACTIVITY_TERMINAL_META = {
         finished: {
@@ -5993,6 +6115,12 @@ noscript {
         return ACTIVITY_STAGE_LABELS[stage] || '处理中';
     }
 
+    function activityMemoryMeta(stateName) {
+        return Object.prototype.hasOwnProperty.call(ACTIVITY_MEMORY_META, stateName)
+            ? ACTIVITY_MEMORY_META[stateName]
+            : null;
+    }
+
     function activityDurationText(milliseconds) {
         const value = Number(milliseconds);
         if (!Number.isFinite(value) || value < 0) {
@@ -6019,6 +6147,9 @@ noscript {
         const outgoing = Array.isArray(session.outgoing_messages)
             ? session.outgoing_messages
             : [];
+        const memoryTask = session.memory_task && typeof session.memory_task === 'object'
+            ? session.memory_task
+            : null;
         return [
             session.session_id || '',
             session.group_id || '',
@@ -6045,6 +6176,9 @@ noscript {
             session.outgoing_total || 0,
             Number.isInteger(session.sending_index) ? session.sending_index : -1,
             session.sent_count || 0,
+            memoryTask
+                ? [memoryTask.state || '', memoryTask.detail || ''].join(':')
+                : '',
         ].join('|');
     }
 
@@ -6074,6 +6208,54 @@ noscript {
             element.textContent = String(text);
         }
         return element;
+    }
+
+    function buildActivityMemory(session) {
+        const task = session && session.memory_task && typeof session.memory_task === 'object'
+            ? session.memory_task
+            : null;
+        if (!task) {
+            return null;
+        }
+        const stateName = String(task.state || '');
+        const meta = activityMemoryMeta(stateName);
+        if (!meta) {
+            return null;
+        }
+        const container = createActivityElement('div', 'activity-parallel');
+        container.appendChild(createActivityElement(
+            'span', 'activity-parallel-label', '并行任务'
+        ));
+        const pill = createActivityElement(
+            'span', 'activity-parallel-task ' + meta.className
+        );
+        const dot = createActivityElement('span', 'activity-parallel-dot');
+        dot.setAttribute('aria-hidden', 'true');
+        pill.appendChild(dot);
+        pill.appendChild(createActivityElement(
+            'span', 'activity-parallel-name', '整理记忆'
+        ));
+        pill.appendChild(createActivityElement(
+            'span', 'activity-parallel-state', meta.label
+        ));
+        const elapsed = createActivityElement(
+            'span',
+            'activity-parallel-time',
+            activityDurationText(Number(task.elapsed_ms || 0))
+        );
+        pill.appendChild(elapsed);
+        const detail = String(task.detail || '');
+        if (detail) {
+            pill.title = detail;
+            container.setAttribute(
+                'aria-label',
+                '并行任务：整理记忆，' + meta.label + '，' + detail
+            );
+        } else {
+            container.setAttribute('aria-label', '并行任务：整理记忆，' + meta.label);
+        }
+        container.appendChild(pill);
+        return {element: container, elapsed: elapsed};
     }
 
     function activityTraceStatusMeta(statusName) {
@@ -6274,6 +6456,10 @@ noscript {
         const preview = session.message_preview ||
             (terminalMeta ? terminalMeta.preview : (running ? '处理中' : '等待处理'));
         article.appendChild(createActivityElement('p', 'activity-session-preview', preview));
+        const parallelTask = buildActivityMemory(session);
+        if (parallelTask) {
+            article.appendChild(parallelTask.element);
+        }
         const stream = buildActivityStream(session);
         if (stream) {
             article.appendChild(stream);
@@ -6316,6 +6502,7 @@ noscript {
             elapsed: elapsed,
             stageElapsed: stageElapsed,
             countdown: countdown,
+            memoryElapsed: parallelTask ? parallelTask.elapsed : null,
         });
         return article;
     }
@@ -6392,6 +6579,14 @@ noscript {
             if (node.stageElapsed) {
                 node.stageElapsed.textContent = '阶段 ' + activityDurationText(
                     Number(session.stage_elapsed_ms || 0) + sessionOffset
+                );
+            }
+            const memoryTask = session.memory_task && typeof session.memory_task === 'object'
+                ? session.memory_task
+                : null;
+            if (node.memoryElapsed && memoryTask && memoryTask.state === 'running') {
+                node.memoryElapsed.textContent = activityDurationText(
+                    Number(memoryTask.elapsed_ms || 0) + elapsedOffset
                 );
             }
             if (node.countdown) {

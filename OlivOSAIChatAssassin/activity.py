@@ -41,6 +41,23 @@ STAGES = frozenset((
     STAGE_MEMORY_EXTRACT,
 ))
 
+MEMORY_STATE_RUNNING = 'running'
+MEMORY_STATE_DONE = 'done'
+MEMORY_STATE_FAILED = 'failed'
+MEMORY_STATE_SKIPPED = 'skipped'
+
+MEMORY_STATES = frozenset((
+    MEMORY_STATE_RUNNING,
+    MEMORY_STATE_DONE,
+    MEMORY_STATE_FAILED,
+    MEMORY_STATE_SKIPPED,
+))
+
+MEMORY_DETAIL_RUNNING = '与回复发送并行'
+MEMORY_DETAIL_DONE = '并行整理完成'
+MEMORY_DETAIL_FAILED = '并行整理失败，不影响回复'
+MEMORY_DETAIL_SKIPPED = '已跳过并行整理'
+
 STATE_QUEUED = 'queued'
 STATE_RUNNING = 'running'
 STATE_SKIPPED = 'skipped'
@@ -162,6 +179,11 @@ class _ActivitySession:
         self.outgoing_total = 0
         self.sending_index = -1
         self.sent_count = 0
+        self.memory_state = ''
+        self.memory_detail = ''
+        self.memory_started_monotonic = 0.0
+        self.memory_finished_monotonic = 0.0
+        self.memory_token_id = None
         now = time.monotonic()
         self.started_monotonic = now
         self.updated_monotonic = now
@@ -202,6 +224,32 @@ def _session_for_token(token):
     if session is None or session.session_id != token.session_id:
         return None
     return session
+
+
+def _session_for_memory_token(token):
+    if not isinstance(token, ActivityToken):
+        return None
+    key = (token.bot_hash, token.group_id)
+    session = _sessions.get(key)
+    if (
+        session is not None
+        and session.session_id == token.session_id
+        and session.current_token_id == token.token_id
+        and session.memory_token_id == token.token_id
+    ):
+        return session
+    terminal = _terminals.get(key)
+    if terminal is not None and terminal.memory_token_id == token.token_id:
+        return terminal
+    return None
+
+
+def _reset_memory_task(session):
+    session.memory_state = ''
+    session.memory_detail = ''
+    session.memory_started_monotonic = 0.0
+    session.memory_finished_monotonic = 0.0
+    session.memory_token_id = None
 
 
 def _refresh_pending_summary(session):
@@ -290,6 +338,11 @@ def _remember_terminal(session, token, now, state, error_code):
     terminal.outgoing_total = session.outgoing_total
     terminal.sending_index = session.sending_index
     terminal.sent_count = session.sent_count
+    terminal.memory_state = session.memory_state
+    terminal.memory_detail = session.memory_detail
+    terminal.memory_started_monotonic = session.memory_started_monotonic
+    terminal.memory_finished_monotonic = session.memory_finished_monotonic
+    terminal.memory_token_id = session.memory_token_id
     terminal.started_monotonic = session.started_monotonic
     terminal.started_at = session.started_at
     terminal.stage_started_monotonic = session.stage_started_monotonic
@@ -335,6 +388,7 @@ def _begin(bot_hash, group_id, sender_name, preview):
             session.outgoing_total = 0
             session.sending_index = -1
             session.sent_count = 0
+            _reset_memory_task(session)
             _append_trace(
                 session,
                 STAGE_QUEUED,
@@ -377,6 +431,7 @@ def _activate(token, stage, metadata):
         session.outgoing_total = 0
         session.sending_index = -1
         session.sent_count = 0
+        _reset_memory_task(session)
         session.started_monotonic = token.started_monotonic
         session.started_at = token.started_at
         session.stage_started_monotonic = now
@@ -447,6 +502,62 @@ def _note(token, stage, detail=None, status=TRACE_DONE):
 def note(token, stage, detail=None, status=TRACE_DONE):
     try:
         _note(token, stage, detail, status)
+    except Exception:
+        return None
+    return None
+
+
+def _memory_started(token):
+    with _lock:
+        session = _session_for_token(token)
+        if session is None or session.current_token_id != token.token_id:
+            return
+        if session.memory_token_id == token.token_id:
+            return
+        now = time.monotonic()
+        session.memory_token_id = token.token_id
+        session.memory_state = MEMORY_STATE_RUNNING
+        session.memory_detail = MEMORY_DETAIL_RUNNING
+        session.memory_started_monotonic = now
+        session.memory_finished_monotonic = 0.0
+        session.updated_monotonic = now
+        session.updated_at = _now_iso()
+
+
+def memory_started(token):
+    try:
+        _memory_started(token)
+    except Exception:
+        return None
+    return None
+
+
+def _memory_finished(token, state):
+    normalized_state = state if state in MEMORY_STATES else MEMORY_STATE_FAILED
+    if normalized_state == MEMORY_STATE_RUNNING:
+        normalized_state = MEMORY_STATE_FAILED
+    with _lock:
+        now = time.monotonic()
+        _prune_terminals(now)
+        session = _session_for_memory_token(token)
+        if session is None or session.memory_finished_monotonic > 0.0:
+            return
+        if session.memory_state != MEMORY_STATE_RUNNING:
+            return
+        session.memory_state = normalized_state
+        session.memory_detail = {
+            MEMORY_STATE_DONE: MEMORY_DETAIL_DONE,
+            MEMORY_STATE_FAILED: MEMORY_DETAIL_FAILED,
+            MEMORY_STATE_SKIPPED: MEMORY_DETAIL_SKIPPED,
+        }.get(normalized_state, MEMORY_DETAIL_FAILED)
+        session.memory_finished_monotonic = now
+        session.updated_monotonic = now
+        session.updated_at = _now_iso()
+
+
+def memory_finished(token, state=MEMORY_STATE_DONE):
+    try:
+        _memory_finished(token, state)
     except Exception:
         return None
     return None
@@ -573,6 +684,7 @@ def _finish(token, state, error_code):
             session.outgoing_total = 0
             session.sending_index = -1
             session.sent_count = 0
+            _reset_memory_task(session)
             _append_trace(
                 session,
                 STAGE_QUEUED,
@@ -590,6 +702,27 @@ def finish(token, state=STATE_FINISHED, error_code=None):
     except Exception:
         return None
     return None
+
+
+def _snapshot_memory_task(session, now):
+    if (
+        session.memory_state not in MEMORY_STATES
+        or session.memory_token_id is None
+        or session.memory_started_monotonic <= 0.0
+    ):
+        return None
+    elapsed_at = (
+        session.memory_finished_monotonic
+        if session.memory_finished_monotonic > 0.0
+        else now
+    )
+    return {
+        'state': session.memory_state,
+        'detail': sanitize_trace_detail(session.memory_detail),
+        'elapsed_ms': int(
+            max(0.0, elapsed_at - session.memory_started_monotonic) * 1000
+        ),
+    }
 
 
 def _snapshot_session(session, now):
@@ -642,6 +775,7 @@ def _snapshot_session(session, now):
         'outgoing_total': session.outgoing_total,
         'sending_index': session.sending_index,
         'sent_count': session.sent_count,
+        'memory_task': _snapshot_memory_task(session, now),
         'updated_at': session.updated_at,
         'expires_in_ms': expires_in_ms,
     }
