@@ -6,15 +6,15 @@ import OlivOSAIChatAssassin
 
 gProc: 'OlivOS.pluginAPI.shallow|None' = None
 gPluginName = '群聊刺客'
-gMessageHistory: 'dict[str, OlivOSAIChatAssassin.tools.DynamicQueue]' = {}
+gMessageHistory: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.DynamicQueue]' = {}
 
 gData: 'OlivOSAIChatAssassin.load.DataManager|None' = None
 
 gConfigDir = './plugin/data/OlivOSAIChatAssassin'
 gConfigPath = './plugin/data/OlivOSAIChatAssassin/config.json'
 
-gGroupLock: 'dict[str, OlivOSAIChatAssassin.tools.SlackableFairLock]' = {}
-gGroupKnowledgeCounter: 'dict[str, int]' = {}
+gGroupLock: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.SlackableFairLock]' = {}
+gGroupKnowledgeCounter: 'dict[tuple[str, str], int]' = {}
 gGroupKnowledgeCounterLimit: int = int(4 * 4)
 
 gMemoryLock = threading.Lock()
@@ -35,11 +35,17 @@ gStaticKnowledgeDir = './plugin/data/OlivOSAIChatAssassin/Knowledge'
 gStaticKnowledge = {}
 
 gImageDir = './plugin/data/OlivOSAIChatAssassin/Image'
-gImageCache: 'dict[str, deque]' = {}
+gImageCache: 'dict[tuple[str, str], deque]' = {}
 
-gPeakUpCache: 'dict[str, dict[str, dict[str, int|list]]]' = {}
+gPeakUpCache: 'dict[str, dict[str, dict[tuple, dict]]]' = {}
 
 gThinkTS: 'dict[str, dict[str, float]]' = {}
+
+
+def state_key(bot_hash: str, group_id: str) -> tuple:
+    """返回运行期群状态键；所有状态都按 bot 与群共同隔离。"""
+    return (str(bot_hash), str(group_id))
+
 
 configDefault = {
     'api_key': '',
@@ -64,6 +70,8 @@ configDefault = {
     'history_size': 8,
     'history_dynamic': False,
     'history_dynamic_size': 16,
+    'context_budget_chars': 0,
+    'knowledge_top_k': 0,
     'slack_time': 5,
     'slack_cooldown_time': 30,
     'reply_probability': 1,

@@ -3646,6 +3646,7 @@ noscript {
                             <label class="field" for="replyProbability">
                                 <span>随机回复概率</span>
                                 <input id="replyProbability" data-field="reply_probability" type="number" min="0" step="0.01">
+                                <small class="muted">消息进入 AI 预判/回复流程的采样率，不是模型最终回复概率；@ 和关键词会绕过采样。</small>
                             </label>
                             <label class="field" for="retryCount">
                                 <span>回复重试次数</span>
@@ -3654,6 +3655,11 @@ noscript {
                             <label class="field" for="searchKnowledgeDeepin">
                                 <span>知识检索深度</span>
                                 <input id="searchKnowledgeDeepin" data-field="search_knowledge_deepin" type="number" min="0" step="1">
+                            </label>
+                            <label class="field" for="knowledgeTopK">
+                                <span>每类知识检索条数</span>
+                                <input id="knowledgeTopK" data-field="knowledge_top_k" type="number" min="0" step="1">
+                                <small class="muted">0 表示不限制知识检索条数。</small>
                             </label>
                             <label class="field" for="searchAgeing">
                                 <span>检索缓存老化（秒）</span>
@@ -3697,6 +3703,11 @@ noscript {
                             <label class="field" for="historyDynamicSize">
                                 <span>动态窗口最大条数</span>
                                 <input id="historyDynamicSize" data-field="history_dynamic_size" type="number" min="1" step="1">
+                            </label>
+                            <label class="field" for="contextBudgetChars">
+                                <span>上下文字符预算</span>
+                                <input id="contextBudgetChars" data-field="context_budget_chars" type="number" min="0" step="1">
+                                <small class="muted">0 表示关闭上下文预算；大于 0 时优先保留最新消息和回复目标。</small>
                             </label>
                             <label class="field" for="slackTime">
                                 <span>松弛时间（秒）</span>
@@ -4137,9 +4148,9 @@ noscript {
             'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'apiTimeout', 'temperature', 'thinkingEnabled',
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
             'recordKnowledge', 'mentionReply', 'replyProbability', 'retryCount',
-            'searchKnowledgeDeepin', 'searchAgeing', 'maxMessageLength', 'enabledGroups',
+            'searchKnowledgeDeepin', 'knowledgeTopK', 'searchAgeing', 'maxMessageLength', 'enabledGroups',
             'replyKeywords', 'ignorePrefixes', 'historySizeMin', 'historySize', 'historyDynamic',
-            'historyDynamicSize', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
+            'historyDynamicSize', 'contextBudgetChars', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
             'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
             'saveButton', 'extraConfigFields', 'extraConfigAddButton', 'extraConfigEmpty',
             'memoryRefreshButton', 'memorySectionList',
@@ -5191,6 +5202,7 @@ noscript {
         setValue('replyProbability', config.reply_probability);
         setValue('retryCount', config.retry_count);
         setValue('searchKnowledgeDeepin', config.search_knowledge_deepin);
+        setValue('knowledgeTopK', config.knowledge_top_k);
         setValue('searchAgeing', config.search_ageing);
         setValue('maxMessageLength', config.max_message_length);
         elements.enabledGroups.value = listToText(config.enabled_groups);
@@ -5200,6 +5212,7 @@ noscript {
         setValue('historySize', config.history_size);
         elements.historyDynamic.checked = config.history_dynamic === true;
         setValue('historyDynamicSize', config.history_dynamic_size);
+        setValue('contextBudgetChars', config.context_budget_chars);
         setValue('slackTime', config.slack_time);
         setValue('slackCooldown', config.slack_cooldown_time);
         elements.ocrEnable.checked = ocrConfig.enable === true;
@@ -5756,6 +5769,7 @@ noscript {
             reply_probability: function () { return readNumber('replyProbability'); },
             retry_count: function () { return readInteger('retryCount'); },
             search_knowledge_deepin: function () { return readInteger('searchKnowledgeDeepin'); },
+            knowledge_top_k: function () { return readInteger('knowledgeTopK'); },
             search_ageing: function () { return readNumber('searchAgeing'); },
             max_message_length: function () { return readInteger('maxMessageLength'); },
             enabled_groups: function () { return readLines('enabledGroups'); },
@@ -5765,6 +5779,7 @@ noscript {
             history_size: function () { return readInteger('historySize'); },
             history_dynamic: function () { return elements.historyDynamic.checked; },
             history_dynamic_size: function () { return readInteger('historyDynamicSize'); },
+            context_budget_chars: function () { return readInteger('contextBudgetChars'); },
             slack_time: function () { return readNumber('slackTime'); },
             slack_cooldown_time: function () { return readNumber('slackCooldown'); },
         };

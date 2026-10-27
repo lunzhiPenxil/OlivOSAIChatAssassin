@@ -184,50 +184,86 @@ def get_recommendMatch(rank, gate_rank: int = 1000):
     return res
 
 
+def invalidate_peak_up_cache(bot_hash: 'str|None' = None) -> None:
+    """让记忆编辑后的检索缓存立即失效。"""
+    if bot_hash is None:
+        OlivOSAIChatAssassin.data.gPeakUpCache.clear()
+        return
+    OlivOSAIChatAssassin.data.gPeakUpCache.pop(str(bot_hash), None)
+
+
+def iter_memory_strings(value):
+    """递归遍历 WebUI 可能保存的字符串、数组和对象记忆值。"""
+    if isinstance(value, str):
+        if value:
+            yield value
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from iter_memory_strings(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from iter_memory_strings(item)
+
+
 def peak_up_recommendMatch(
     target: str, dictMap: dict, dictName: str, ageing: int,
     rate: float = 1.0,
     matchedList: 'list|None' = None,
-    father: 'str|None' = None
+    father: 'str|None' = None,
+    *,
+    bot_hash: 'str|None' = None,
+    top_k: int = 0,
 ):
     timestamp = int(time.perf_counter())
     res = {}
-    res_key_list = []
     matchedList_this = matchedList if type(matchedList) is list else []
-    if dictName not in OlivOSAIChatAssassin.data.gPeakUpCache:
-        OlivOSAIChatAssassin.data.gPeakUpCache[dictName] = {}
-    cache_key_list = list(OlivOSAIChatAssassin.data.gPeakUpCache[dictName].keys())
-    for k in cache_key_list:
-        if timestamp - (
-            OlivOSAIChatAssassin.data.gPeakUpCache.get(dictName, {}).get(k, {}).get('timestamp', 0)
-        ) >= ageing:
-            OlivOSAIChatAssassin.data.gPeakUpCache[dictName].pop(k, None)
-    if type(dictMap) is dict:
-        dictMap_key_list = list(dictMap.keys())
-        if target in OlivOSAIChatAssassin.data.gPeakUpCache[dictName]:
-            res_key_list = OlivOSAIChatAssassin.data.gPeakUpCache.get(dictName, {}).get(target, {}).get('keylist', None)
-            if type(res_key_list) is list:
-                for k in res_key_list:
-                    k_str = k if father is None else f'{father} -> {k}'
-                    OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k_str} (cached)')
-        else:
-            for k in dictMap_key_list:
-                if k not in matchedList_this:
-                    rank = OlivOSAIChatAssassin.tools.get_recommendRank(k, target, rate=rate)
-                    if OlivOSAIChatAssassin.tools.get_recommendMatch(rank):
-                        res_key_list.append(k)
-                        k_str = k if father is None else f'{father} -> {k}'
-                        OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {k_str} ({rank})')
-        if type(res_key_list) is not list:
-            res_key_list = []
-        else:
-            OlivOSAIChatAssassin.data.gPeakUpCache[dictName][target] = {
-                'timestamp': timestamp,
-                'keylist': res_key_list
-            }
-        for k in res_key_list:
-            if k in dictMap:
-                res[k] = dictMap[k]
+    matched_set = {str(item) for item in matchedList_this}
+    try:
+        top_k = max(0, int(top_k))
+    except (TypeError, ValueError):
+        top_k = 0
+    bot_key = str(bot_hash) if bot_hash is not None else ''
+    bot_cache = OlivOSAIChatAssassin.data.gPeakUpCache.setdefault(bot_key, {})
+    named_cache = bot_cache.setdefault(dictName, {})
+    for cache_key in list(named_cache.keys()):
+        cached_at = named_cache.get(cache_key, {}).get('timestamp', 0)
+        if timestamp - cached_at >= ageing:
+            named_cache.pop(cache_key, None)
+
+    if type(dictMap) is not dict:
+        return res
+
+    cache_key = (str(target), float(rate), father or '')
+    cache_entry = named_cache.get(cache_key)
+    if isinstance(cache_entry, dict) and isinstance(cache_entry.get('matches'), list):
+        matches = list(cache_entry['matches'])
+        cached = True
+    else:
+        matches = []
+        for key in dictMap:
+            rank = OlivOSAIChatAssassin.tools.get_recommendRank(key, target, rate=rate)
+            if OlivOSAIChatAssassin.tools.get_recommendMatch(rank):
+                matches.append({'key': key, 'rank': rank})
+        matches.sort(key=lambda item: (item['rank'], str(item['key'])))
+        named_cache[cache_key] = {
+            'timestamp': timestamp,
+            'matches': matches,
+        }
+        cached = False
+
+    selected = []
+    for item in matches:
+        key = item.get('key')
+        if key in dictMap and str(key) not in matched_set:
+            selected.append(key)
+        if top_k > 0 and len(selected) >= top_k:
+            break
+
+    for key in selected:
+        key_text = key if father is None else f'{father} -> {key}'
+        suffix = ' (cached)' if cached else f" ({next(item['rank'] for item in matches if item['key'] == key)})"
+        OlivOSAIChatAssassin.logger.log(f'PEAK UP - [{dictName}] {key_text}{suffix}')
+        res[key] = dictMap[key]
     return res
 
 

@@ -571,6 +571,14 @@ def _validate_config_patch(patch: dict):
             checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
+        elif key == 'context_budget_chars':
+            checked = _validate_number(value, key, errors, 0, integer=True)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'knowledge_top_k':
+            checked = _validate_number(value, key, errors, 0, integer=True)
+            if checked is not None:
+                result[key] = checked
         elif key == 'slack_time':
             checked = _validate_number(value, key, errors, 0)
             if checked is not None:
@@ -1720,6 +1728,11 @@ def _handle_save_memory(payload, Proc):
             '记忆已被其他操作修改，请刷新记忆后重试',
             {'current_revision': exc.current_revision},
         )
+    # 记忆变更后不能继续使用旧的检索缓存。
+    try:
+        OlivOSAIChatAssassin.tools.invalidate_peak_up_cache(bot_hash)
+    except Exception:
+        pass
     result = {'scope': scope, 'action': action}
     if group_id is not None:
         result['group_id'] = group_id
