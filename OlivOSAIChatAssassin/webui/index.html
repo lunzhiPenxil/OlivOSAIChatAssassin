@@ -680,77 +680,138 @@ code {
     color: var(--danger);
 }
 
-.activity-more {
+.activity-fullscreen-launcher {
+    display: flex;
+    justify-content: flex-end;
     margin-top: 12px;
 }
 
-.activity-more-toggle {
-    min-height: 34px;
-    padding: 5px 12px;
+.activity-fullscreen-toggle {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    place-items: center;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 10px;
     color: var(--muted);
     background: var(--surface-soft);
-    font: inherit;
-    font-size: 0.78rem;
-    font-weight: 600;
     cursor: pointer;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
-.activity-more-toggle:hover {
+.activity-fullscreen-toggle:hover {
     color: var(--text);
     border-color: var(--accent);
+    background: var(--surface);
 }
 
-.activity-more-list {
+.activity-fullscreen-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.activity-fullscreen-icon {
+    width: 18px;
+    height: 18px;
+}
+
+body.activity-fullscreen-open {
+    overflow: hidden;
+}
+
+.activity-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    margin-top: 9px;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    padding:
+        max(18px, env(safe-area-inset-top, 0px))
+        max(20px, env(safe-area-inset-right, 0px))
+        max(20px, env(safe-area-inset-bottom, 0px))
+        max(20px, env(safe-area-inset-left, 0px));
+    background:
+        radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 30rem),
+        var(--bg);
 }
 
-.activity-more-row {
+.activity-fullscreen:not([hidden]) {
+    animation: activity-fullscreen-enter 180ms ease-out;
+}
+
+@keyframes activity-fullscreen-enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.activity-fullscreen-head {
     display: flex;
     min-width: 0;
-    flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 5px 10px;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    color: var(--muted);
-    background: var(--surface-soft);
-    font-size: 0.76rem;
+    gap: 20px;
+    padding: 0 2px 15px;
+    border-bottom: 1px solid var(--border);
 }
 
-.activity-more-row strong {
+.activity-fullscreen-heading {
+    display: flex;
     min-width: 0;
-    overflow-wrap: anywhere;
-    color: var(--text);
-    font-size: 0.8rem;
+    align-items: flex-start;
+    gap: 12px;
 }
 
-.activity-more-row.is-completed {
-    border-color: color-mix(in srgb, var(--success) 24%, var(--border));
+.activity-fullscreen-title {
+    min-width: 0;
 }
 
-.activity-more-row.is-skipped {
-    border-color: color-mix(in srgb, var(--warning) 24%, var(--border));
+.activity-fullscreen-title h2 {
+    margin: 0;
+    font-size: 1.15rem;
 }
 
-.activity-more-row.is-failed {
-    border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
+.activity-fullscreen-title p {
+    margin: 2px 0 0;
 }
 
-.activity-more-row.is-superseded {
-    border-color: color-mix(in srgb, var(--muted) 24%, var(--border));
+.activity-fullscreen-back {
+    flex: 0 0 auto;
 }
 
-.activity-more-row.is-omitted {
+.activity-fullscreen-meta {
+    display: flex;
+    min-width: 0;
+    flex: 0 1 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.activity-fullscreen-body {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 16px 2px 28px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.activity-fullscreen-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+}
+
+.activity-fullscreen .activity-stream {
+    max-height: min(220px, 28vh);
+}
+
+.activity-fullscreen-note {
     grid-column: 1 / -1;
-    justify-content: center;
-    border-style: dashed;
+    margin: 0;
 }
 
 .notice {
@@ -2550,7 +2611,8 @@ body.memory-modal-open {
 
 @media (prefers-reduced-motion: reduce) {
     .activity-refresh.is-active .activity-refresh-dot,
-    .activity-trace-item.is-active .activity-trace-dot {
+    .activity-trace-item.is-active .activity-trace-dot,
+    .activity-fullscreen:not([hidden]) {
         animation: none;
     }
 }
@@ -2680,12 +2742,54 @@ noscript {
     }
 
     .activity-session-grid,
-    .activity-more-list {
+    .activity-fullscreen-grid {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .activity-more-toggle {
+    .activity-fullscreen-toggle {
+        width: 44px;
         min-height: 44px;
+    }
+
+    .activity-fullscreen {
+        padding:
+            max(12px, env(safe-area-inset-top, 0px))
+            max(12px, env(safe-area-inset-right, 0px))
+            max(14px, env(safe-area-inset-bottom, 0px))
+            max(12px, env(safe-area-inset-left, 0px));
+    }
+
+    .activity-fullscreen-head {
+        flex-direction: column;
+        gap: 10px;
+        padding-bottom: 12px;
+    }
+
+    .activity-fullscreen-heading {
+        width: 100%;
+        flex-direction: column;
+        gap: 9px;
+    }
+
+    .activity-fullscreen-back {
+        min-height: 44px;
+    }
+
+    .activity-fullscreen-meta {
+        width: 100%;
+        align-items: flex-start;
+    }
+
+    .activity-fullscreen .activity-summary {
+        text-align: left;
+    }
+
+    .activity-fullscreen-body {
+        padding-top: 12px;
+    }
+
+    .activity-fullscreen .activity-stream {
+        max-height: min(190px, 26vh);
     }
 
     .notice {
@@ -3441,10 +3545,17 @@ noscript {
                     <div id="overviewActivityList" class="activity-session-grid">
                         <p class="activity-empty">读取处理状态…</p>
                     </div>
-                    <div id="overviewActivityMore" class="activity-more" hidden>
-                        <button id="overviewActivityMoreButton" class="activity-more-toggle" type="button"
-                            aria-expanded="false" aria-controls="overviewActivityMoreList">更多 0 个</button>
-                        <div id="overviewActivityMoreList" class="activity-more-list" hidden></div>
+                    <div id="overviewActivityFullscreenLauncher" class="activity-fullscreen-launcher">
+                        <button id="overviewActivityFullscreenButton" class="activity-fullscreen-toggle" type="button"
+                            aria-haspopup="dialog" aria-expanded="false"
+                            aria-controls="overviewActivityFullscreen" aria-label="全屏查看处理会话"
+                            title="全屏查看处理会话">
+                            <svg class="activity-fullscreen-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5M4 4l5 5M20 4l-5 5M20 20l-5-5M4 20l5-5"
+                                    stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </button>
                     </div>
                 </section>
             </section>
@@ -3698,6 +3809,29 @@ noscript {
             </section>
         </main>
     </div>
+    <section id="overviewActivityFullscreen" class="activity-fullscreen" role="dialog" aria-modal="true"
+        aria-labelledby="overviewActivityFullscreenTitle" hidden>
+        <header class="activity-fullscreen-head">
+            <div class="activity-fullscreen-heading">
+                <button id="overviewActivityFullscreenBackButton" class="button secondary small activity-fullscreen-back"
+                    type="button">返回概览</button>
+                <div class="activity-fullscreen-title">
+                    <h2 id="overviewActivityFullscreenTitle">全部处理会话</h2>
+                    <p class="muted small-text">实时处理阶段，仅展示运行状态。</p>
+                </div>
+            </div>
+            <div class="activity-fullscreen-meta">
+                <span id="overviewActivityFullscreenRefresh" class="activity-refresh" role="status" aria-live="polite">
+                    <span class="activity-refresh-dot" aria-hidden="true"></span>
+                    <span class="activity-refresh-text">准备刷新</span>
+                </span>
+                <div id="overviewActivityFullscreenSummary" class="activity-summary" aria-live="polite">—</div>
+            </div>
+        </header>
+        <div class="activity-fullscreen-body">
+            <div id="overviewActivityFullscreenList" class="activity-session-grid activity-fullscreen-grid"></div>
+        </div>
+    </section>
     <div id="memoryModal" class="memory-modal-layer" role="dialog" aria-modal="true" aria-labelledby="memoryModalTitle" aria-describedby="memoryModalHint" hidden>
         <div class="memory-modal-backdrop" data-memory-modal-close aria-hidden="true"></div>
         <section class="memory-modal-card">
@@ -3939,7 +4073,7 @@ noscript {
         activityLoading: false,
         activityError: '',
         activityTicket: 0,
-        activityMoreExpanded: false,
+        activityFullscreenOpen: false,
         activityRenderedSignature: '',
         activityTimingNodes: [],
         activityTimingAnchor: 0,
@@ -3994,8 +4128,11 @@ noscript {
             'overviewAccount', 'overviewPlatform', 'overviewApi', 'overviewOcr', 'overviewGroups',
             'overviewKnowledge', 'overviewImageCache', 'overviewRevision', 'configForm', 'configErrors',
             'overviewActivity', 'overviewActivityRefresh', 'overviewActivitySummary',
-            'overviewActivityList', 'overviewActivityMore', 'overviewActivityMoreButton',
-            'overviewActivityMoreList',
+            'overviewActivityList', 'overviewActivityFullscreenLauncher',
+            'overviewActivityFullscreenButton',
+            'overviewActivityFullscreen', 'overviewActivityFullscreenBackButton',
+            'overviewActivityFullscreenRefresh', 'overviewActivityFullscreenSummary',
+            'overviewActivityFullscreenList',
             'configWarnings', 'apiKey',
             'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'apiTimeout', 'temperature', 'thinkingEnabled',
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
@@ -4137,7 +4274,11 @@ noscript {
         elements.extraConfigFields.addEventListener('change', handleExtraConfigChange);
         elements.extraConfigFields.addEventListener('click', handleExtraConfigClick);
         elements.saveButton.addEventListener('click', saveConfig);
-        elements.overviewActivityMoreButton.addEventListener('click', toggleActivityMore);
+        elements.overviewActivityFullscreenButton.addEventListener('click', openActivityFullscreen);
+        elements.overviewActivityFullscreenBackButton.addEventListener('click', function () {
+            closeActivityFullscreen();
+        });
+        elements.overviewActivityFullscreen.addEventListener('keydown', handleActivityFullscreenKeydown);
         elements.bannerAction.addEventListener('click', function () {
             if (state.selectedBot) {
                 loadBotData(state.selectedBot, true);
@@ -4877,11 +5018,13 @@ noscript {
     }
 
     function setActivityRefreshState() {
-        const refresh = elements.overviewActivityRefresh;
-        if (!refresh) {
+        const refreshes = [
+            elements.overviewActivityRefresh,
+            elements.overviewActivityFullscreenRefresh,
+        ].filter(Boolean);
+        if (!refreshes.length) {
             return;
         }
-        const text = refresh.querySelector('.activity-refresh-text');
         const polling = shouldPollActivity();
         const failing = Boolean(polling && state.activityError);
         let message = '等待账号';
@@ -4894,12 +5037,15 @@ noscript {
                 message = '持续刷新中';
             }
         }
-        if (text && text.textContent !== message) {
-            text.textContent = message;
-        }
-        refresh.classList.toggle('is-active', polling && !failing);
-        refresh.classList.toggle('is-error', failing);
-        refresh.classList.toggle('is-paused', !polling);
+        refreshes.forEach(function (refresh) {
+            const text = refresh.querySelector('.activity-refresh-text');
+            if (text && text.textContent !== message) {
+                text.textContent = message;
+            }
+            refresh.classList.toggle('is-active', polling && !failing);
+            refresh.classList.toggle('is-error', failing);
+            refresh.classList.toggle('is-paused', !polling);
+        });
     }
 
     function resetActivityState() {
@@ -4907,7 +5053,7 @@ noscript {
         state.activity = null;
         state.activityLoading = false;
         state.activityError = '';
-        state.activityMoreExpanded = false;
+        closeActivityFullscreen(false);
         state.activityRenderedSignature = '';
         state.activityTimingNodes = [];
         state.activityTimingAnchor = 0;
@@ -4949,10 +5095,53 @@ noscript {
         }
     }
 
-    function toggleActivityMore() {
-        state.activityMoreExpanded = !state.activityMoreExpanded;
-        elements.overviewActivityMoreButton.setAttribute('aria-expanded', state.activityMoreExpanded ? 'true' : 'false');
-        elements.overviewActivityMoreList.hidden = !state.activityMoreExpanded;
+    function openActivityFullscreen() {
+        if (state.activityFullscreenOpen) {
+            return;
+        }
+        state.activityFullscreenOpen = true;
+        elements.overviewActivityFullscreenButton.setAttribute('aria-expanded', 'true');
+        elements.overviewActivityFullscreen.hidden = false;
+        document.body.classList.add('activity-fullscreen-open');
+        const pageShell = document.querySelector('.page-shell');
+        if (pageShell) {
+            pageShell.inert = true;
+        }
+        renderActivity(true);
+        window.requestAnimationFrame(function () {
+            scrollActivityStreams(elements.overviewActivityFullscreenList);
+            elements.overviewActivityFullscreenBackButton.focus({preventScroll: true});
+        });
+    }
+
+    function closeActivityFullscreen(restoreFocus) {
+        const wasOpen = state.activityFullscreenOpen;
+        state.activityFullscreenOpen = false;
+        if (elements.overviewActivityFullscreen) {
+            elements.overviewActivityFullscreen.hidden = true;
+        }
+        if (elements.overviewActivityFullscreenButton) {
+            elements.overviewActivityFullscreenButton.setAttribute('aria-expanded', 'false');
+        }
+        document.body.classList.remove('activity-fullscreen-open');
+        const pageShell = document.querySelector('.page-shell');
+        if (pageShell) {
+            pageShell.inert = false;
+        }
+        if (wasOpen && restoreFocus !== false) {
+            const target = elements.overviewActivityFullscreenButton || elements.refreshButton;
+            if (target) {
+                target.focus({preventScroll: true});
+            }
+        }
+    }
+
+    function handleActivityFullscreenKeydown(event) {
+        if (event.key !== 'Escape') {
+            return;
+        }
+        event.preventDefault();
+        closeActivityFullscreen();
     }
 
     async function loadOverview(botHash) {
@@ -6019,11 +6208,12 @@ noscript {
         return stream;
     }
 
-    function scrollActivityStreams() {
-        if (!elements.overviewActivityList) {
+    function scrollActivityStreams(root) {
+        const container = root || elements.overviewActivityList;
+        if (!container) {
             return;
         }
-        elements.overviewActivityList.querySelectorAll('.activity-session').forEach(function (article) {
+        container.querySelectorAll('.activity-session').forEach(function (article) {
             const stream = article.querySelector('.activity-stream');
             if (!stream) {
                 return;
@@ -6113,41 +6303,6 @@ noscript {
             countdown: countdown,
         });
         return article;
-    }
-
-    function buildActivityMoreRow(session) {
-        const row = createActivityElement('div', 'activity-more-row');
-        const stateName = String(session.state || '');
-        const terminalMeta = activityTerminalMeta(stateName);
-        if (terminalMeta) {
-            row.classList.add(terminalMeta.className);
-        }
-        row.appendChild(createActivityElement('strong', '', session.group_label || ('群 ' + String(session.group_id || '未知'))));
-        row.appendChild(createActivityElement('span', '', activityStageText(session.stage, stateName)));
-        const elapsed = createActivityElement('span', '', activityDurationText(session.elapsed_ms));
-        row.appendChild(elapsed);
-        if (Number(session.queue_depth) > 0) {
-            row.appendChild(createActivityElement('span', '', '队列 +' + String(session.queue_depth)));
-        }
-        if (Number(session.retry_count) > 0) {
-            row.appendChild(createActivityElement('span', '', '重试 ' + String(session.retry_count) + ' 次'));
-        }
-        let countdown = null;
-        if (terminalMeta) {
-            countdown = createActivityElement(
-                'span',
-                'activity-countdown ' + terminalMeta.className,
-                activityTerminalCountdownText(session)
-            );
-            row.appendChild(countdown);
-        }
-        state.activityTimingNodes.push({
-            sessionId: String(session.session_id || ''),
-            elapsed: elapsed,
-            stageElapsed: null,
-            countdown: countdown,
-        });
-        return row;
     }
 
     function activityTerminalRemainingMs(session, elapsedOffset) {
@@ -6259,9 +6414,10 @@ noscript {
         });
         const signature = activitySnapshotSignature(data, sessions);
         setActivityRefreshState();
+        let summaryText = '—';
 
         if (!data) {
-            elements.overviewActivitySummary.textContent = state.activityLoading
+            summaryText = state.activityLoading
                 ? '读取中'
                 : (state.activityError ? '暂时不可用' : '—');
         } else {
@@ -6276,7 +6432,7 @@ noscript {
                 : completedCount + skippedCount + failedCount + supersededCount;
             const pendingCount = Number(data.pending_messages) || 0;
             if (sessionCount <= 0) {
-                elements.overviewActivitySummary.textContent = '当前空闲';
+                summaryText = '当前空闲';
             } else {
                 const activeSessionCount = Math.max(0, sessionCount - terminalCount);
                 const parts = [];
@@ -6301,16 +6457,23 @@ noscript {
                 if (pendingCount > 0) {
                     parts.push(String(pendingCount) + ' 条待处理');
                 }
-                elements.overviewActivitySummary.textContent = parts.length
+                summaryText = parts.length
                     ? parts.join(' · ')
                     : String(sessionCount) + ' 个会话';
             }
         }
+        elements.overviewActivitySummary.textContent = summaryText;
+        elements.overviewActivityFullscreenSummary.textContent = summaryText;
 
         if (force || signature !== state.activityRenderedSignature) {
+            const fullscreenBody = elements.overviewActivityFullscreen
+                ? elements.overviewActivityFullscreen.querySelector('.activity-fullscreen-body')
+                : null;
+            const fullscreenScrollTop = fullscreenBody ? fullscreenBody.scrollTop : 0;
             elements.overviewActivityList.replaceChildren();
-            elements.overviewActivityMoreList.replaceChildren();
+            elements.overviewActivityFullscreenList.replaceChildren();
             state.activityTimingNodes = [];
+            const omittedCount = Math.max(0, Number(data && data.omitted_count) || 0);
 
             if (!data || sessions.length <= 0) {
                 const empty = createActivityElement('p', 'activity-empty');
@@ -6319,29 +6482,43 @@ noscript {
                     : (state.activityError ? '暂时无法读取处理状态' : '读取处理状态…');
                 empty.classList.toggle('is-error', Boolean(state.activityError) && !data);
                 elements.overviewActivityList.appendChild(empty);
-                elements.overviewActivityMore.hidden = true;
+                if (state.activityFullscreenOpen) {
+                    const fullscreenEmpty = createActivityElement('p', 'activity-empty');
+                    fullscreenEmpty.textContent = empty.textContent;
+                    fullscreenEmpty.classList.toggle('is-error', empty.classList.contains('is-error'));
+                    elements.overviewActivityFullscreenList.appendChild(fullscreenEmpty);
+                }
+                elements.overviewActivityFullscreenButton.setAttribute(
+                    'aria-label', '全屏查看处理会话'
+                );
+                elements.overviewActivityFullscreenButton.title = '全屏查看处理会话';
             } else {
                 sessions.slice(0, ACTIVITY_DETAIL_LIMIT).forEach(function (session) {
                     elements.overviewActivityList.appendChild(buildActivitySession(session));
                 });
-                scrollActivityStreams();
-                const moreSessions = sessions.slice(ACTIVITY_DETAIL_LIMIT);
-                const omittedCount = Math.max(0, Number(data.omitted_count) || 0);
-                const moreCount = moreSessions.length + omittedCount;
-                elements.overviewActivityMore.hidden = moreCount <= 0;
-                if (moreCount <= 0) {
-                    state.activityMoreExpanded = false;
-                }
-                elements.overviewActivityMoreButton.textContent = '更多 ' + String(moreCount) + ' 个';
-                elements.overviewActivityMoreButton.setAttribute('aria-expanded', state.activityMoreExpanded ? 'true' : 'false');
-                elements.overviewActivityMoreList.hidden = !state.activityMoreExpanded;
-                moreSessions.forEach(function (session) {
-                    elements.overviewActivityMoreList.appendChild(buildActivityMoreRow(session));
-                });
-                if (omittedCount > 0) {
-                    const omitted = createActivityElement('div', 'activity-more-row is-omitted');
-                    omitted.textContent = '另有 ' + String(omittedCount) + ' 个会话未载入';
-                    elements.overviewActivityMoreList.appendChild(omitted);
+                scrollActivityStreams(elements.overviewActivityList);
+                const fullscreenCount = sessions.length + omittedCount;
+                const fullscreenLabel = fullscreenCount > 0
+                    ? '全屏查看处理会话，共 ' + String(fullscreenCount) + ' 个'
+                    : '全屏查看处理会话';
+                elements.overviewActivityFullscreenButton.setAttribute('aria-label', fullscreenLabel);
+                elements.overviewActivityFullscreenButton.title = fullscreenLabel;
+                elements.overviewActivityFullscreenButton.setAttribute(
+                    'aria-expanded', state.activityFullscreenOpen ? 'true' : 'false'
+                );
+                if (state.activityFullscreenOpen) {
+                    sessions.forEach(function (session) {
+                        elements.overviewActivityFullscreenList.appendChild(buildActivitySession(session));
+                    });
+                    if (omittedCount > 0) {
+                        const omitted = createActivityElement('p', 'activity-empty activity-fullscreen-note');
+                        omitted.textContent = '另有 ' + String(omittedCount) + ' 个会话未载入';
+                        elements.overviewActivityFullscreenList.appendChild(omitted);
+                    }
+                    scrollActivityStreams(elements.overviewActivityFullscreenList);
+                    if (fullscreenBody) {
+                        fullscreenBody.scrollTop = fullscreenScrollTop;
+                    }
                 }
             }
             state.activityRenderedSignature = signature;
@@ -9189,6 +9366,9 @@ noscript {
 
     function activateTab(tabName) {
         state.activeTab = tabName;
+        if (tabName !== 'overview') {
+            closeActivityFullscreen(false);
+        }
         document.querySelectorAll('.tab-button').forEach(function (button) {
             const selected = button.dataset.tab === tabName;
             button.classList.toggle('selected', selected);
