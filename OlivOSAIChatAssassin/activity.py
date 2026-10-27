@@ -7,8 +7,12 @@ from datetime import datetime
 
 ACTIVITY_PREVIEW_LIMIT = 96
 ACTIVITY_SENDER_LIMIT = 32
+ACTIVITY_TRACE_LIMIT = 12
+ACTIVITY_TRACE_TEXT_LIMIT = 96
+ACTIVITY_OUTGOING_LIMIT = 8
+ACTIVITY_OUTGOING_TEXT_LIMIT = 240
 ACTIVITY_SNAPSHOT_LIMIT = 50
-ACTIVITY_TERMINAL_TTL_MS = 3000
+ACTIVITY_TERMINAL_TTL_MS = 120000
 ACTIVITY_COMPLETION_TTL_MS = ACTIVITY_TERMINAL_TTL_MS
 ACTIVITY_TERMINAL_LIMIT = 50
 ACTIVITY_COMPLETED_LIMIT = ACTIVITY_TERMINAL_LIMIT
@@ -66,6 +70,20 @@ RETAINED_TERMINAL_STATES = frozenset((
     STATE_FAILED,
 ))
 
+TRACE_ACTIVE = 'active'
+TRACE_DONE = 'done'
+TRACE_WARNING = 'warning'
+TRACE_FAILED = 'failed'
+
+TRACE_STATUSES = frozenset((
+    TRACE_ACTIVE,
+    TRACE_DONE,
+    TRACE_WARNING,
+    TRACE_FAILED,
+))
+
+TRACE_STEPS = STAGES | STATES
+
 _MESSAGE_MARKER_RE = re.compile(r'\[(?:CQ|OP):[^\]]*\]', re.IGNORECASE)
 _CONTROL_RE = re.compile(r'[\x00-\x1f\x7f-\x9f]')
 _INVISIBLE_RE = re.compile(r'[\u200b-\u200f\u202a-\u202e\u2066-\u2069]')
@@ -95,6 +113,14 @@ def sanitize_preview(value):
 
 def sanitize_sender(value):
     return _clean_text(value, ACTIVITY_SENDER_LIMIT)
+
+
+def sanitize_trace_detail(value):
+    return _clean_text(value, ACTIVITY_TRACE_TEXT_LIMIT)
+
+
+def sanitize_outgoing_message(value):
+    return _clean_text(value, ACTIVITY_OUTGOING_TEXT_LIMIT)
 
 
 def _clean_error_code(value):
@@ -131,6 +157,11 @@ class _ActivitySession:
         self.attempt = 0
         self.retry_count = 0
         self.error_code = ''
+        self.trace = []
+        self.outgoing_messages = []
+        self.outgoing_total = 0
+        self.sending_index = -1
+        self.sent_count = 0
         now = time.monotonic()
         self.started_monotonic = now
         self.updated_monotonic = now
@@ -181,6 +212,47 @@ def _refresh_pending_summary(session):
     session.sender_name = latest['sender_name']
 
 
+def _close_active_trace(session, now, status=TRACE_DONE, detail=None):
+    if not session.trace:
+        return
+    entry = session.trace[-1]
+    if entry.get('status') != TRACE_ACTIVE:
+        return
+    entry['status'] = status if status in TRACE_STATUSES else TRACE_DONE
+    entry['at_ms'] = int(max(0.0, now - session.started_monotonic) * 1000)
+    if detail is not None:
+        entry['detail'] = sanitize_trace_detail(detail)
+
+
+def _append_trace(session, stage, detail, status, now):
+    if stage not in TRACE_STEPS:
+        return
+    safe_status = status if status in TRACE_STATUSES else TRACE_DONE
+    safe_detail = sanitize_trace_detail(detail)
+    at_ms = int(max(0.0, now - session.started_monotonic) * 1000)
+    if session.trace and session.trace[-1].get('stage') == stage:
+        entry = session.trace[-1]
+        if entry.get('detail', '') == safe_detail:
+            entry['status'] = safe_status
+            entry['detail'] = safe_detail
+            entry['at_ms'] = at_ms
+            return
+        if not entry.get('detail') and entry.get('status') == TRACE_ACTIVE:
+            entry['status'] = safe_status
+            entry['detail'] = safe_detail
+            entry['at_ms'] = at_ms
+            return
+    _close_active_trace(session, now)
+    session.trace.append({
+        'stage': stage,
+        'status': safe_status,
+        'detail': safe_detail,
+        'at_ms': at_ms,
+    })
+    if len(session.trace) > ACTIVITY_TRACE_LIMIT:
+        del session.trace[:len(session.trace) - ACTIVITY_TRACE_LIMIT]
+
+
 def _prune_terminals(now):
     expired_keys = [
         key for key, session in _terminals.items()
@@ -213,6 +285,11 @@ def _remember_terminal(session, token, now, state, error_code):
     terminal.attempt = session.attempt
     terminal.retry_count = session.retry_count
     terminal.error_code = _clean_error_code(error_code)
+    terminal.trace = [dict(entry) for entry in session.trace]
+    terminal.outgoing_messages = list(session.outgoing_messages)
+    terminal.outgoing_total = session.outgoing_total
+    terminal.sending_index = session.sending_index
+    terminal.sent_count = session.sent_count
     terminal.started_monotonic = session.started_monotonic
     terminal.started_at = session.started_at
     terminal.stage_started_monotonic = session.stage_started_monotonic
@@ -253,6 +330,18 @@ def _begin(bot_hash, group_id, sender_name, preview):
             session.stage = STAGE_QUEUED
             session.preview = safe_preview
             session.sender_name = safe_sender
+            session.trace = []
+            session.outgoing_messages = []
+            session.outgoing_total = 0
+            session.sending_index = -1
+            session.sent_count = 0
+            _append_trace(
+                session,
+                STAGE_QUEUED,
+                f'等待处理 · 队列 {len(session.pending_tokens)}',
+                TRACE_ACTIVE,
+                now,
+            )
     return token
 
 
@@ -283,6 +372,11 @@ def _activate(token, stage, metadata):
         session.attempt = 0
         session.retry_count = 0
         session.error_code = ''
+        session.trace = []
+        session.outgoing_messages = []
+        session.outgoing_total = 0
+        session.sending_index = -1
+        session.sent_count = 0
         session.started_monotonic = token.started_monotonic
         session.started_at = token.started_at
         session.stage_started_monotonic = now
@@ -296,6 +390,7 @@ def _activate(token, stage, metadata):
                 session.preview = sanitize_preview(metadata.get('preview'))
             if 'sender_name' in metadata:
                 session.sender_name = sanitize_sender(metadata.get('sender_name'))
+        _append_trace(session, session.stage, '取得处理权', TRACE_ACTIVE, now)
 
 
 def activate(token, stage=STAGE_PREPARING, metadata=None):
@@ -316,6 +411,7 @@ def _update(token, stage=None, attempt=None, retry_count=None, preview=None,
         if stage in STAGES and stage != session.stage:
             session.stage = stage
             session.stage_started_monotonic = now
+            _append_trace(session, stage, '', TRACE_ACTIVE, now)
         if type(attempt) is int and attempt >= 0:
             session.attempt = attempt
         if type(retry_count) is int and retry_count >= 0:
@@ -332,6 +428,95 @@ def update(token, stage=None, attempt=None, retry_count=None, preview=None,
            sender_name=None):
     try:
         _update(token, stage, attempt, retry_count, preview, sender_name)
+    except Exception:
+        return None
+    return None
+
+
+def _note(token, stage, detail=None, status=TRACE_DONE):
+    with _lock:
+        session = _session_for_token(token)
+        if session is None or session.current_token_id != token.token_id:
+            return
+        now = time.monotonic()
+        _append_trace(session, stage, detail, status, now)
+        session.updated_monotonic = now
+        session.updated_at = _now_iso()
+
+
+def note(token, stage, detail=None, status=TRACE_DONE):
+    try:
+        _note(token, stage, detail, status)
+    except Exception:
+        return None
+    return None
+
+
+def _set_outgoing(token, messages):
+    with _lock:
+        session = _session_for_token(token)
+        if session is None or session.current_token_id != token.token_id:
+            return
+        safe_messages = []
+        total = 0
+        if isinstance(messages, (list, tuple)):
+            for message in messages:
+                safe_message = sanitize_outgoing_message(message)
+                if not safe_message:
+                    continue
+                total += 1
+                if len(safe_messages) < ACTIVITY_OUTGOING_LIMIT:
+                    safe_messages.append(safe_message)
+        session.outgoing_messages = safe_messages
+        session.outgoing_total = total
+        session.sending_index = -1
+        session.sent_count = 0
+        session.updated_monotonic = time.monotonic()
+        session.updated_at = _now_iso()
+
+
+def set_outgoing(token, messages):
+    try:
+        _set_outgoing(token, messages)
+    except Exception:
+        return None
+    return None
+
+
+def _set_send_progress(token, index, sent):
+    with _lock:
+        session = _session_for_token(token)
+        if session is None or session.current_token_id != token.token_id:
+            return
+        now = time.monotonic()
+        if type(index) is not int or index < 0:
+            return
+        total = max(session.outgoing_total, index + 1)
+        detail = f'第 {index + 1}/{total} 条'
+        if sent:
+            session.sent_count = max(0, min(total, index + 1))
+            session.sending_index = -1
+            status = TRACE_DONE
+        else:
+            session.sending_index = index
+            session.sent_count = min(session.sent_count, index)
+            status = TRACE_ACTIVE
+        _append_trace(session, STAGE_SENDING, detail, status, now)
+        session.updated_monotonic = now
+        session.updated_at = _now_iso()
+
+
+def mark_sending(token, index):
+    try:
+        _set_send_progress(token, index, False)
+    except Exception:
+        return None
+    return None
+
+
+def mark_sent(token, index):
+    try:
+        _set_send_progress(token, index, True)
     except Exception:
         return None
     return None
@@ -354,10 +539,25 @@ def _finish(token, state, error_code):
         if session.current_token_id != token.token_id:
             return
 
-        if state in RETAINED_TERMINAL_STATES and not session.pending_tokens:
-            _remember_terminal(session, token, now, state, error_code)
+        normalized_state = state if state in STATES else STATE_FAILED
+        has_pending = bool(session.pending_tokens)
+        final_status = TRACE_DONE
+        if normalized_state == STATE_FAILED:
+            final_status = TRACE_FAILED
+        elif normalized_state == STATE_SKIPPED:
+            final_status = TRACE_WARNING
+        if normalized_state in RETAINED_TERMINAL_STATES and not has_pending:
+            _close_active_trace(session, now, final_status)
+            _append_trace(
+                session,
+                normalized_state,
+                _clean_error_code(error_code),
+                final_status,
+                now,
+            )
+            _remember_terminal(session, token, now, normalized_state, error_code)
         session.current_token_id = None
-        session.state = state if state in STATES else STATE_FAILED
+        session.state = normalized_state
         session.stage = STAGE_QUEUED
         session.stage_started_monotonic = now
         session.updated_monotonic = now
@@ -365,9 +565,21 @@ def _finish(token, state, error_code):
         session.attempt = 0
         session.retry_count = 0
         session.error_code = _clean_error_code(error_code)
-        if session.pending_tokens:
+        if has_pending:
             _refresh_pending_summary(session)
             session.state = STATE_QUEUED
+            session.trace = []
+            session.outgoing_messages = []
+            session.outgoing_total = 0
+            session.sending_index = -1
+            session.sent_count = 0
+            _append_trace(
+                session,
+                STAGE_QUEUED,
+                f'等待下一条 · 队列 {len(session.pending_tokens)}',
+                TRACE_ACTIVE,
+                now,
+            )
         else:
             _sessions.pop((token.bot_hash, token.group_id), None)
 
@@ -412,6 +624,24 @@ def _snapshot_session(session, now):
         'attempt': session.attempt,
         'retry_count': session.retry_count,
         'error_code': session.error_code,
+        'trace': [
+            {
+                'stage': entry.get('stage', STAGE_QUEUED),
+                'status': entry.get('status', TRACE_DONE),
+                'detail': sanitize_trace_detail(entry.get('detail', '')),
+                'at_ms': max(0, int(entry.get('at_ms', 0))),
+            }
+            for entry in session.trace
+            if isinstance(entry, dict)
+        ],
+        'outgoing_messages': [
+            sanitize_outgoing_message(message)
+            for message in session.outgoing_messages
+            if sanitize_outgoing_message(message)
+        ],
+        'outgoing_total': session.outgoing_total,
+        'sending_index': session.sending_index,
+        'sent_count': session.sent_count,
         'updated_at': session.updated_at,
         'expires_in_ms': expires_in_ms,
     }

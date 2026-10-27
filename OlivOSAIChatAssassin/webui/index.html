@@ -457,6 +457,183 @@ code {
     -webkit-line-clamp: 2;
 }
 
+.activity-stream {
+    display: grid;
+    max-height: 96px;
+    gap: 5px;
+    margin: 0 0 9px;
+    padding: 5px 6px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--surface) 78%, var(--surface-soft));
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+}
+
+.activity-trace-list,
+.activity-outgoing-list {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.activity-trace-item {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 7px max-content minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+.activity-trace-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+
+.activity-trace-stage {
+    color: var(--text);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.activity-trace-detail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.activity-trace-status {
+    font-size: 0.64rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.activity-trace-item.is-active .activity-trace-dot {
+    background: var(--accent);
+    animation: activity-pulse 1800ms ease-in-out infinite;
+}
+
+.activity-trace-item.is-active .activity-trace-stage,
+.activity-trace-item.is-active .activity-trace-status {
+    color: var(--accent-strong);
+}
+
+.activity-trace-item.is-done .activity-trace-dot {
+    background: var(--success);
+}
+
+.activity-trace-item.is-done .activity-trace-status,
+.activity-outgoing-item.is-sent .activity-outgoing-state {
+    color: var(--success);
+}
+
+.activity-trace-item.is-warning .activity-trace-dot {
+    background: var(--warning);
+}
+
+.activity-trace-item.is-warning .activity-trace-status {
+    color: var(--warning);
+}
+
+.activity-trace-item.is-failed .activity-trace-dot {
+    background: var(--danger);
+}
+
+.activity-trace-item.is-failed .activity-trace-status {
+    color: var(--danger);
+}
+
+.activity-outgoing {
+    padding-top: 4px;
+    border-top: 1px dashed color-mix(in srgb, var(--border) 88%, transparent);
+}
+
+.activity-outgoing-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.activity-outgoing-head strong {
+    color: var(--text);
+    font-size: 0.72rem;
+}
+
+.activity-outgoing-list {
+    gap: 3px;
+    margin-top: 3px;
+}
+
+.activity-outgoing-item {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 5px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: var(--muted);
+    background: var(--surface-soft);
+    font-size: 0.7rem;
+}
+
+.activity-outgoing-item.is-sending {
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+    background: var(--accent-soft);
+}
+
+.activity-outgoing-index,
+.activity-outgoing-state {
+    color: var(--muted);
+    font-size: 0.64rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.activity-outgoing-text {
+    display: -webkit-box;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: 0.7rem;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.activity-outgoing-item.is-sending .activity-outgoing-index,
+.activity-outgoing-item.is-sending .activity-outgoing-state {
+    color: var(--accent-strong);
+}
+
+.activity-outgoing-item.is-sent .activity-outgoing-text,
+.activity-outgoing-item.is-sent .activity-outgoing-index {
+    color: var(--muted);
+}
+
+.activity-outgoing-more {
+    padding: 2px 5px;
+    color: var(--muted);
+    font-size: 0.66rem;
+    text-align: right;
+}
+
 .activity-session-meta,
 .activity-session-time {
     display: flex;
@@ -2372,7 +2549,8 @@ body.memory-modal-open {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .activity-refresh.is-active .activity-refresh-dot {
+    .activity-refresh.is-active .activity-refresh-dot,
+    .activity-trace-item.is-active .activity-trace-dot {
         animation: none;
     }
 }
@@ -3710,6 +3888,12 @@ noscript {
     const ACTIVITY_TERMINAL_COUNT_KEYS = [
         'completed_count', 'skipped_count', 'failed_count', 'superseded_count'
     ];
+    const ACTIVITY_TRACE_STATUS_META = {
+        active: {label: '进行中', className: 'is-active'},
+        done: {label: '完成', className: 'is-done'},
+        warning: {label: '注意', className: 'is-warning'},
+        failed: {label: '失败', className: 'is-failed'},
+    };
     const IMAGE_CACHE_SECTION = '图片缓存';
     const KNOWLEDGE_SEARCH_SECTION = '知识搜索';
     const TEXT_ONLY_CREATE_SECTIONS = ['用户侧写', '知识缓存', KNOWLEDGE_SEARCH_SECTION];
@@ -5627,6 +5811,10 @@ noscript {
     }
 
     function activitySessionSignature(session) {
+        const trace = Array.isArray(session.trace) ? session.trace : [];
+        const outgoing = Array.isArray(session.outgoing_messages)
+            ? session.outgoing_messages
+            : [];
         return [
             session.session_id || '',
             session.group_id || '',
@@ -5639,6 +5827,20 @@ noscript {
             session.attempt || 0,
             session.retry_count || 0,
             session.error_code || '',
+            trace.map(function (entry) {
+                return [
+                    entry && entry.stage || '',
+                    entry && entry.status || '',
+                    entry && entry.detail || '',
+                    entry && entry.at_ms || 0,
+                ].join(':');
+            }).join(';'),
+            outgoing.map(function (message) {
+                return String(message || '');
+            }).join(';'),
+            session.outgoing_total || 0,
+            Number.isInteger(session.sending_index) ? session.sending_index : -1,
+            session.sent_count || 0,
         ].join('|');
     }
 
@@ -5670,6 +5872,175 @@ noscript {
         return element;
     }
 
+    function activityTraceStatusMeta(statusName) {
+        return Object.prototype.hasOwnProperty.call(ACTIVITY_TRACE_STATUS_META, statusName)
+            ? ACTIVITY_TRACE_STATUS_META[statusName]
+            : ACTIVITY_TRACE_STATUS_META.done;
+    }
+
+    function activityTraceStageText(stageName) {
+        const terminalMeta = activityTerminalMeta(stageName);
+        if (terminalMeta) {
+            return terminalMeta.label;
+        }
+        return ACTIVITY_STAGE_LABELS[stageName] || '处理';
+    }
+
+    function buildActivityTrace(session) {
+        const entries = Array.isArray(session.trace)
+            ? session.trace.filter(function (entry) {
+                return entry && typeof entry === 'object';
+            })
+            : [];
+        if (!entries.length) {
+            return null;
+        }
+        const list = createActivityElement('ol', 'activity-trace-list');
+        list.setAttribute('aria-label', '受控执行轨迹');
+        entries.forEach(function (entry) {
+            const statusMeta = activityTraceStatusMeta(String(entry.status || 'done'));
+            const detail = String(entry.detail || '');
+            const item = createActivityElement(
+                'li', 'activity-trace-item ' + statusMeta.className
+            );
+            const dot = createActivityElement('span', 'activity-trace-dot');
+            dot.setAttribute('aria-hidden', 'true');
+            item.appendChild(dot);
+            item.appendChild(createActivityElement(
+                'span', 'activity-trace-stage', activityTraceStageText(String(entry.stage || ''))
+            ));
+            const detailNode = createActivityElement('span', 'activity-trace-detail', detail);
+            if (detail) {
+                detailNode.title = detail;
+            }
+            item.appendChild(detailNode);
+            item.appendChild(createActivityElement(
+                'span', 'activity-trace-status', statusMeta.label
+            ));
+            list.appendChild(item);
+        });
+        return list;
+    }
+
+    function buildActivityOutgoing(session) {
+        const sourceMessages = Array.isArray(session.outgoing_messages)
+            ? session.outgoing_messages
+            : [];
+        const messages = sourceMessages.map(function (message) {
+            return String(message || '');
+        }).filter(function (message) {
+            return message.length > 0;
+        });
+        const reportedTotal = Number(session.outgoing_total);
+        const total = Math.max(
+            messages.length,
+            Number.isFinite(reportedTotal) ? Math.max(0, Math.trunc(reportedTotal)) : 0
+        );
+        if (total <= 0 || !messages.length) {
+            return null;
+        }
+        const rawSentCount = Number(session.sent_count);
+        const sentCount = Number.isFinite(rawSentCount)
+            ? Math.max(0, Math.min(total, Math.trunc(rawSentCount)))
+            : 0;
+        const rawSendingIndex = Number(session.sending_index);
+        const sendingIndex = (
+            Number.isInteger(rawSendingIndex) && rawSendingIndex >= 0 && rawSendingIndex < total
+        ) ? rawSendingIndex : -1;
+        const section = createActivityElement('div', 'activity-outgoing');
+        const head = createActivityElement('div', 'activity-outgoing-head');
+        head.appendChild(createActivityElement(
+            'strong', '', sentCount >= total ? '发送结果' : '待发送消息'
+        ));
+        head.appendChild(createActivityElement(
+            'span',
+            '',
+            sendingIndex >= 0
+                ? '发送中 ' + String(sendingIndex + 1) + '/' + String(total)
+                : '已发 ' + String(sentCount) + '/' + String(total)
+        ));
+        section.appendChild(head);
+
+        const list = createActivityElement('ol', 'activity-outgoing-list');
+        list.setAttribute('aria-label', '待发送消息');
+        messages.forEach(function (message, index) {
+            let stateText = '待发送';
+            let stateClass = 'is-pending';
+            if (index === sendingIndex) {
+                stateText = '发送中';
+                stateClass = 'is-sending';
+            } else if (index < sentCount) {
+                stateText = '已发送';
+                stateClass = 'is-sent';
+            }
+            const item = createActivityElement(
+                'li', 'activity-outgoing-item ' + stateClass
+            );
+            item.appendChild(createActivityElement(
+                'span',
+                'activity-outgoing-index',
+                '第 ' + String(index + 1) + '/' + String(total) + ' 条'
+            ));
+            const messageNode = createActivityElement(
+                'span', 'activity-outgoing-text', message
+            );
+            messageNode.title = message;
+            item.appendChild(messageNode);
+            item.appendChild(createActivityElement(
+                'span', 'activity-outgoing-state', stateText
+            ));
+            list.appendChild(item);
+        });
+        section.appendChild(list);
+        if (total > messages.length) {
+            section.appendChild(createActivityElement(
+                'div',
+                'activity-outgoing-more',
+                '另有 ' + String(total - messages.length) + ' 条未展开'
+            ));
+        }
+        return section;
+    }
+
+    function buildActivityStream(session) {
+        const trace = buildActivityTrace(session);
+        const outgoing = buildActivityOutgoing(session);
+        if (!trace && !outgoing) {
+            return null;
+        }
+        const stream = createActivityElement('div', 'activity-stream');
+        stream.setAttribute('aria-label', '处理步骤与发送进度');
+        if (trace) {
+            stream.appendChild(trace);
+        }
+        if (outgoing) {
+            stream.appendChild(outgoing);
+        }
+        return stream;
+    }
+
+    function scrollActivityStreams() {
+        if (!elements.overviewActivityList) {
+            return;
+        }
+        elements.overviewActivityList.querySelectorAll('.activity-session').forEach(function (article) {
+            const stream = article.querySelector('.activity-stream');
+            if (!stream) {
+                return;
+            }
+            let target = stream.querySelector('.activity-outgoing-item.is-sending');
+            if (!target && article.classList.contains('is-running')) {
+                const traceItems = stream.querySelectorAll('.activity-trace-item');
+                target = traceItems.length ? traceItems[traceItems.length - 1] : null;
+            }
+            if (target) {
+                stream.scrollTop = Math.max(0, target.offsetTop - stream.offsetTop - 4);
+                return;
+            }
+            stream.scrollTop = stream.scrollHeight;
+        });
+    }
+
     function buildActivitySession(session) {
         const article = createActivityElement('article', 'activity-session');
         const stateName = String(session.state || '');
@@ -5698,6 +6069,10 @@ noscript {
         const preview = session.message_preview ||
             (terminalMeta ? terminalMeta.preview : (running ? '处理中' : '等待处理'));
         article.appendChild(createActivityElement('p', 'activity-session-preview', preview));
+        const stream = buildActivityStream(session);
+        if (stream) {
+            article.appendChild(stream);
+        }
 
         const meta = createActivityElement('div', 'activity-session-meta');
         if (session.sender_name) {
@@ -5726,7 +6101,7 @@ noscript {
             countdown = createActivityElement(
                 'span',
                 'activity-countdown ' + terminalMeta.className,
-                '3 秒后消失'
+                activityTerminalCountdownText(session)
             );
             timing.appendChild(countdown);
         }
@@ -5762,7 +6137,7 @@ noscript {
             countdown = createActivityElement(
                 'span',
                 'activity-countdown ' + terminalMeta.className,
-                '3 秒后消失'
+                activityTerminalCountdownText(session)
             );
             row.appendChild(countdown);
         }
@@ -5781,6 +6156,14 @@ noscript {
             return 0;
         }
         return Math.max(0, expiresInMs - elapsedOffset);
+    }
+
+    function activityTerminalCountdownText(session) {
+        const expiresInMs = Number(session && session.expires_in_ms);
+        const remainingSeconds = Number.isFinite(expiresInMs)
+            ? Math.max(0, Math.ceil(expiresInMs / 1000))
+            : 0;
+        return remainingSeconds + ' 秒后消失';
     }
 
     function expireTerminalActivitySessions() {
@@ -5941,6 +6324,7 @@ noscript {
                 sessions.slice(0, ACTIVITY_DETAIL_LIMIT).forEach(function (session) {
                     elements.overviewActivityList.appendChild(buildActivitySession(session));
                 });
+                scrollActivityStreams();
                 const moreSessions = sessions.slice(ACTIVITY_DETAIL_LIMIT);
                 const omittedCount = Math.max(0, Number(data.omitted_count) || 0);
                 const moreCount = moreSessions.length + omittedCount;

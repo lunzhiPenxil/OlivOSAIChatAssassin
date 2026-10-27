@@ -241,9 +241,16 @@ def get_reply_list_with_retry(
                         OlivOSAIChatAssassin.logger.log(
                             f'FIRST THINK - PASS - {first_thinking_res}'
                         )
+                        activity.note(activity_token, activity.STAGE_JUDGING, '继续参与')
                     else:
                         OlivOSAIChatAssassin.logger.log(
                             f'FIRST THINK - SKIP - {first_thinking_res}'
+                        )
+                        activity.note(
+                            activity_token,
+                            activity.STAGE_JUDGING,
+                            '选择跳过',
+                            activity.TRACE_WARNING,
                         )
                 flag_need_think = need_think
                 if flag_need_think is False:
@@ -267,12 +274,23 @@ def get_reply_list_with_retry(
                 )
                 reply_list = get_json_message(ai_res)
                 if reply_list is None:
+                    activity.note(
+                        activity_token,
+                        activity.STAGE_MODEL,
+                        f'第 {reply_count} 次 · 格式待修复',
+                        activity.TRACE_WARNING,
+                    )
                     raise OlivOSAIChatAssassin.webTools.AICallFailure(
                         'invalid reply JSON',
                         retryable=True,
                         kind='invalid_reply_json',
                         content=ai_res
                     )
+                activity.note(
+                    activity_token,
+                    activity.STAGE_MODEL,
+                    f'第 {reply_count} 次 · {len(reply_list)} 条',
+                )
         except OlivOSAIChatAssassin.webTools.AICallFailure as exc:
             last_failure = exc
             if exc.kind in ('empty_content', 'invalid_reply_json'):
@@ -282,7 +300,18 @@ def get_reply_list_with_retry(
                     activity.update(activity_token, stage=activity.STAGE_REPAIRING)
                     repaired_reply_list = _repair_json_reply(lConfig, draft)
                     if repaired_reply_list is not None:
+                        activity.note(
+                            activity_token,
+                            activity.STAGE_REPAIRING,
+                            f'修复成功 · {len(repaired_reply_list)} 条',
+                        )
                         return repaired_reply_list
+                    activity.note(
+                        activity_token,
+                        activity.STAGE_REPAIRING,
+                        '未得到有效回复',
+                        activity.TRACE_WARNING,
+                    )
                 contract_failure_count += 1
                 flag_disable_thinking = True
                 flag_json_correction = True
@@ -307,6 +336,12 @@ def get_reply_list_with_retry(
                 f'API RETRY - [{reply_count + 1}/{retry_count}] wait {retry_delay:.2f} s - {exc}'
             )
             activity.update(activity_token, stage=activity.STAGE_BACKOFF)
+            activity.note(
+                activity_token,
+                activity.STAGE_BACKOFF,
+                f'第 {reply_count + 1} 次 · {retry_delay:.1f} 秒',
+                activity.TRACE_ACTIVE,
+            )
             if _wait_retry_backoff(group_id, retry_delay):
                 flag_retry_canceled = True
                 OlivOSAIChatAssassin.logger.log('CALL AI - RETRY CANCELED - new message arrived')
@@ -376,6 +411,7 @@ def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc, activity_to
     if not OlivOSAIChatAssassin.data.gData.getConfig(bot_hash):
         activity.finish(activity_token, activity.STATE_SKIPPED, 'configuration_missing')
         return
+    activity.note(activity_token, activity.STAGE_PREPARING, '配置已加载')
     # 检查是否在启用群组列表中
     if (
         'enabled_groups' in OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
@@ -390,6 +426,7 @@ def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc, activity_to
     message = plugin_event.data.message
     message = msg_trans(message, group_id, bot_hash=bot_hash)
     message = msg_wash(message)
+    activity.note(activity_token, activity.STAGE_PREPARING, '消息已解析')
     if should_ignore(message, bot_hash=bot_hash):
         OlivOSAIChatAssassin.logger.log('IGNORE')
         activity.finish(activity_token, activity.STATE_SKIPPED, 'ignored')
@@ -420,8 +457,20 @@ def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc, activity_to
         message_id=message_id,
         bot_hash=bot_hash
     )
+    activity.note(
+        activity_token,
+        activity.STAGE_PREPARING,
+        f'历史 {len(OlivOSAIChatAssassin.data.gMessageHistory.get(group_id, []))} 条',
+    )
     # 决定是否回复
-    if not should_reply(group_id, message, plugin_event, bot_hash=bot_hash):
+    flag_reply = should_reply(group_id, message, plugin_event, bot_hash=bot_hash)
+    activity.note(
+        activity_token,
+        activity.STAGE_PREPARING,
+        '命中回复条件' if flag_reply else '未命中回复条件',
+        activity.TRACE_DONE if flag_reply else activity.TRACE_WARNING,
+    )
+    if not flag_reply:
         OlivOSAIChatAssassin.logger.log('SHOULD NOT')
         activity.finish(activity_token, activity.STATE_SKIPPED, 'not_selected')
     else:
@@ -512,6 +561,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
         OlivOSAIChatAssassin.logger.log('HISTORY TOO SHORT')
         activity.finish(activity_token, activity.STATE_SKIPPED, 'history_short')
         return
+    activity.note(activity_token, activity.STAGE_RECALLING, f'历史 {len(history)} 条')
     self_id = plugin_event.base_info['self_id']
     mention_str = f'[OP:at,id={self_id}]'
     personality = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get('personality', '')
@@ -533,6 +583,11 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
 '''
 
     # 生成记忆
+    memory_outcome = {
+        'detail': '记忆整理完成',
+        'status': activity.TRACE_DONE,
+    }
+
     def set_memory(t_thisMemory: dict, activity_token=None):
         history = list(OlivOSAIChatAssassin.data.gMessageHistory.get(group_id, []))
         # 设置任务
@@ -600,11 +655,15 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
             )
         except OlivOSAIChatAssassin.webTools.AICallFailure as exc:
             OlivOSAIChatAssassin.logger.warn(f'MEMORY API ERR: {exc}')
+            memory_outcome['detail'] = '记忆提炼失败'
+            memory_outcome['status'] = activity.TRACE_WARNING
             return
         try:
             call_ai_data = json.loads(call_ai_res)
         except (json.JSONDecodeError, TypeError) as exc:
             OlivOSAIChatAssassin.logger.warn(f'MEMORY FORMAT ERR: {exc}')
+            memory_outcome['detail'] = '记忆格式异常'
+            memory_outcome['status'] = activity.TRACE_WARNING
             return
         try:
             with OlivOSAIChatAssassin.data.gMemoryLock:
@@ -615,8 +674,13 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
                 )
             if flag_memory_changed:
                 OlivOSAIChatAssassin.load.write_memory(bot_hash=bot_hash)
+                memory_outcome['detail'] = '记忆已更新'
+            else:
+                memory_outcome['detail'] = '无记忆变更'
         except Exception as exc:
             OlivOSAIChatAssassin.logger.warn(f'MEMORY UPDATE ERR: {exc}')
+            memory_outcome['detail'] = '记忆更新异常'
+            memory_outcome['status'] = activity.TRACE_WARNING
 
     # 设置任务
     thisMemoryC = {}
@@ -748,6 +812,23 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
         '全局': thisMemoryG
     }
     thisMemory.update(thisGroupMemoryDict)
+    recall_parts = []
+    for memory_key, memory_label in (
+        ('知识搜索', '知识'),
+        ('人物关系', '关系'),
+        ('用户侧写', '侧写'),
+    ):
+        memory_value = thisMemoryG.get(memory_key, {})
+        if isinstance(memory_value, dict) and memory_value:
+            recall_parts.append(f'{memory_label} {len(memory_value)}')
+    image_cache = OlivOSAIChatAssassin.data.gImageCache.get(group_id, {})
+    if isinstance(image_cache, dict) and image_cache:
+        recall_parts.append(f'图片 {len(image_cache)}')
+    activity.note(
+        activity_token,
+        activity.STAGE_RECALLING,
+        ' · '.join(recall_parts) if recall_parts else '无记忆命中',
+    )
     activity.update(activity_token, stage=activity.STAGE_PACING)
     if not OlivOSAIChatAssassin.data.gGroupLock[group_id].slack():
         OlivOSAIChatAssassin.logger.log(
@@ -761,6 +842,7 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
             f'HIT - {time.perf_counter() - total_start:.2f}'
             f'/{OlivOSAIChatAssassin.data.gGroupLock[group_id].getRemaining():.2f} s - {message}'
         )
+        activity.note(activity_token, activity.STAGE_PACING, '发送窗口已通过')
     examples_reply = {
         'r': ['好的']
     }
@@ -853,14 +935,22 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
                 args=(thisMemory, activity_token)
             )
             t_set_memory.start()
-            OlivOSAIChatAssassin.tools.sleep(1 + (random.random() * 2 - 1) * 0.95)
+            activity.set_outgoing(activity_token, reply_list)
             activity.update(activity_token, stage=activity.STAGE_SENDING)
+            OlivOSAIChatAssassin.tools.sleep(1 + (random.random() * 2 - 1) * 0.95)
             reply(
                 plugin_event, reply_trans(reply_list),
-                total_time_past=time.perf_counter() - total_start
+                total_time_past=time.perf_counter() - total_start,
+                activity_token=activity_token,
             )
             activity.update(activity_token, stage=activity.STAGE_MEMORY_EXTRACT)
             t_set_memory.join()
+            activity.note(
+                activity_token,
+                activity.STAGE_MEMORY_EXTRACT,
+                memory_outcome['detail'],
+                memory_outcome['status'],
+            )
 
 
 def get_ai_context(
@@ -1019,13 +1109,15 @@ def send_message_force(bot_hash, send_type, target_id, message):
         plugin_event.send(send_type, target_id, message)
 
 
-def reply(plugin_event, msg: list, total_time_past: float = 0.0):
+def reply(plugin_event, msg: list, total_time_past: float = 0.0, activity_token=None):
     flag_first = True
+    send_index = 0
     for i in msg:
         len_i = len(i)
         if len_i <= 0:
             OlivOSAIChatAssassin.logger.log('SKIP - REPLY NONE')
         else:
+            activity.mark_sending(activity_token, send_index)
             sleep_time = sum([
                 0.2 + (random.random() * 2 - 1) * 0.15
                 for _ in range(len_i)
@@ -1038,6 +1130,8 @@ def reply(plugin_event, msg: list, total_time_past: float = 0.0):
                 sleep_time /= 2
             OlivOSAIChatAssassin.tools.sleep(sleep_time)
             plugin_event.reply(i)
+            activity.mark_sent(activity_token, send_index)
+            send_index += 1
 
 
 def reply_wash(msg: list, bot_hash: str):
