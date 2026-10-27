@@ -8,8 +8,10 @@ from datetime import datetime
 ACTIVITY_PREVIEW_LIMIT = 96
 ACTIVITY_SENDER_LIMIT = 32
 ACTIVITY_SNAPSHOT_LIMIT = 50
-ACTIVITY_COMPLETION_TTL_MS = 3000
-ACTIVITY_COMPLETED_LIMIT = 50
+ACTIVITY_TERMINAL_TTL_MS = 3000
+ACTIVITY_COMPLETION_TTL_MS = ACTIVITY_TERMINAL_TTL_MS
+ACTIVITY_TERMINAL_LIMIT = 50
+ACTIVITY_COMPLETED_LIMIT = ACTIVITY_TERMINAL_LIMIT
 
 STAGE_QUEUED = 'queued'
 STAGE_PREPARING = 'preparing'
@@ -49,6 +51,19 @@ STATES = frozenset((
     STATE_SUPERSEDED,
     STATE_FAILED,
     STATE_FINISHED,
+))
+
+TERMINAL_STATES = frozenset((
+    STATE_FINISHED,
+    STATE_SKIPPED,
+    STATE_SUPERSEDED,
+    STATE_FAILED,
+))
+
+RETAINED_TERMINAL_STATES = frozenset((
+    STATE_FINISHED,
+    STATE_SKIPPED,
+    STATE_FAILED,
 ))
 
 _MESSAGE_MARKER_RE = re.compile(r'\[(?:CQ|OP):[^\]]*\]', re.IGNORECASE)
@@ -107,7 +122,7 @@ class _ActivitySession:
         self.sequence = sequence
         self.current_token_id = None
         self.pending_tokens = {}
-        self.completed_monotonic = 0.0
+        self.terminal_monotonic = 0.0
         self.expires_monotonic = 0.0
         self.state = STATE_QUEUED
         self.stage = STAGE_QUEUED
@@ -129,7 +144,7 @@ class _ActivitySession:
 
 _lock = threading.RLock()
 _sessions = {}
-_completed = {}
+_terminals = {}
 _next_token_id = 0
 _next_session_sequence = 0
 
@@ -166,56 +181,56 @@ def _refresh_pending_summary(session):
     session.sender_name = latest['sender_name']
 
 
-def _prune_completed(now):
+def _prune_terminals(now):
     expired_keys = [
-        key for key, session in _completed.items()
+        key for key, session in _terminals.items()
         if session.expires_monotonic <= now
     ]
     for key in expired_keys:
-        _completed.pop(key, None)
-    overflow = len(_completed) - ACTIVITY_COMPLETED_LIMIT
+        _terminals.pop(key, None)
+    overflow = len(_terminals) - ACTIVITY_TERMINAL_LIMIT
     if overflow <= 0:
         return
     oldest_keys = sorted(
-        _completed,
-        key=lambda key: _completed[key].expires_monotonic,
+        _terminals,
+        key=lambda key: _terminals[key].expires_monotonic,
     )[:overflow]
     for key in oldest_keys:
-        _completed.pop(key, None)
+        _terminals.pop(key, None)
 
 
-def _remember_completion(session, token, now):
-    completed = _ActivitySession(
+def _remember_terminal(session, token, now, state, error_code):
+    terminal = _ActivitySession(
         f'{session.session_id}-done-{token.token_id}',
         session.bot_hash,
         session.group_id,
         _next_id('session'),
     )
-    completed.state = STATE_FINISHED
-    completed.stage = session.stage if session.stage in STAGES else STAGE_QUEUED
-    completed.preview = session.preview
-    completed.sender_name = session.sender_name
-    completed.attempt = session.attempt
-    completed.retry_count = session.retry_count
-    completed.error_code = session.error_code
-    completed.started_monotonic = session.started_monotonic
-    completed.started_at = session.started_at
-    completed.stage_started_monotonic = session.stage_started_monotonic
-    completed.updated_monotonic = now
-    completed.updated_at = _now_iso()
-    completed.completed_monotonic = now
-    completed.expires_monotonic = now + ACTIVITY_COMPLETION_TTL_MS / 1000.0
-    _completed[(session.bot_hash, session.group_id)] = completed
-    _prune_completed(now)
+    terminal.state = state if state in TERMINAL_STATES else STATE_FINISHED
+    terminal.stage = session.stage if session.stage in STAGES else STAGE_QUEUED
+    terminal.preview = session.preview
+    terminal.sender_name = session.sender_name
+    terminal.attempt = session.attempt
+    terminal.retry_count = session.retry_count
+    terminal.error_code = _clean_error_code(error_code)
+    terminal.started_monotonic = session.started_monotonic
+    terminal.started_at = session.started_at
+    terminal.stage_started_monotonic = session.stage_started_monotonic
+    terminal.updated_monotonic = now
+    terminal.updated_at = _now_iso()
+    terminal.terminal_monotonic = now
+    terminal.expires_monotonic = now + ACTIVITY_TERMINAL_TTL_MS / 1000.0
+    _terminals[(session.bot_hash, session.group_id)] = terminal
+    _prune_terminals(now)
 
 
 def _begin(bot_hash, group_id, sender_name, preview):
     token = _new_token(bot_hash, group_id)
     with _lock:
         now = time.monotonic()
-        _prune_completed(now)
+        _prune_terminals(now)
         key = (bot_hash, group_id)
-        _completed.pop(key, None)
+        _terminals.pop(key, None)
         session = _sessions.get(key)
         if session is None:
             sequence = _next_id('session')
@@ -325,7 +340,7 @@ def update(token, stage=None, attempt=None, retry_count=None, preview=None,
 def _finish(token, state, error_code):
     with _lock:
         now = time.monotonic()
-        _prune_completed(now)
+        _prune_terminals(now)
         session = _session_for_token(token)
         if session is None:
             return
@@ -339,8 +354,8 @@ def _finish(token, state, error_code):
         if session.current_token_id != token.token_id:
             return
 
-        if state == STATE_FINISHED and not session.pending_tokens:
-            _remember_completion(session, token, now)
+        if state in RETAINED_TERMINAL_STATES and not session.pending_tokens:
+            _remember_terminal(session, token, now, state, error_code)
         session.current_token_id = None
         session.state = state if state in STATES else STATE_FAILED
         session.stage = STAGE_QUEUED
@@ -366,12 +381,12 @@ def finish(token, state=STATE_FINISHED, error_code=None):
 
 
 def _snapshot_session(session, now):
-    completed = session.completed_monotonic > 0.0
-    queue_depth = 0 if completed else session.queue_depth()
-    if completed:
-        state = STATE_FINISHED
+    terminal = session.terminal_monotonic > 0.0
+    queue_depth = 0 if terminal else session.queue_depth()
+    if terminal:
+        state = session.state if session.state in TERMINAL_STATES else STATE_FINISHED
         stage = session.stage if session.stage in STAGES else STAGE_QUEUED
-        elapsed_at = session.completed_monotonic
+        elapsed_at = session.terminal_monotonic
         expires_in_ms = max(0, int((session.expires_monotonic - now) * 1000))
     elif session.current_token_id is None:
         state = STATE_QUEUED
@@ -412,17 +427,17 @@ def snapshot(bot_hash, limit=ACTIVITY_SNAPSHOT_LIMIT):
         limit = max(0, min(limit, ACTIVITY_SNAPSHOT_LIMIT))
         now = time.monotonic()
         with _lock:
-            _prune_completed(now)
+            _prune_terminals(now)
             sessions = [
                 session for (session_bot_hash, _group_id), session in _sessions.items()
                 if session_bot_hash == bot_hash
             ]
             sessions.extend(
-                session for (session_bot_hash, _group_id), session in _completed.items()
+                session for (session_bot_hash, _group_id), session in _terminals.items()
                 if session_bot_hash == bot_hash
             )
             sessions.sort(key=lambda session: (
-                2 if session.completed_monotonic > 0.0 else (
+                2 if session.terminal_monotonic > 0.0 else (
                     0 if session.current_token_id is not None else 1
                 ),
                 -session.updated_monotonic,
@@ -432,8 +447,24 @@ def snapshot(bot_hash, limit=ACTIVITY_SNAPSHOT_LIMIT):
             running_count = sum(
                 1 for session in sessions if session.current_token_id is not None
             )
+            terminal_count = sum(
+                1 for session in sessions if session.terminal_monotonic > 0.0
+            )
             completed_count = sum(
-                1 for session in sessions if session.completed_monotonic > 0.0
+                1 for session in sessions
+                if session.terminal_monotonic > 0.0 and session.state == STATE_FINISHED
+            )
+            skipped_count = sum(
+                1 for session in sessions
+                if session.terminal_monotonic > 0.0 and session.state == STATE_SKIPPED
+            )
+            failed_count = sum(
+                1 for session in sessions
+                if session.terminal_monotonic > 0.0 and session.state == STATE_FAILED
+            )
+            superseded_count = sum(
+                1 for session in sessions
+                if session.terminal_monotonic > 0.0 and session.state == STATE_SUPERSEDED
             )
             pending_messages = sum(session.queue_depth() for session in sessions)
             selected = sessions[:limit]
@@ -444,7 +475,11 @@ def snapshot(bot_hash, limit=ACTIVITY_SNAPSHOT_LIMIT):
                 ],
                 'session_count': session_count,
                 'running_count': running_count,
+                'terminal_count': terminal_count,
                 'completed_count': completed_count,
+                'skipped_count': skipped_count,
+                'failed_count': failed_count,
+                'superseded_count': superseded_count,
                 'pending_messages': pending_messages,
                 'omitted_count': max(0, session_count - len(selected)),
             }
@@ -454,7 +489,11 @@ def snapshot(bot_hash, limit=ACTIVITY_SNAPSHOT_LIMIT):
             'sessions': [],
             'session_count': 0,
             'running_count': 0,
+            'terminal_count': 0,
             'completed_count': 0,
+            'skipped_count': 0,
+            'failed_count': 0,
+            'superseded_count': 0,
             'pending_messages': 0,
             'omitted_count': 0,
         }
@@ -466,8 +505,8 @@ def clear_bot(bot_hash):
         with _lock:
             for key in [key for key in _sessions if key[0] == bot_hash]:
                 _sessions.pop(key, None)
-            for key in [key for key in _completed if key[0] == bot_hash]:
-                _completed.pop(key, None)
+            for key in [key for key in _terminals if key[0] == bot_hash]:
+                _terminals.pop(key, None)
     except Exception:
         return None
     return None
@@ -477,7 +516,7 @@ def clear_all():
     try:
         with _lock:
             _sessions.clear()
-            _completed.clear()
+            _terminals.clear()
     except Exception:
         return None
     return None

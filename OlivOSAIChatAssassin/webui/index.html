@@ -371,12 +371,36 @@ code {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 16%, transparent);
 }
 
-.activity-state-dot.completed {
+.activity-state-dot.is-completed {
     background: var(--success);
+}
+
+.activity-state-dot.is-skipped {
+    background: var(--warning);
+}
+
+.activity-state-dot.is-failed {
+    background: var(--danger);
+}
+
+.activity-state-dot.is-superseded {
+    background: var(--muted);
 }
 
 .activity-session.is-completed {
     border-color: color-mix(in srgb, var(--success) 28%, var(--border));
+}
+
+.activity-session.is-skipped {
+    border-color: color-mix(in srgb, var(--warning) 28%, var(--border));
+}
+
+.activity-session.is-failed {
+    border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+}
+
+.activity-session.is-superseded {
+    border-color: color-mix(in srgb, var(--muted) 28%, var(--border));
 }
 
 .activity-stage {
@@ -401,6 +425,24 @@ code {
     border-color: color-mix(in srgb, var(--success) 28%, var(--border));
     color: var(--success);
     background: var(--success-soft);
+}
+
+.activity-session.is-skipped .activity-stage {
+    border-color: color-mix(in srgb, var(--warning) 28%, var(--border));
+    color: var(--warning);
+    background: var(--warning-soft);
+}
+
+.activity-session.is-failed .activity-stage {
+    border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
+    color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.activity-session.is-superseded .activity-stage {
+    border-color: var(--border);
+    color: var(--muted);
+    background: var(--surface);
 }
 
 .activity-session-preview {
@@ -433,6 +475,18 @@ code {
     color: var(--success);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+}
+
+.activity-countdown.is-skipped {
+    color: var(--warning);
+}
+
+.activity-countdown.is-failed {
+    color: var(--danger);
+}
+
+.activity-countdown.is-superseded {
+    color: var(--muted);
 }
 
 .activity-empty {
@@ -502,6 +556,18 @@ code {
 
 .activity-more-row.is-completed {
     border-color: color-mix(in srgb, var(--success) 24%, var(--border));
+}
+
+.activity-more-row.is-skipped {
+    border-color: color-mix(in srgb, var(--warning) 24%, var(--border));
+}
+
+.activity-more-row.is-failed {
+    border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
+}
+
+.activity-more-row.is-superseded {
+    border-color: color-mix(in srgb, var(--muted) 24%, var(--border));
 }
 
 .activity-more-row.is-omitted {
@@ -3615,6 +3681,35 @@ noscript {
         sending: '发送回复',
         memory_extract: '整理记忆',
     };
+    const ACTIVITY_TERMINAL_META = {
+        finished: {
+            label: '已完成',
+            className: 'is-completed',
+            countKey: 'completed_count',
+            preview: '本轮回复已完成',
+        },
+        skipped: {
+            label: '已跳过',
+            className: 'is-skipped',
+            countKey: 'skipped_count',
+            preview: '本轮未回复',
+        },
+        failed: {
+            label: '失败',
+            className: 'is-failed',
+            countKey: 'failed_count',
+            preview: '本轮处理失败',
+        },
+        superseded: {
+            label: '已取代',
+            className: 'is-superseded',
+            countKey: 'superseded_count',
+            preview: '已由新消息接管',
+        },
+    };
+    const ACTIVITY_TERMINAL_COUNT_KEYS = [
+        'completed_count', 'skipped_count', 'failed_count', 'superseded_count'
+    ];
     const IMAGE_CACHE_SECTION = '图片缓存';
     const KNOWLEDGE_SEARCH_SECTION = '知识搜索';
     const TEXT_ONLY_CREATE_SECTIONS = ['用户侧写', '知识缓存', KNOWLEDGE_SEARCH_SECTION];
@@ -5496,9 +5591,16 @@ noscript {
             ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
     }
 
+    function activityTerminalMeta(stateName) {
+        return Object.prototype.hasOwnProperty.call(ACTIVITY_TERMINAL_META, stateName)
+            ? ACTIVITY_TERMINAL_META[stateName]
+            : null;
+    }
+
     function activityStageText(stage, stateName) {
-        if (stateName === 'finished') {
-            return '已完成';
+        const terminalMeta = activityTerminalMeta(stateName);
+        if (terminalMeta) {
+            return terminalMeta.label;
         }
         return ACTIVITY_STAGE_LABELS[stage] || '处理中';
     }
@@ -5547,7 +5649,11 @@ noscript {
         const parts = sessions.map(activitySessionSignature);
         parts.push('count:' + String(data.session_count || 0));
         parts.push('running:' + String(data.running_count || 0));
+        parts.push('terminal:' + String(data.terminal_count || 0));
         parts.push('completed:' + String(data.completed_count || 0));
+        parts.push('skipped:' + String(data.skipped_count || 0));
+        parts.push('failed:' + String(data.failed_count || 0));
+        parts.push('superseded:' + String(data.superseded_count || 0));
         parts.push('pending:' + String(data.pending_messages || 0));
         parts.push('omitted:' + String(data.omitted_count || 0));
         return parts.join('\n');
@@ -5568,15 +5674,18 @@ noscript {
         const article = createActivityElement('article', 'activity-session');
         const stateName = String(session.state || '');
         const running = stateName === 'running';
-        const completed = stateName === 'finished';
+        const terminalMeta = activityTerminalMeta(stateName);
+        const terminal = Boolean(terminalMeta);
         article.classList.add(
-            running ? 'is-running' : (completed ? 'is-completed' : 'is-queued')
+            running ? 'is-running' : (terminalMeta ? terminalMeta.className : 'is-queued')
         );
         const head = createActivityElement('div', 'activity-session-head');
         const group = createActivityElement('div', 'activity-session-group');
         const dot = createActivityElement('span', 'activity-state-dot');
         dot.classList.toggle('running', running);
-        dot.classList.toggle('completed', completed);
+        if (terminalMeta) {
+            dot.classList.add(terminalMeta.className);
+        }
         dot.setAttribute('aria-hidden', 'true');
         group.appendChild(dot);
         group.appendChild(createActivityElement('strong', '', session.group_label || ('群 ' + String(session.group_id || '未知'))));
@@ -5587,7 +5696,7 @@ noscript {
         article.appendChild(head);
 
         const preview = session.message_preview ||
-            (completed ? '本轮回复已完成' : (running ? '处理中' : '等待处理'));
+            (terminalMeta ? terminalMeta.preview : (running ? '处理中' : '等待处理'));
         article.appendChild(createActivityElement('p', 'activity-session-preview', preview));
 
         const meta = createActivityElement('div', 'activity-session-meta');
@@ -5613,8 +5722,12 @@ noscript {
         timing.appendChild(elapsed);
         timing.appendChild(stageElapsed);
         let countdown = null;
-        if (completed) {
-            countdown = createActivityElement('span', 'activity-countdown', '3 秒后消失');
+        if (terminal) {
+            countdown = createActivityElement(
+                'span',
+                'activity-countdown ' + terminalMeta.className,
+                '3 秒后消失'
+            );
             timing.appendChild(countdown);
         }
         article.appendChild(timing);
@@ -5630,8 +5743,10 @@ noscript {
     function buildActivityMoreRow(session) {
         const row = createActivityElement('div', 'activity-more-row');
         const stateName = String(session.state || '');
-        const completed = stateName === 'finished';
-        row.classList.toggle('is-completed', completed);
+        const terminalMeta = activityTerminalMeta(stateName);
+        if (terminalMeta) {
+            row.classList.add(terminalMeta.className);
+        }
         row.appendChild(createActivityElement('strong', '', session.group_label || ('群 ' + String(session.group_id || '未知'))));
         row.appendChild(createActivityElement('span', '', activityStageText(session.stage, stateName)));
         const elapsed = createActivityElement('span', '', activityDurationText(session.elapsed_ms));
@@ -5643,8 +5758,12 @@ noscript {
             row.appendChild(createActivityElement('span', '', '重试 ' + String(session.retry_count) + ' 次'));
         }
         let countdown = null;
-        if (completed) {
-            countdown = createActivityElement('span', 'activity-countdown', '3 秒后消失');
+        if (terminalMeta) {
+            countdown = createActivityElement(
+                'span',
+                'activity-countdown ' + terminalMeta.className,
+                '3 秒后消失'
+            );
             row.appendChild(countdown);
         }
         state.activityTimingNodes.push({
@@ -5656,7 +5775,7 @@ noscript {
         return row;
     }
 
-    function activityCompletionRemainingMs(session, elapsedOffset) {
+    function activityTerminalRemainingMs(session, elapsedOffset) {
         const expiresInMs = Number(session.expires_in_ms);
         if (!Number.isFinite(expiresInMs)) {
             return 0;
@@ -5664,28 +5783,37 @@ noscript {
         return Math.max(0, expiresInMs - elapsedOffset);
     }
 
-    function expireCompletedActivitySessions() {
+    function expireTerminalActivitySessions() {
         const data = state.activity;
         if (!data || !Array.isArray(data.sessions) || !state.activityTimingAnchor) {
             return false;
         }
         const elapsedOffset = Math.max(0, performance.now() - state.activityTimingAnchor);
         let removed = 0;
+        const removedCounts = {};
+        ACTIVITY_TERMINAL_COUNT_KEYS.forEach(function (key) {
+            removedCounts[key] = 0;
+        });
         data.sessions = data.sessions.filter(function (session) {
+            const terminalMeta = session ? activityTerminalMeta(session.state) : null;
             if (
-                !session || session.state !== 'finished' ||
-                activityCompletionRemainingMs(session, elapsedOffset) > 0
+                !terminalMeta ||
+                activityTerminalRemainingMs(session, elapsedOffset) > 0
             ) {
                 return true;
             }
             removed += 1;
+            removedCounts[terminalMeta.countKey] += 1;
             return false;
         });
         if (!removed) {
             return false;
         }
         data.session_count = Math.max(0, (Number(data.session_count) || 0) - removed);
-        data.completed_count = Math.max(0, (Number(data.completed_count) || 0) - removed);
+        data.terminal_count = Math.max(0, (Number(data.terminal_count) || 0) - removed);
+        ACTIVITY_TERMINAL_COUNT_KEYS.forEach(function (key) {
+            data[key] = Math.max(0, (Number(data[key]) || 0) - removedCounts[key]);
+        });
         state.activityRenderedSignature = '';
         return true;
     }
@@ -5703,8 +5831,8 @@ noscript {
             if (!session) {
                 return;
             }
-            const completed = session.state === 'finished';
-            const sessionOffset = completed ? 0 : elapsedOffset;
+            const terminal = Boolean(activityTerminalMeta(session.state));
+            const sessionOffset = terminal ? 0 : elapsedOffset;
             node.elapsed.textContent = '总耗时 ' + activityDurationText(
                 Number(session.elapsed_ms || 0) + sessionOffset
             );
@@ -5714,7 +5842,7 @@ noscript {
                 );
             }
             if (node.countdown) {
-                const remainingMs = activityCompletionRemainingMs(session, elapsedOffset);
+                const remainingMs = activityTerminalRemainingMs(session, elapsedOffset);
                 const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
                 node.countdown.textContent = remainingSeconds + ' 秒后消失';
             }
@@ -5728,7 +5856,7 @@ noscript {
         ) {
             return;
         }
-        if (expireCompletedActivitySessions()) {
+        if (expireTerminalActivitySessions()) {
             renderActivity(true);
             return;
         }
@@ -5757,11 +5885,17 @@ noscript {
             const sessionCount = Number(data.session_count) || sessions.length;
             const runningCount = Number(data.running_count) || 0;
             const completedCount = Number(data.completed_count) || 0;
+            const skippedCount = Number(data.skipped_count) || 0;
+            const failedCount = Number(data.failed_count) || 0;
+            const supersededCount = Number(data.superseded_count) || 0;
+            const terminalCount = Number.isFinite(Number(data.terminal_count))
+                ? Math.max(0, Number(data.terminal_count))
+                : completedCount + skippedCount + failedCount + supersededCount;
             const pendingCount = Number(data.pending_messages) || 0;
             if (sessionCount <= 0) {
                 elements.overviewActivitySummary.textContent = '当前空闲';
             } else {
-                const activeSessionCount = Math.max(0, sessionCount - completedCount);
+                const activeSessionCount = Math.max(0, sessionCount - terminalCount);
                 const parts = [];
                 if (runningCount > 0) {
                     parts.push(String(runningCount) + ' 个运行中');
@@ -5771,6 +5905,15 @@ noscript {
                 }
                 if (completedCount > 0) {
                     parts.push(String(completedCount) + ' 个已完成');
+                }
+                if (skippedCount > 0) {
+                    parts.push(String(skippedCount) + ' 个已跳过');
+                }
+                if (failedCount > 0) {
+                    parts.push(String(failedCount) + ' 个失败');
+                }
+                if (supersededCount > 0) {
+                    parts.push(String(supersededCount) + ' 个已取代');
                 }
                 if (pendingCount > 0) {
                     parts.push(String(pendingCount) + ' 条待处理');
