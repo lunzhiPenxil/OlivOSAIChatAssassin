@@ -319,6 +319,29 @@ def log_reasoning_content(choices: list):
             )
 
 
+def _usage_int(value):
+    return value if type(value) is int else None
+
+
+def _usage_cache_tokens(usage_data: dict):
+    prompt_tokens = _usage_int(usage_data.get('prompt_tokens'))
+    cache_hit = _usage_int(usage_data.get('prompt_cache_hit_tokens'))
+    cache_miss = _usage_int(usage_data.get('prompt_cache_miss_tokens'))
+    if cache_hit is None:
+        details = usage_data.get('prompt_tokens_details')
+        if isinstance(details, dict):
+            cache_hit = _usage_int(details.get('cached_tokens'))
+    if cache_hit is None:
+        cache_hit = _usage_int(usage_data.get('cached_tokens'))
+    if cache_hit is None:
+        cache_hit = _usage_int(usage_data.get('cache_read_input_tokens'))
+    if cache_hit is None:
+        return None
+    if cache_miss is None:
+        cache_miss = max(0, prompt_tokens - cache_hit) if prompt_tokens is not None else 0
+    return cache_hit, cache_miss
+
+
 def log_usage(usage_data: dict):
     if type(usage_data) is dict:
         if (
@@ -333,24 +356,19 @@ def log_usage(usage_data: dict):
                 "USAGE - TOKEN - "
                 f"{usage_data['total_tokens']} ({usage_data['prompt_tokens']}/{usage_data['completion_tokens']})"
             )
-        if (
-            'prompt_cache_hit_tokens' in usage_data
-            and type(usage_data['prompt_cache_hit_tokens']) is int
-            and 'prompt_cache_miss_tokens' in usage_data
-            and type(usage_data['prompt_cache_miss_tokens']) is int
-        ):
+        cache_tokens = _usage_cache_tokens(usage_data)
+        if cache_tokens is not None:
+            cache_hit_tokens, cache_miss_tokens = cache_tokens
+            cache_total = cache_hit_tokens + cache_miss_tokens
+            if cache_total <= 0:
+                return
             cache_hit = (
-                (
-                    usage_data['prompt_cache_hit_tokens']
-                    / (
-                        usage_data['prompt_cache_hit_tokens'] + usage_data['prompt_cache_miss_tokens']
-                    )
-                )
+                (cache_hit_tokens / cache_total)
                 * 100
             )
             OlivOSAIChatAssassin.logger.log(
                 "USAGE - CACHE - "
-                f"{cache_hit:.2f} %"
+                f"{cache_hit:.2f} % (hit={cache_hit_tokens}, miss={cache_miss_tokens})"
             )
 
 

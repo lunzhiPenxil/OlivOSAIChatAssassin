@@ -72,7 +72,7 @@ configDefault = {
     'search_ageing': 900,
     'history_size_min': 5,
     'history_size': 8,
-    'history_dynamic': False,
+    'history_dynamic': True,
     'history_dynamic_size': 16,
     'context_budget_chars': 0,
     'knowledge_top_k': 0,

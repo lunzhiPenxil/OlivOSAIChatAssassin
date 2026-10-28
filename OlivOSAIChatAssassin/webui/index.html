@@ -4169,12 +4169,13 @@ noscript {
                             </label>
                             <label class="check-field" for="historyDynamic">
                                 <input id="historyDynamic" data-field="history_dynamic" type="checkbox">
-                                <span>启用动态历史窗口</span>
+                                <span>启用动态历史窗口（缓存友好）</span>
                             </label>
                             <label class="field" for="historyDynamicSize">
                                 <span>动态窗口最大条数</span>
                                 <input id="historyDynamicSize" data-field="history_dynamic_size" type="number" min="1" step="1">
                             </label>
+                            <small class="muted span-2">动态窗口会在上下限之间成批收缩，避免历史每次整体平移，便于供应商复用稳定的前缀缓存。</small>
                             <label class="field" for="contextBudgetChars">
                                 <span>上下文字符预算</span>
                                 <input id="contextBudgetChars" data-field="context_budget_chars" type="number" min="0" step="1">
