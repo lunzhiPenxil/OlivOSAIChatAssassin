@@ -17,6 +17,7 @@ API_VERSION = 1
 
 EVENT_BOOTSTRAP = 'OlivOSAIChatAssassin_WebUI_Bootstrap'
 EVENT_ACTIVITY = 'OlivOSAIChatAssassin_WebUI_GetActivity'
+EVENT_INBOUND = 'OlivOSAIChatAssassin_WebUI_GetInboundEvents'
 EVENT_GET_CONFIG = 'OlivOSAIChatAssassin_WebUI_GetConfig'
 EVENT_SAVE_CONFIG = 'OlivOSAIChatAssassin_WebUI_SaveConfig'
 EVENT_MEMORY_OVERVIEW = 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview'
@@ -286,11 +287,21 @@ def _config_warnings(config: dict):
         ('enabled_groups', list, '启用群列表'),
         ('reply_keywords', list, '回复关键词'),
         ('ignore_prefixes', list, '忽略前缀'),
+        ('interaction_actions', list, '互动动作'),
+        ('interaction_reactions', list, '互动表情'),
+        ('event_private_message_enabled', bool, '私聊消息接收'),
+        ('event_poke_enabled', bool, '戳一戳接收'),
+        ('event_recall_enabled', bool, '撤回事件接收'),
+        ('event_group_advanced_enabled', bool, '群高级事件接收'),
     )
     for field, expected_type, label in expected_types:
         if field in config and not isinstance(config[field], expected_type):
-            type_name = '对象' if expected_type is dict else '列表'
-            warnings.append(f'{label}（{field}）不是{type_name}，页面暂按默认结构显示；请检查配置文件。')
+            type_name = {
+                dict: '对象',
+                list: '列表',
+                bool: '布尔值',
+            }.get(expected_type, '有效值')
+            warnings.append(f'{label}（{field}）不是{type_name}，页面暂按默认值显示；请检查配置文件。')
     return warnings
 
 
@@ -393,6 +404,18 @@ def _validate_string_list(value, field, errors):
             _add_field_error(errors, f'{field}.{index}', '必须是非空字符串')
             return None
         result.append(item)
+    return result
+
+
+def _validate_enum_string_list(value, field, errors, allowed):
+    result = _validate_string_list(value, field, errors)
+    if result is None:
+        return None
+    allowed_values = set(allowed)
+    for index, item in enumerate(result):
+        if item not in allowed_values:
+            _add_field_error(errors, f'{field}.{index}', '不支持的值')
+            return None
     return result
 
 
@@ -605,6 +628,48 @@ def _validate_config_patch(patch: dict):
                 result[key] = checked
         elif key == 'max_message_length':
             checked = _validate_number(value, key, errors, 1, integer=True)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'interaction_enabled':
+            checked = _validate_bool(value, key, errors)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'interaction_actions':
+            checked = _validate_enum_string_list(
+                value,
+                key,
+                errors,
+                OlivOSAIChatAssassin.interaction.VALID_ACTIONS,
+            )
+            if checked is not None:
+                result[key] = checked
+        elif key == 'interaction_reactions':
+            checked = _validate_enum_string_list(
+                value,
+                key,
+                errors,
+                OlivOSAIChatAssassin.interaction.REACTION_LABELS.keys(),
+            )
+            if checked is not None:
+                result[key] = checked
+        elif key == 'interaction_cooldown':
+            checked = _validate_number(value, key, errors, 0)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'event_private_message_enabled':
+            checked = _validate_bool(value, key, errors)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'event_poke_enabled':
+            checked = _validate_bool(value, key, errors)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'event_recall_enabled':
+            checked = _validate_bool(value, key, errors)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'event_group_advanced_enabled':
+            checked = _validate_bool(value, key, errors)
             if checked is not None:
                 result[key] = checked
         elif key == 'ocr_api':
@@ -1096,6 +1161,7 @@ def _handle_bootstrap(payload, Proc):
             'config_write': True,
             'memory_read': True,
             'memory_write': True,
+            'inbound_events_read': True,
         },
     })
 
@@ -1103,6 +1169,13 @@ def _handle_bootstrap(payload, Proc):
 def _handle_activity(payload, Proc):
     bot_hash, _bot_info = _require_bot(Proc, payload)
     return _ok(OlivOSAIChatAssassin.activity.snapshot(bot_hash))
+
+
+def _handle_inbound_events(payload, Proc):
+    bot_hash, _bot_info = _require_bot(Proc, payload)
+    inbox = OlivOSAIChatAssassin.eventInbox
+    limit = _page_number(payload.get('limit'), inbox.SNAPSHOT_LIMIT, 1, inbox.EVENT_LIMIT)
+    return _ok(inbox.snapshot(bot_hash, limit=limit))
 
 
 def _handle_get_config(payload, Proc):
@@ -1140,6 +1213,7 @@ def _handle_save_config(payload, Proc):
             '配置文件已被其他操作修改，请刷新后重试',
             {'current_revision': exc.current_revision},
         )
+    OlivOSAIChatAssassin.interaction.clear_bot(bot_hash)
     return _ok(_config_payload(config, bot_hash), revision)
 
 
@@ -1746,6 +1820,7 @@ def _handle_save_memory(payload, Proc):
 _HANDLERS = {
     EVENT_BOOTSTRAP: _handle_bootstrap,
     EVENT_ACTIVITY: _handle_activity,
+    EVENT_INBOUND: _handle_inbound_events,
     EVENT_GET_CONFIG: _handle_get_config,
     EVENT_SAVE_CONFIG: _handle_save_config,
     EVENT_MEMORY_OVERVIEW: _handle_memory_overview,
