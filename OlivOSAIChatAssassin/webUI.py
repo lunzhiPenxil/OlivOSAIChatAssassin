@@ -1173,7 +1173,9 @@ def _handle_activity(payload, Proc):
 
 def _handle_inbound_events(payload, Proc):
     bot_hash, _bot_info = _require_bot(Proc, payload)
-    return _ok(OlivOSAIChatAssassin.eventInbox.snapshot(bot_hash))
+    inbox = OlivOSAIChatAssassin.eventInbox
+    limit = _page_number(payload.get('limit'), inbox.SNAPSHOT_LIMIT, 1, inbox.EVENT_LIMIT)
+    return _ok(inbox.snapshot(bot_hash, limit=limit))
 
 
 def _handle_get_config(payload, Proc):

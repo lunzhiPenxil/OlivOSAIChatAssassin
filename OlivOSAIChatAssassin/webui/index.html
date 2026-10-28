@@ -847,6 +847,21 @@ code {
     white-space: nowrap;
 }
 
+.inbox-fullscreen-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+}
+
+.inbox-pager {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.inbox-fullscreen-note {
+    margin: 12px 0 0;
+    text-align: center;
+}
+
 .activity-fullscreen-launcher {
     display: flex;
     justify-content: flex-end;
@@ -3901,10 +3916,6 @@ noscript {
                         <strong id="overviewImageCache">—</strong>
                     </article>
                     <article class="card">
-                        <span class="card-label">互动动作</span>
-                        <strong id="overviewInteraction">—</strong>
-                    </article>
-                    <article class="card">
                         <span class="card-label">配置版本</span>
                         <strong id="overviewRevision">—</strong>
                     </article>
@@ -3955,6 +3966,18 @@ noscript {
                     </div>
                     <div id="overviewInboundList" class="inbox-list">
                         <p class="activity-empty">读取最近接收…</p>
+                    </div>
+                    <div id="overviewInboundFullscreenLauncher" class="activity-fullscreen-launcher">
+                        <button id="overviewInboundFullscreenButton" class="activity-fullscreen-toggle" type="button"
+                            aria-haspopup="dialog" aria-expanded="false"
+                            aria-controls="overviewInboundFullscreen" aria-label="全屏查看最近接收"
+                            title="全屏查看最近接收">
+                            <svg class="activity-fullscreen-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M9 20H4v-5M4 4l5 5M20 4l-5 5M20 20l-5-5M4 20l5-5"
+                                    stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </button>
                     </div>
                 </section>
             </section>
@@ -4315,6 +4338,39 @@ noscript {
             <div id="overviewActivityFullscreenList" class="activity-session-grid activity-fullscreen-grid"></div>
         </div>
     </section>
+    <section id="overviewInboundFullscreen" class="activity-fullscreen" role="dialog" aria-modal="true"
+        aria-labelledby="overviewInboundFullscreenTitle" hidden>
+        <header class="activity-fullscreen-head">
+            <div class="activity-fullscreen-heading">
+                <button id="overviewInboundFullscreenBackButton" class="button secondary small activity-fullscreen-back"
+                    type="button">返回概览</button>
+                <div class="activity-fullscreen-title">
+                    <h2 id="overviewInboundFullscreenTitle">最近接收</h2>
+                    <p class="muted small-text">只读浏览已载入事件，不会触发回复或发送动作。</p>
+                </div>
+            </div>
+            <div class="activity-fullscreen-meta">
+                <span id="overviewInboundFullscreenRefresh" class="activity-refresh" role="status" aria-live="polite">
+                    <span class="activity-refresh-dot" aria-hidden="true"></span>
+                    <span class="activity-refresh-text">准备读取</span>
+                </span>
+                <div id="overviewInboundFullscreenSummary" class="activity-summary" aria-live="polite">—</div>
+            </div>
+        </header>
+        <div class="activity-fullscreen-body">
+            <div id="overviewInboundFullscreenList" class="inbox-list inbox-fullscreen-list">
+                <p class="activity-empty">读取最近接收…</p>
+            </div>
+            <div id="overviewInboundFullscreenPager" class="pager inbox-pager">
+                <button id="overviewInboundFullscreenPrevious" class="button small secondary" type="button"
+                    disabled>上一页</button>
+                <span id="overviewInboundFullscreenRange" class="muted">0 - 0 / 0</span>
+                <button id="overviewInboundFullscreenNext" class="button small secondary" type="button"
+                    disabled>下一页</button>
+            </div>
+            <p id="overviewInboundFullscreenNote" class="muted small-text inbox-fullscreen-note" hidden></p>
+        </div>
+    </section>
     <div id="memoryModal" class="memory-modal-layer" role="dialog" aria-modal="true" aria-labelledby="memoryModalTitle" aria-describedby="memoryModalHint" hidden>
         <div class="memory-modal-backdrop" data-memory-modal-close aria-hidden="true"></div>
         <section class="memory-modal-card">
@@ -4467,7 +4523,9 @@ noscript {
     const ACTIVITY_DETAIL_LIMIT = 3;
     const INBOUND_POLL_INTERVAL = 3000;
     const INBOUND_REQUEST_TIMEOUT = 5000;
-    const INBOUND_DISPLAY_LIMIT = 8;
+    const INBOUND_DISPLAY_LIMIT = 1;
+    const INBOUND_FULLSCREEN_LIMIT = 200;
+    const INBOUND_PAGE_SIZE = 10;
     const ACTIVITY_STAGE_LABELS = {
         queued: '排队等待',
         preparing: '构建上下文',
@@ -4486,10 +4544,6 @@ noscript {
         done: {label: '已完成', className: 'is-done'},
         failed: {label: '失败', className: 'is-failed'},
         skipped: {label: '已跳过', className: 'is-skipped'},
-    };
-    const INTERACTION_ACTION_LABELS = {
-        reaction: '表情回应',
-        poke: '戳一戳',
     };
     const INTERACTION_ACTION_OPTIONS = [
         ['reaction', '表情回应'],
@@ -4604,6 +4658,8 @@ noscript {
         inboundLoading: false,
         inboundError: '',
         inboundTicket: 0,
+        inboundFullscreenOpen: false,
+        inboundPage: 0,
         inboundRenderedSignature: '',
         activeTab: 'overview',
         ready: false,
@@ -4655,7 +4711,7 @@ noscript {
         [
             'pluginMeta', 'botSelect', 'refreshButton', 'banner', 'bannerText', 'bannerAction',
             'overviewAccount', 'overviewPlatform', 'overviewApi', 'overviewOcr', 'overviewGroups',
-            'overviewKnowledge', 'overviewImageCache', 'overviewInteraction', 'overviewRevision',
+            'overviewKnowledge', 'overviewImageCache', 'overviewRevision',
             'configForm', 'configErrors',
             'overviewActivity', 'overviewActivityRefresh', 'overviewActivitySummary',
             'overviewActivityList', 'overviewActivityFullscreenLauncher',
@@ -4664,6 +4720,12 @@ noscript {
             'overviewActivityFullscreenRefresh', 'overviewActivityFullscreenSummary',
             'overviewActivityFullscreenList',
             'overviewInboundRefresh', 'overviewInboundSummary', 'overviewInboundList',
+            'overviewInboundFullscreenLauncher', 'overviewInboundFullscreenButton',
+            'overviewInboundFullscreen', 'overviewInboundFullscreenBackButton',
+            'overviewInboundFullscreenRefresh', 'overviewInboundFullscreenSummary',
+            'overviewInboundFullscreenList', 'overviewInboundFullscreenPager',
+            'overviewInboundFullscreenPrevious', 'overviewInboundFullscreenRange',
+            'overviewInboundFullscreenNext', 'overviewInboundFullscreenNote',
             'configWarnings', 'apiKey',
             'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'apiTimeout', 'temperature', 'thinkingEnabled',
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
@@ -4816,6 +4878,17 @@ noscript {
             closeActivityFullscreen();
         });
         elements.overviewActivityFullscreen.addEventListener('keydown', handleActivityFullscreenKeydown);
+        elements.overviewInboundFullscreenButton.addEventListener('click', openInboundFullscreen);
+        elements.overviewInboundFullscreenBackButton.addEventListener('click', function () {
+            closeInboundFullscreen();
+        });
+        elements.overviewInboundFullscreenPrevious.addEventListener('click', function () {
+            changeInboundPage(-1);
+        });
+        elements.overviewInboundFullscreenNext.addEventListener('click', function () {
+            changeInboundPage(1);
+        });
+        elements.overviewInboundFullscreen.addEventListener('keydown', handleInboundFullscreenKeydown);
         elements.bannerAction.addEventListener('click', function () {
             if (state.selectedBot) {
                 loadBotData(state.selectedBot, true);
@@ -5646,10 +5719,6 @@ noscript {
     }
 
     function setInboundRefreshState() {
-        const refresh = elements.overviewInboundRefresh;
-        if (!refresh) {
-            return;
-        }
         const polling = shouldPollInbound();
         const failing = Boolean(polling && state.inboundError);
         let message = '等待账号';
@@ -5662,13 +5731,18 @@ noscript {
                 message = '持续刷新中';
             }
         }
-        const text = refresh.querySelector('.activity-refresh-text');
-        if (text && text.textContent !== message) {
-            text.textContent = message;
-        }
-        refresh.classList.toggle('is-active', polling && !failing);
-        refresh.classList.toggle('is-error', failing);
-        refresh.classList.toggle('is-paused', !polling);
+        [elements.overviewInboundRefresh, elements.overviewInboundFullscreenRefresh].forEach(function (refresh) {
+            if (!refresh) {
+                return;
+            }
+            const text = refresh.querySelector('.activity-refresh-text');
+            if (text && text.textContent !== message) {
+                text.textContent = message;
+            }
+            refresh.classList.toggle('is-active', polling && !failing);
+            refresh.classList.toggle('is-error', failing);
+            refresh.classList.toggle('is-paused', !polling);
+        });
     }
 
     function resetInboundState() {
@@ -5676,21 +5750,29 @@ noscript {
         state.inbound = null;
         state.inboundLoading = false;
         state.inboundError = '';
+        state.inboundPage = 0;
         state.inboundRenderedSignature = '';
+        closeInboundFullscreen(false);
         renderInboundEvents(true);
     }
 
-    async function loadInboundEvents() {
-        if (!shouldPollInbound() || state.inboundLoading) {
+    async function loadInboundEvents(limitOverride) {
+        if (!shouldPollInbound()) {
+            return false;
+        }
+        if (state.inboundLoading && !limitOverride) {
             return false;
         }
         const botHash = state.selectedBot;
+        const limit = limitOverride || (state.inboundFullscreenOpen
+            ? INBOUND_FULLSCREEN_LIMIT
+            : INBOUND_DISPLAY_LIMIT);
         const ticket = state.inboundTicket + 1;
         state.inboundTicket = ticket;
         state.inboundLoading = true;
         setInboundRefreshState();
         try {
-            const response = await callApi(EVENTS.inbound, {bot_hash: botHash}, {
+            const response = await callApi(EVENTS.inbound, {bot_hash: botHash, limit: limit}, {
                 timeout: INBOUND_REQUEST_TIMEOUT,
             });
             if (ticket !== state.inboundTicket || botHash !== state.selectedBot) {
@@ -5754,8 +5836,49 @@ noscript {
         return '群聊';
     }
 
+    function buildInboundItem(event) {
+        const item = createActivityElement('article', 'inbox-item');
+        item.appendChild(createActivityElement('span', 'inbox-scene', inboundSceneLabel(event)));
+
+        const body = createActivityElement('div', 'inbox-body');
+        const heading = createActivityElement('div', 'inbox-heading');
+        heading.appendChild(createActivityElement('strong', '', event.label || event.kind || '事件'));
+        const actorName = String(event.actor_name || '').trim();
+        const userId = String(event.user_id || '').trim();
+        if (actorName || userId) {
+            heading.appendChild(createActivityElement(
+                'span',
+                'inbox-actor',
+                actorName || ('用户 ' + userId),
+            ));
+        }
+        body.appendChild(heading);
+        body.appendChild(createActivityElement('p', 'inbox-summary', event.summary || ''));
+        item.appendChild(body);
+        item.appendChild(createActivityElement('time', 'inbox-time', formatInboundTime(event)));
+        return item;
+    }
+
+    function inboundPageCount(total) {
+        return Math.max(1, Math.ceil(Math.max(0, total) / INBOUND_PAGE_SIZE));
+    }
+
+    function renderInboundFullscreenPager(offset, entryCount, total) {
+        const range = memoryPagerRangeText(offset, entryCount, total);
+        if (elements.overviewInboundFullscreenRange) {
+            elements.overviewInboundFullscreenRange.textContent = range;
+        }
+        if (elements.overviewInboundFullscreenPrevious) {
+            elements.overviewInboundFullscreenPrevious.disabled = offset <= 0 || total <= 0;
+        }
+        if (elements.overviewInboundFullscreenNext) {
+            elements.overviewInboundFullscreenNext.disabled = total <= 0 ||
+                offset + entryCount >= total;
+        }
+    }
+
     function renderInboundEvents(force) {
-        if (!elements.overviewInboundList) {
+        if (!elements.overviewInboundList || !elements.overviewInboundFullscreenList) {
             return;
         }
         setInboundRefreshState();
@@ -5766,66 +5889,158 @@ noscript {
         const events = rawEvents.filter(function (event) {
             return event && typeof event === 'object';
         });
-        const signature = inboundSnapshotSignature(data, events);
+        const eventCount = data ? Math.max(0, Number(data.event_count) || events.length) : 0;
+        const pageCount = inboundPageCount(events.length);
+        state.inboundPage = Math.min(state.inboundPage, pageCount - 1);
+        const pageOffset = state.inboundPage * INBOUND_PAGE_SIZE;
+        const pageEvents = events.slice(pageOffset, pageOffset + INBOUND_PAGE_SIZE);
+        const signature = inboundSnapshotSignature(data, events) + '|page:' + String(state.inboundPage);
         let summaryText = '—';
+        let fullscreenSummaryText = '—';
         if (!data) {
             summaryText = state.inboundLoading
                 ? '读取中'
                 : (state.inboundError ? '暂时不可用' : '—');
+            fullscreenSummaryText = summaryText;
+        } else if (eventCount <= 0) {
+            summaryText = '当前无事件';
+            fullscreenSummaryText = summaryText;
         } else {
-            const eventCount = Number(data.event_count) || events.length;
-            if (eventCount <= 0) {
-                summaryText = '当前无事件';
-            } else {
-                const visibleCount = Math.min(eventCount, events.length, INBOUND_DISPLAY_LIMIT);
-                summaryText = eventCount > visibleCount
-                    ? '显示 ' + String(visibleCount) + ' / ' + String(eventCount) + ' 条'
-                    : String(eventCount) + ' 条';
-            }
+            summaryText = eventCount > INBOUND_DISPLAY_LIMIT
+                ? '最新 1 / ' + String(eventCount) + ' 条'
+                : String(eventCount) + ' 条';
+            fullscreenSummaryText = events.length < eventCount
+                ? '已载入 ' + String(events.length) + ' / ' + String(eventCount) + ' 条'
+                : String(eventCount) + ' 条';
         }
-        elements.overviewInboundSummary.textContent = summaryText;
+        if (elements.overviewInboundSummary) {
+            elements.overviewInboundSummary.textContent = summaryText;
+        }
+        if (elements.overviewInboundFullscreenSummary) {
+            elements.overviewInboundFullscreenSummary.textContent = fullscreenSummaryText;
+        }
+        const fullscreenLabel = eventCount > 0
+            ? '全屏查看最近接收，共 ' + String(eventCount) + ' 条'
+            : '全屏查看最近接收';
+        elements.overviewInboundFullscreenButton.setAttribute('aria-label', fullscreenLabel);
+        elements.overviewInboundFullscreenButton.title = fullscreenLabel;
+        elements.overviewInboundFullscreenButton.setAttribute(
+            'aria-expanded', state.inboundFullscreenOpen ? 'true' : 'false'
+        );
         if (!force && signature === state.inboundRenderedSignature) {
             return;
         }
         state.inboundRenderedSignature = signature;
         elements.overviewInboundList.replaceChildren();
+        elements.overviewInboundFullscreenList.replaceChildren();
+        renderInboundFullscreenPager(pageOffset, pageEvents.length, events.length);
+        if (elements.overviewInboundFullscreenNote) {
+            const omittedCount = data ? Math.max(0, Number(data.omitted_count) || 0) : 0;
+            elements.overviewInboundFullscreenNote.hidden = omittedCount <= 0;
+            elements.overviewInboundFullscreenNote.textContent = omittedCount > 0
+                ? '另有 ' + String(omittedCount) + ' 条较早事件未载入本次快照'
+                : '';
+        }
         if (!data || events.length <= 0) {
-            const empty = createActivityElement('p', 'activity-empty');
-            empty.textContent = data
+            const message = data
                 ? '尚未收到已启用的事件'
                 : (state.inboundError ? '暂时无法读取接收事件' : '读取最近接收…');
-            empty.classList.toggle('is-error', Boolean(state.inboundError) && !data);
-            elements.overviewInboundList.appendChild(empty);
+            [elements.overviewInboundList, elements.overviewInboundFullscreenList].forEach(function (list) {
+                const empty = createActivityElement('p', 'activity-empty');
+                empty.textContent = message;
+                empty.classList.toggle('is-error', Boolean(state.inboundError) && !data);
+                list.appendChild(empty);
+            });
             return;
         }
         events.slice(0, INBOUND_DISPLAY_LIMIT).forEach(function (event) {
-            const item = createActivityElement('article', 'inbox-item');
-            item.appendChild(createActivityElement('span', 'inbox-scene', inboundSceneLabel(event)));
-
-            const body = createActivityElement('div', 'inbox-body');
-            const heading = createActivityElement('div', 'inbox-heading');
-            heading.appendChild(createActivityElement('strong', '', event.label || event.kind || '事件'));
-            const actorName = String(event.actor_name || '').trim();
-            const userId = String(event.user_id || '').trim();
-            if (actorName || userId) {
-                heading.appendChild(createActivityElement(
-                    'span',
-                    'inbox-actor',
-                    actorName || ('用户 ' + userId),
-                ));
-            }
-            body.appendChild(heading);
-            body.appendChild(createActivityElement('p', 'inbox-summary', event.summary || ''));
-            item.appendChild(body);
-            item.appendChild(createActivityElement('time', 'inbox-time', formatInboundTime(event)));
-            elements.overviewInboundList.appendChild(item);
+            elements.overviewInboundList.appendChild(buildInboundItem(event));
         });
+        pageEvents.forEach(function (event) {
+            elements.overviewInboundFullscreenList.appendChild(buildInboundItem(event));
+        });
+    }
+
+    function changeInboundPage(delta) {
+        const data = state.inbound && typeof state.inbound === 'object'
+            ? state.inbound
+            : null;
+        const events = data && Array.isArray(data.events)
+            ? data.events.filter(function (event) { return event && typeof event === 'object'; })
+            : [];
+        const pageCount = inboundPageCount(events.length);
+        const nextPage = Math.max(0, Math.min(pageCount - 1, state.inboundPage + delta));
+        if (nextPage === state.inboundPage) {
+            return;
+        }
+        state.inboundPage = nextPage;
+        renderInboundEvents(true);
+        const body = elements.overviewInboundFullscreen
+            ? elements.overviewInboundFullscreen.querySelector('.activity-fullscreen-body')
+            : null;
+        if (body) {
+            body.scrollTop = 0;
+        }
+    }
+
+    function openInboundFullscreen() {
+        if (state.inboundFullscreenOpen) {
+            return;
+        }
+        closeActivityFullscreen(false);
+        state.inboundFullscreenOpen = true;
+        state.inboundPage = 0;
+        elements.overviewInboundFullscreenButton.setAttribute('aria-expanded', 'true');
+        elements.overviewInboundFullscreen.hidden = false;
+        document.body.classList.add('activity-fullscreen-open');
+        const pageShell = document.querySelector('.page-shell');
+        if (pageShell) {
+            pageShell.inert = true;
+        }
+        renderInboundEvents(true);
+        loadInboundEvents(INBOUND_FULLSCREEN_LIMIT);
+        window.requestAnimationFrame(function () {
+            elements.overviewInboundFullscreenBackButton.focus({preventScroll: true});
+        });
+    }
+
+    function closeInboundFullscreen(restoreFocus) {
+        const wasOpen = state.inboundFullscreenOpen;
+        state.inboundFullscreenOpen = false;
+        if (elements.overviewInboundFullscreen) {
+            elements.overviewInboundFullscreen.hidden = true;
+        }
+        if (elements.overviewInboundFullscreenButton) {
+            elements.overviewInboundFullscreenButton.setAttribute('aria-expanded', 'false');
+        }
+        if (!state.activityFullscreenOpen) {
+            document.body.classList.remove('activity-fullscreen-open');
+            const pageShell = document.querySelector('.page-shell');
+            if (pageShell) {
+                pageShell.inert = false;
+            }
+        }
+        if (wasOpen && restoreFocus !== false) {
+            const target = elements.overviewInboundFullscreenButton || elements.refreshButton;
+            if (target) {
+                target.focus({preventScroll: true});
+            }
+        }
+    }
+
+    function handleInboundFullscreenKeydown(event) {
+        if (event.key !== 'Escape') {
+            return;
+        }
+        event.preventDefault();
+        closeInboundFullscreen();
     }
 
     function openActivityFullscreen() {
         if (state.activityFullscreenOpen) {
             return;
         }
+        closeInboundFullscreen(false);
         state.activityFullscreenOpen = true;
         elements.overviewActivityFullscreenButton.setAttribute('aria-expanded', 'true');
         elements.overviewActivityFullscreen.hidden = false;
@@ -5850,10 +6065,12 @@ noscript {
         if (elements.overviewActivityFullscreenButton) {
             elements.overviewActivityFullscreenButton.setAttribute('aria-expanded', 'false');
         }
-        document.body.classList.remove('activity-fullscreen-open');
-        const pageShell = document.querySelector('.page-shell');
-        if (pageShell) {
-            pageShell.inert = false;
+        if (!state.inboundFullscreenOpen) {
+            document.body.classList.remove('activity-fullscreen-open');
+            const pageShell = document.querySelector('.page-shell');
+            if (pageShell) {
+                pageShell.inert = false;
+            }
         }
         if (wasOpen && restoreFocus !== false) {
             const target = elements.overviewActivityFullscreenButton || elements.refreshButton;
@@ -7621,24 +7838,6 @@ noscript {
         elements.overviewImageCache.textContent = state.overview
             ? String(imageCacheCount) + ' 条'
             : '—';
-        const interactionActions = state.config && Array.isArray(state.config.interaction_actions)
-            ? state.config.interaction_actions.filter(function (action) {
-                return Object.prototype.hasOwnProperty.call(INTERACTION_ACTION_LABELS, action);
-            })
-            : [];
-        if (!state.config) {
-            elements.overviewInteraction.textContent = '—';
-        } else if (state.config.interaction_enabled !== true) {
-            elements.overviewInteraction.textContent = '关闭';
-        } else if (interactionActions.length === 0) {
-            elements.overviewInteraction.textContent = '启用但未选动作';
-        } else {
-            elements.overviewInteraction.textContent = '已启用 · ' + interactionActions
-                .map(function (action) {
-                    return INTERACTION_ACTION_LABELS[action];
-                })
-                .join('、');
-        }
         elements.overviewRevision.textContent = configRevisionTimeText(state.revision);
     }
 
@@ -10426,6 +10625,7 @@ noscript {
         state.activeTab = tabName;
         if (tabName !== 'overview') {
             closeActivityFullscreen(false);
+            closeInboundFullscreen(false);
         }
         document.querySelectorAll('.tab-button').forEach(function (button) {
             const selected = button.dataset.tab === tabName;
