@@ -786,6 +786,67 @@ code {
     color: var(--danger);
 }
 
+.inbox-list {
+    display: grid;
+    gap: 8px;
+}
+
+.inbox-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-soft);
+}
+
+.inbox-scene {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.inbox-body {
+    min-width: 0;
+}
+
+.inbox-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 3px 8px;
+}
+
+.inbox-heading strong {
+    font-size: 0.88rem;
+}
+
+.inbox-actor,
+.inbox-time {
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.inbox-summary {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+}
+
+.inbox-time {
+    padding-top: 2px;
+    white-space: nowrap;
+}
+
 .activity-fullscreen-launcher {
     display: flex;
     justify-content: flex-end;
@@ -1618,6 +1679,15 @@ select[aria-invalid="true"] {
 
     .choice-chip {
         min-height: 40px;
+    }
+
+    .inbox-item {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .inbox-time {
+        grid-column: 2;
+        padding-top: 0;
     }
 }
 
@@ -3869,6 +3939,24 @@ noscript {
                         </button>
                     </div>
                 </section>
+                <section id="overviewInbound" class="activity-board" aria-labelledby="overviewInboundTitle">
+                    <div class="activity-board-head">
+                        <div class="activity-board-title">
+                            <div class="activity-heading-line">
+                                <h3 id="overviewInboundTitle">最近接收</h3>
+                                <span id="overviewInboundRefresh" class="activity-refresh" role="status" aria-live="polite">
+                                    <span class="activity-refresh-dot" aria-hidden="true"></span>
+                                    <span class="activity-refresh-text">准备读取</span>
+                                </span>
+                            </div>
+                            <p class="muted small-text">只读展示私聊、戳一戳、撤回与群高级事件，不会触发回复或发送动作。</p>
+                        </div>
+                        <div id="overviewInboundSummary" class="activity-summary" aria-live="polite">—</div>
+                    </div>
+                    <div id="overviewInboundList" class="inbox-list">
+                        <p class="activity-empty">读取最近接收…</p>
+                    </div>
+                </section>
             </section>
 
             <section id="panel-settings" class="tab-panel" role="tabpanel" tabindex="0" aria-labelledby="tab-settings" hidden>
@@ -4039,6 +4127,31 @@ noscript {
                             <p class="muted span-2">表情语义值（仅启用表情回应时生效，可多选）</p>
                             <div id="interactionReactions" class="choice-grid span-2" data-choice-group="interaction_reactions"
                                  aria-label="可选表情回应"></div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend>事件接收</legend>
+                        <p class="muted form-note">只读接收并记录最近事件，不进入回复、记忆整理或互动发送链路。记录仅保存在内存中，重载插件后清空。</p>
+                        <div class="form-grid">
+                            <label class="check-field span-2" for="eventPrivateMessageEnabled">
+                                <input id="eventPrivateMessageEnabled" data-field="event_private_message_enabled" type="checkbox">
+                                <span>接收私聊消息</span>
+                            </label>
+                            <label class="check-field span-2" for="eventPokeEnabled">
+                                <input id="eventPokeEnabled" data-field="event_poke_enabled" type="checkbox">
+                                <span>接收戳一戳</span>
+                            </label>
+                            <label class="check-field span-2" for="eventRecallEnabled">
+                                <input id="eventRecallEnabled" data-field="event_recall_enabled" type="checkbox">
+                                <span>接收撤回事件</span>
+                            </label>
+                            <small class="muted span-2">私聊撤回还要求“接收私聊消息”已开启；群消息撤回只受本开关控制。</small>
+                            <label class="check-field span-2" for="eventGroupAdvancedEnabled">
+                                <input id="eventGroupAdvancedEnabled" data-field="event_group_advanced_enabled" type="checkbox">
+                                <span>群高级事件</span>
+                            </label>
+                            <small class="muted span-2">含群成员增加、群成员减少、管理员变动、禁言和群文件上传。</small>
                         </div>
                     </fieldset>
 
@@ -4330,6 +4443,7 @@ noscript {
     const EVENTS = {
         bootstrap: 'OlivOSAIChatAssassin_WebUI_Bootstrap',
         activity: 'OlivOSAIChatAssassin_WebUI_GetActivity',
+        inbound: 'OlivOSAIChatAssassin_WebUI_GetInboundEvents',
         getConfig: 'OlivOSAIChatAssassin_WebUI_GetConfig',
         saveConfig: 'OlivOSAIChatAssassin_WebUI_SaveConfig',
         memoryOverview: 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview',
@@ -4350,6 +4464,9 @@ noscript {
     const ACTIVITY_TIMER_INTERVAL = 1000;
     const ACTIVITY_REQUEST_TIMEOUT = 5000;
     const ACTIVITY_DETAIL_LIMIT = 3;
+    const INBOUND_POLL_INTERVAL = 3000;
+    const INBOUND_REQUEST_TIMEOUT = 5000;
+    const INBOUND_DISPLAY_LIMIT = 8;
     const ACTIVITY_STAGE_LABELS = {
         queued: '排队等待',
         preparing: '构建上下文',
@@ -4482,6 +4599,11 @@ noscript {
         activityRenderedSignature: '',
         activityTimingNodes: [],
         activityTimingAnchor: 0,
+        inbound: null,
+        inboundLoading: false,
+        inboundError: '',
+        inboundTicket: 0,
+        inboundRenderedSignature: '',
         activeTab: 'overview',
         ready: false,
         visible: true,
@@ -4540,12 +4662,15 @@ noscript {
             'overviewActivityFullscreen', 'overviewActivityFullscreenBackButton',
             'overviewActivityFullscreenRefresh', 'overviewActivityFullscreenSummary',
             'overviewActivityFullscreenList',
+            'overviewInboundRefresh', 'overviewInboundSummary', 'overviewInboundList',
             'configWarnings', 'apiKey',
             'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'apiTimeout', 'temperature', 'thinkingEnabled',
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
             'recordKnowledge', 'mentionReply', 'replyProbability', 'retryCount',
             'searchKnowledgeDeepin', 'knowledgeTopK', 'searchAgeing', 'maxMessageLength', 'enabledGroups',
             'interactionEnabled', 'interactionActions', 'interactionReactions', 'interactionCooldown',
+            'eventPrivateMessageEnabled', 'eventPokeEnabled', 'eventRecallEnabled',
+            'eventGroupAdvancedEnabled',
             'replyKeywords', 'ignorePrefixes', 'historySizeMin', 'historySize', 'historyDynamic',
             'historyDynamicSize', 'contextBudgetChars', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
             'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
@@ -4728,6 +4853,11 @@ noscript {
             }
         }, ACTIVITY_POLL_INTERVAL);
         window.setInterval(function () {
+            if (shouldPollInbound()) {
+                loadInboundEvents();
+            }
+        }, INBOUND_POLL_INTERVAL);
+        window.setInterval(function () {
             if (shouldPollActivity()) {
                 tickActivityTimings();
             }
@@ -4735,6 +4865,7 @@ noscript {
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden && shouldPollActivity()) {
                 loadActivity();
+                loadInboundEvents();
             }
         });
 
@@ -5185,6 +5316,7 @@ noscript {
             }
             if (shouldPollActivity()) {
                 loadActivity();
+                loadInboundEvents();
             }
             return;
         }
@@ -5343,6 +5475,7 @@ noscript {
         state.config = null;
         state.overview = null;
         resetActivityState();
+        resetInboundState();
         state.revision = '';
         state.secrets = {};
         state.clearSecrets.clear();
@@ -5391,6 +5524,7 @@ noscript {
             renderOverview();
             if (shouldPollActivity()) {
                 loadActivity();
+                loadInboundEvents();
             }
         }
     }
@@ -5506,6 +5640,187 @@ noscript {
         }
     }
 
+    function shouldPollInbound() {
+        return shouldPollActivity();
+    }
+
+    function setInboundRefreshState() {
+        const refresh = elements.overviewInboundRefresh;
+        if (!refresh) {
+            return;
+        }
+        const polling = shouldPollInbound();
+        const failing = Boolean(polling && state.inboundError);
+        let message = '等待账号';
+        if (state.selectedBot) {
+            if (!polling) {
+                message = '持续刷新已暂停';
+            } else if (failing) {
+                message = '刷新异常，仍在重试';
+            } else {
+                message = '持续刷新中';
+            }
+        }
+        const text = refresh.querySelector('.activity-refresh-text');
+        if (text && text.textContent !== message) {
+            text.textContent = message;
+        }
+        refresh.classList.toggle('is-active', polling && !failing);
+        refresh.classList.toggle('is-error', failing);
+        refresh.classList.toggle('is-paused', !polling);
+    }
+
+    function resetInboundState() {
+        state.inboundTicket += 1;
+        state.inbound = null;
+        state.inboundLoading = false;
+        state.inboundError = '';
+        state.inboundRenderedSignature = '';
+        renderInboundEvents(true);
+    }
+
+    async function loadInboundEvents() {
+        if (!shouldPollInbound() || state.inboundLoading) {
+            return false;
+        }
+        const botHash = state.selectedBot;
+        const ticket = state.inboundTicket + 1;
+        state.inboundTicket = ticket;
+        state.inboundLoading = true;
+        setInboundRefreshState();
+        try {
+            const response = await callApi(EVENTS.inbound, {bot_hash: botHash}, {
+                timeout: INBOUND_REQUEST_TIMEOUT,
+            });
+            if (ticket !== state.inboundTicket || botHash !== state.selectedBot) {
+                return false;
+            }
+            state.inbound = response.data && typeof response.data === 'object'
+                ? response.data
+                : {};
+            state.inboundError = '';
+            state.inboundLoading = false;
+            renderInboundEvents();
+            return true;
+        } catch (error) {
+            if (ticket !== state.inboundTicket || botHash !== state.selectedBot) {
+                return false;
+            }
+            state.inboundError = errorMessage(error);
+            state.inboundLoading = false;
+            renderInboundEvents();
+            return false;
+        }
+    }
+
+    function inboundSnapshotSignature(data, events) {
+        return [
+            state.inboundError,
+            data ? data.event_count : 'null',
+            events.map(function (event) {
+                return String(event.id || '') + ':' + String(event.kind || '');
+            }).join(','),
+        ].join('|');
+    }
+
+    function formatInboundTime(event) {
+        const timestamp = Number(event && event.timestamp);
+        if (Number.isFinite(timestamp) && timestamp > 0) {
+            const date = new Date(timestamp * 1000);
+            try {
+                return date.toLocaleString('zh-CN', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                });
+            } catch (error) {
+                return String(event.at || '');
+            }
+        }
+        return String(event && event.at || '');
+    }
+
+    function inboundSceneLabel(event) {
+        if (event && event.scene === 'private') {
+            return '私聊';
+        }
+        if (event && event.group_id) {
+            return '群 ' + String(event.group_id);
+        }
+        return '群聊';
+    }
+
+    function renderInboundEvents(force) {
+        if (!elements.overviewInboundList) {
+            return;
+        }
+        setInboundRefreshState();
+        const data = state.inbound && typeof state.inbound === 'object'
+            ? state.inbound
+            : null;
+        const rawEvents = data && Array.isArray(data.events) ? data.events : [];
+        const events = rawEvents.filter(function (event) {
+            return event && typeof event === 'object';
+        });
+        const signature = inboundSnapshotSignature(data, events);
+        let summaryText = '—';
+        if (!data) {
+            summaryText = state.inboundLoading
+                ? '读取中'
+                : (state.inboundError ? '暂时不可用' : '—');
+        } else {
+            const eventCount = Number(data.event_count) || events.length;
+            if (eventCount <= 0) {
+                summaryText = '当前无事件';
+            } else {
+                const visibleCount = Math.min(eventCount, events.length, INBOUND_DISPLAY_LIMIT);
+                summaryText = eventCount > visibleCount
+                    ? '显示 ' + String(visibleCount) + ' / ' + String(eventCount) + ' 条'
+                    : String(eventCount) + ' 条';
+            }
+        }
+        elements.overviewInboundSummary.textContent = summaryText;
+        if (!force && signature === state.inboundRenderedSignature) {
+            return;
+        }
+        state.inboundRenderedSignature = signature;
+        elements.overviewInboundList.replaceChildren();
+        if (!data || events.length <= 0) {
+            const empty = createActivityElement('p', 'activity-empty');
+            empty.textContent = data
+                ? '尚未收到已启用的事件'
+                : (state.inboundError ? '暂时无法读取接收事件' : '读取最近接收…');
+            empty.classList.toggle('is-error', Boolean(state.inboundError) && !data);
+            elements.overviewInboundList.appendChild(empty);
+            return;
+        }
+        events.slice(0, INBOUND_DISPLAY_LIMIT).forEach(function (event) {
+            const item = createActivityElement('article', 'inbox-item');
+            item.appendChild(createActivityElement('span', 'inbox-scene', inboundSceneLabel(event)));
+
+            const body = createActivityElement('div', 'inbox-body');
+            const heading = createActivityElement('div', 'inbox-heading');
+            heading.appendChild(createActivityElement('strong', '', event.label || event.kind || '事件'));
+            const actorName = String(event.actor_name || '').trim();
+            const userId = String(event.user_id || '').trim();
+            if (actorName || userId) {
+                heading.appendChild(createActivityElement(
+                    'span',
+                    'inbox-actor',
+                    actorName || ('用户 ' + userId),
+                ));
+            }
+            body.appendChild(heading);
+            body.appendChild(createActivityElement('p', 'inbox-summary', event.summary || ''));
+            item.appendChild(body);
+            item.appendChild(createActivityElement('time', 'inbox-time', formatInboundTime(event)));
+            elements.overviewInboundList.appendChild(item);
+        });
+    }
+
     function openActivityFullscreen() {
         if (state.activityFullscreenOpen) {
             return;
@@ -5618,6 +5933,10 @@ noscript {
         setChoiceValues('interactionActions', interactionActions);
         setChoiceValues('interactionReactions', interactionReactions);
         setValue('interactionCooldown', config.interaction_cooldown);
+        elements.eventPrivateMessageEnabled.checked = config.event_private_message_enabled === true;
+        elements.eventPokeEnabled.checked = config.event_poke_enabled === true;
+        elements.eventRecallEnabled.checked = config.event_recall_enabled === true;
+        elements.eventGroupAdvancedEnabled.checked = config.event_group_advanced_enabled === true;
         setValue('historySizeMin', config.history_size_min);
         setValue('historySize', config.history_size);
         elements.historyDynamic.checked = config.history_dynamic === true;
@@ -6404,6 +6723,10 @@ noscript {
             interaction_actions: function () { return readChoiceValues('interactionActions'); },
             interaction_reactions: function () { return readChoiceValues('interactionReactions'); },
             interaction_cooldown: function () { return readNumber('interactionCooldown'); },
+            event_private_message_enabled: function () { return elements.eventPrivateMessageEnabled.checked; },
+            event_poke_enabled: function () { return elements.eventPokeEnabled.checked; },
+            event_recall_enabled: function () { return elements.eventRecallEnabled.checked; },
+            event_group_advanced_enabled: function () { return elements.eventGroupAdvancedEnabled.checked; },
             history_size_min: function () { return readInteger('historySizeMin'); },
             history_size: function () { return readInteger('historySize'); },
             history_dynamic: function () { return elements.historyDynamic.checked; },
@@ -10117,6 +10440,7 @@ noscript {
         }
         if (tabName === 'overview' && shouldPollActivity()) {
             loadActivity();
+            loadInboundEvents();
         }
         if (tabName === 'memory' && state.selectedBot && !state.overview) {
             loadOverview(state.selectedBot).catch(function (error) {

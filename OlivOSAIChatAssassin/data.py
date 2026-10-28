@@ -87,6 +87,10 @@ configDefault = {
     'interaction_actions': [],
     'interaction_reactions': [],
     'interaction_cooldown': 30,
+    'event_private_message_enabled': False,
+    'event_poke_enabled': False,
+    'event_recall_enabled': False,
+    'event_group_advanced_enabled': False,
     'ocr_api': {
         'api_key': '',
         'api_base': 'https://api.siliconflow.cn/v1',
