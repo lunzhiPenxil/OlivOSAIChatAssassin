@@ -26,6 +26,7 @@ STAGE_MODEL = 'model'
 STAGE_REPAIRING = 'repairing'
 STAGE_BACKOFF = 'backoff'
 STAGE_SENDING = 'sending'
+STAGE_INTERACTION = 'interaction'
 STAGE_MEMORY_EXTRACT = 'memory_extract'
 
 STAGES = frozenset((
@@ -38,6 +39,7 @@ STAGES = frozenset((
     STAGE_REPAIRING,
     STAGE_BACKOFF,
     STAGE_SENDING,
+    STAGE_INTERACTION,
     STAGE_MEMORY_EXTRACT,
 ))
 

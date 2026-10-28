@@ -17,6 +17,10 @@ gGroupLock: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.SlackableFairLock]
 gGroupKnowledgeCounter: 'dict[tuple[str, str], int]' = {}
 gGroupKnowledgeCounterLimit: int = int(4 * 4)
 
+gInteractionLock = threading.Lock()
+gInteractionLastAttempt: 'dict[tuple[str, str], float]' = {}
+gInteractionFailureUntil: 'dict[tuple[str, str, str], float]' = {}
+
 gMemoryLock = threading.Lock()
 gMemoryDir = './plugin/data/OlivOSAIChatAssassin'
 gMemoryPath = './plugin/data/OlivOSAIChatAssassin/memory.json'
@@ -79,6 +83,10 @@ configDefault = {
     'mention_reply': True,
     'ignore_prefixes': [],
     'max_message_length': 2048,
+    'interaction_enabled': False,
+    'interaction_actions': [],
+    'interaction_reactions': [],
+    'interaction_cooldown': 30,
     'ocr_api': {
         'api_key': '',
         'api_base': 'https://api.siliconflow.cn/v1',

@@ -1430,6 +1430,197 @@ select[aria-invalid="true"] {
     border-color: var(--danger);
 }
 
+.config-list-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.config-list-label {
+    font-weight: 600;
+}
+
+.tag-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 9px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.tag-editor:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.config-list-field.has-error .tag-editor {
+    border-color: var(--danger);
+}
+
+.tag-editor-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-height: 31px;
+    align-items: center;
+}
+
+.tag-editor-empty {
+    color: var(--muted);
+    font-size: 0.82rem;
+    padding: 0 3px;
+}
+
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 4px 6px 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--text);
+    font-size: 0.86rem;
+    line-height: 1.3;
+}
+
+.tag-chip-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tag-chip-remove {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 23px;
+    height: 23px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1;
+}
+
+.tag-chip-remove:hover,
+.tag-chip-remove:focus-visible {
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    color: var(--danger);
+}
+
+.tag-editor-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.tag-editor-entry input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 4px;
+    border: 0;
+    background: transparent;
+}
+
+.tag-editor-entry input:focus {
+    outline: none;
+    border-color: transparent;
+}
+
+.tag-editor-entry .button {
+    flex: 0 0 auto;
+}
+
+.choice-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.choice-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.choice-chip::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.choice-chip:hover {
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+    background: var(--surface-soft);
+}
+
+.choice-chip:has(input:checked) {
+    border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+.choice-chip:has(input:checked)::before {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.choice-chip:has(input:focus-visible) {
+    outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    outline-offset: 1px;
+}
+
+.choice-chip input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+@media (max-width: 720px) {
+    .tag-editor-entry {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tag-editor-entry .button {
+        width: 100%;
+    }
+
+    .choice-chip {
+        min-height: 40px;
+    }
+}
+
 .secret-row {
     display: flex;
     gap: 8px;
@@ -3640,6 +3831,10 @@ noscript {
                         <strong id="overviewImageCache">—</strong>
                     </article>
                     <article class="card">
+                        <span class="card-label">互动动作</span>
+                        <strong id="overviewInteraction">—</strong>
+                    </article>
+                    <article class="card">
                         <span class="card-label">配置版本</span>
                         <strong id="overviewRevision">—</strong>
                     </article>
@@ -3722,16 +3917,16 @@ noscript {
                                 <span>Temperature</span>
                                 <input id="temperature" data-field="temperature" type="number" min="0" step="0.05" required>
                             </label>
+                            <label class="check-field" for="thinkingEnabled">
+                                <input id="thinkingEnabled" data-field="thinking" type="checkbox">
+                                <span>启用深度思考</span>
+                            </label>
                             <label class="field" for="reasoningEffort">
                                 <span>思考强度</span>
                                 <select id="reasoningEffort" data-field="reasoning_effort">
                                     <option value="high">high</option>
                                     <option value="max">max</option>
                                 </select>
-                            </label>
-                            <label class="check-field" for="thinkingEnabled">
-                                <input id="thinkingEnabled" data-field="thinking" type="checkbox">
-                                <span>启用深度思考</span>
                             </label>
                             <label class="check-field" for="firstThinking">
                                 <input id="firstThinking" data-field="first_thinking" type="checkbox">
@@ -3785,18 +3980,65 @@ noscript {
                                 <span>单条消息长度上限</span>
                                 <input id="maxMessageLength" data-field="max_message_length" type="number" min="1" step="1">
                             </label>
-                            <label class="field span-2" for="enabledGroups">
-                                <span>启用群组（每行一个，或填 all）</span>
-                                <textarea id="enabledGroups" data-field="enabled_groups" rows="4" spellcheck="false"></textarea>
+                            <div class="field span-2 config-list-field" data-list-editor="enabledGroups">
+                                <span class="config-list-label" id="enabledGroupsLabel">启用群组</span>
+                                <div class="tag-editor" role="group" aria-labelledby="enabledGroupsLabel">
+                                    <div class="tag-editor-values" data-list-values></div>
+                                    <div class="tag-editor-entry">
+                                        <input data-list-input type="text" autocomplete="off" spellcheck="false" placeholder="输入群号，按 Enter 添加">
+                                        <button data-list-add class="button small secondary" type="button">添加</button>
+                                    </div>
+                                </div>
+                                <input id="enabledGroups" data-field="enabled_groups" type="hidden">
+                                <small class="muted">填写 all 表示全部群组；支持粘贴多行批量添加。</small>
+                            </div>
+                            <div class="field span-2 config-list-field" data-list-editor="replyKeywords">
+                                <span class="config-list-label" id="replyKeywordsLabel">回复关键词</span>
+                                <div class="tag-editor" role="group" aria-labelledby="replyKeywordsLabel">
+                                    <div class="tag-editor-values" data-list-values></div>
+                                    <div class="tag-editor-entry">
+                                        <input data-list-input type="text" autocomplete="off" placeholder="输入关键词，按 Enter 添加">
+                                        <button data-list-add class="button small secondary" type="button">添加</button>
+                                    </div>
+                                </div>
+                                <input id="replyKeywords" data-field="reply_keywords" type="hidden">
+                                <small class="muted">消息包含任意关键词时提高回复概率；支持粘贴多行批量添加。</small>
+                            </div>
+                            <div class="field span-2 config-list-field" data-list-editor="ignorePrefixes">
+                                <span class="config-list-label" id="ignorePrefixesLabel">忽略前缀</span>
+                                <div class="tag-editor" role="group" aria-labelledby="ignorePrefixesLabel">
+                                    <div class="tag-editor-values" data-list-values></div>
+                                    <div class="tag-editor-entry">
+                                        <input data-list-input type="text" autocomplete="off" placeholder="输入前缀，按 Enter 添加">
+                                        <button data-list-add class="button small secondary" type="button">添加</button>
+                                    </div>
+                                </div>
+                                <input id="ignorePrefixes" data-field="ignore_prefixes" type="hidden">
+                                <small class="muted">消息以任意前缀开头时忽略；支持粘贴多行批量添加。</small>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="form-section">
+                        <legend>群内互动</legend>
+                        <p class="muted form-note">默认关闭。动作只作用于当前群消息与当前发送者，模型不能指定目标；表情回应和戳一戳可以脱离文本单独执行。</p>
+                        <p class="muted form-note">当前仅对 OneBot V11 的 NapCat、LLOneBot、Lagrange 已验证模型生效；其它平台会保留配置但不会执行动作。</p>
+                        <div class="form-grid">
+                            <label class="check-field span-2" for="interactionEnabled">
+                                <input id="interactionEnabled" data-field="interaction_enabled" type="checkbox">
+                                <span>启用群内互动动作</span>
                             </label>
-                            <label class="field span-2" for="replyKeywords">
-                                <span>回复关键词（每行一个）</span>
-                                <textarea id="replyKeywords" data-field="reply_keywords" rows="3"></textarea>
+                            <label class="field" for="interactionCooldown">
+                                <span>动作冷却（秒）</span>
+                                <input id="interactionCooldown" data-field="interaction_cooldown" type="number" min="0" step="1">
+                                <small class="muted">同一账号在同一个群内两次动作之间的最小间隔，不设置上限。</small>
                             </label>
-                            <label class="field span-2" for="ignorePrefixes">
-                                <span>忽略前缀（每行一个）</span>
-                                <textarea id="ignorePrefixes" data-field="ignore_prefixes" rows="3"></textarea>
-                            </label>
+                            <p class="muted span-2">可用动作（每轮最多采用模型输出的第一项）</p>
+                            <div id="interactionActions" class="choice-grid span-2" data-choice-group="interaction_actions"
+                                 aria-label="可用互动动作"></div>
+                            <p class="muted span-2">表情语义值（仅启用表情回应时生效，可多选）</p>
+                            <div id="interactionReactions" class="choice-grid span-2" data-choice-group="interaction_reactions"
+                                 aria-label="可选表情回应"></div>
                         </div>
                     </fieldset>
 
@@ -4118,6 +4360,7 @@ noscript {
         repairing: '修复格式',
         backoff: '等待重试',
         sending: '发送回复',
+        interaction: '互动动作',
         memory_extract: '整理记忆',
     };
     const ACTIVITY_MEMORY_META = {
@@ -4126,6 +4369,35 @@ noscript {
         failed: {label: '失败', className: 'is-failed'},
         skipped: {label: '已跳过', className: 'is-skipped'},
     };
+    const INTERACTION_ACTION_LABELS = {
+        reaction: '表情回应',
+        poke: '戳一戳',
+    };
+    const INTERACTION_ACTION_OPTIONS = [
+        ['reaction', '表情回应'],
+        ['poke', '戳一戳'],
+    ];
+    const INTERACTION_REACTION_OPTIONS = [
+        ['like', '赞'],
+        ['laugh', '笑'],
+        ['tears', '笑哭'],
+        ['biglaugh', '大笑'],
+        ['doge', '狗头'],
+        ['surprise', '惊讶'],
+        ['question', '疑问'],
+        ['speechless', '无语'],
+        ['applause', '鼓掌'],
+        ['cheer', '打call'],
+        ['fingerheart', '比心'],
+        ['heart', '爱心'],
+        ['rose', '玫瑰'],
+        ['cry', '流泪'],
+        ['shy', '害羞'],
+        ['hug', '抱抱'],
+        ['watermelon', '吃瓜'],
+        ['slack', '摸鱼'],
+        ['ok', 'OK'],
+    ];
     const ACTIVITY_TERMINAL_META = {
         finished: {
             label: '已完成',
@@ -4222,6 +4494,7 @@ noscript {
         knownConfigFields: [],
         extraConfigRows: [],
         extraConfigRemoved: new Set(),
+        listEditors: {},
         memoryQuery: null,
         memoryOtherExpanded: false,
         memoryGroupIndexOffset: 0,
@@ -4259,7 +4532,8 @@ noscript {
         [
             'pluginMeta', 'botSelect', 'refreshButton', 'banner', 'bannerText', 'bannerAction',
             'overviewAccount', 'overviewPlatform', 'overviewApi', 'overviewOcr', 'overviewGroups',
-            'overviewKnowledge', 'overviewImageCache', 'overviewRevision', 'configForm', 'configErrors',
+            'overviewKnowledge', 'overviewImageCache', 'overviewInteraction', 'overviewRevision',
+            'configForm', 'configErrors',
             'overviewActivity', 'overviewActivityRefresh', 'overviewActivitySummary',
             'overviewActivityList', 'overviewActivityFullscreenLauncher',
             'overviewActivityFullscreenButton',
@@ -4271,6 +4545,7 @@ noscript {
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
             'recordKnowledge', 'mentionReply', 'replyProbability', 'retryCount',
             'searchKnowledgeDeepin', 'knowledgeTopK', 'searchAgeing', 'maxMessageLength', 'enabledGroups',
+            'interactionEnabled', 'interactionActions', 'interactionReactions', 'interactionCooldown',
             'replyKeywords', 'ignorePrefixes', 'historySizeMin', 'historySize', 'historyDynamic',
             'historyDynamicSize', 'contextBudgetChars', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
             'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
@@ -4299,6 +4574,9 @@ noscript {
         });
 
         enhanceCustomSelects(document);
+        enhanceListEditors();
+        renderChoiceGroup(elements.interactionActions, INTERACTION_ACTION_OPTIONS);
+        renderChoiceGroup(elements.interactionReactions, INTERACTION_REACTION_OPTIONS);
         if (window.MutationObserver) {
             state.selectObserver = new MutationObserver(function (records) {
                 records.forEach(function (record) {
@@ -5327,9 +5605,19 @@ noscript {
         setValue('knowledgeTopK', config.knowledge_top_k);
         setValue('searchAgeing', config.search_ageing);
         setValue('maxMessageLength', config.max_message_length);
-        elements.enabledGroups.value = listToText(config.enabled_groups);
-        elements.replyKeywords.value = listToText(config.reply_keywords);
-        elements.ignorePrefixes.value = listToText(config.ignore_prefixes);
+        setListValues('enabledGroups', config.enabled_groups);
+        setListValues('replyKeywords', config.reply_keywords);
+        setListValues('ignorePrefixes', config.ignore_prefixes);
+        const interactionActions = Array.isArray(config.interaction_actions)
+            ? config.interaction_actions
+            : [];
+        const interactionReactions = Array.isArray(config.interaction_reactions)
+            ? config.interaction_reactions
+            : [];
+        elements.interactionEnabled.checked = config.interaction_enabled === true;
+        setChoiceValues('interactionActions', interactionActions);
+        setChoiceValues('interactionReactions', interactionReactions);
+        setValue('interactionCooldown', config.interaction_cooldown);
         setValue('historySizeMin', config.history_size_min);
         setValue('historySize', config.history_size);
         elements.historyDynamic.checked = config.history_dynamic === true;
@@ -5790,8 +6078,215 @@ noscript {
         element.value = hasOption ? target : fallback;
     }
 
-    function listToText(value) {
-        return Array.isArray(value) ? value.join('\n') : '';
+    function normalizeStringList(values) {
+        const result = [];
+        const seen = new Set();
+        (Array.isArray(values) ? values : []).forEach(function (value) {
+            if (typeof value !== 'string') {
+                return;
+            }
+            const text = value.trim();
+            if (!text || seen.has(text)) {
+                return;
+            }
+            seen.add(text);
+            result.push(text);
+        });
+        return result;
+    }
+
+    function enhanceListEditors() {
+        document.querySelectorAll('[data-list-editor]').forEach(function (root) {
+            const id = root.dataset.listEditor;
+            const hidden = elements[id];
+            const input = root.querySelector('[data-list-input]');
+            const add = root.querySelector('[data-list-add]');
+            const valuesRoot = root.querySelector('[data-list-values]');
+            if (!id || !hidden || !input || !add || !valuesRoot) {
+                return;
+            }
+            state.listEditors[id] = {
+                root: root,
+                hidden: hidden,
+                input: input,
+                add: add,
+                valuesRoot: valuesRoot,
+                values: [],
+            };
+            add.addEventListener('click', function () {
+                commitListInput(id);
+            });
+            input.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commitListInput(id);
+                } else if (event.key === 'Backspace' && !input.value) {
+                    removeListValue(id, state.listEditors[id].values.length - 1);
+                }
+            });
+            input.addEventListener('paste', function (event) {
+                const pasted = event.clipboardData ? event.clipboardData.getData('text') : '';
+                if (!/[\r\n]/.test(pasted)) {
+                    return;
+                }
+                event.preventDefault();
+                const typed = input.value.trim();
+                input.value = '';
+                appendListValues(id, typed ? typed + '\n' + pasted : pasted);
+            });
+            valuesRoot.addEventListener('click', function (event) {
+                const button = event.target.closest('[data-list-remove]');
+                if (!button) {
+                    return;
+                }
+                removeListValue(id, Number(button.dataset.listRemove));
+            });
+            renderListEditor(id);
+        });
+    }
+
+    function setListValues(id, values) {
+        const entry = state.listEditors[id];
+        if (!entry) {
+            return;
+        }
+        entry.input.value = '';
+        entry.values = normalizeStringList(values);
+        renderListEditor(id);
+    }
+
+    function readListValues(id) {
+        const entry = state.listEditors[id];
+        return entry ? entry.values.slice() : [];
+    }
+
+    function appendListValues(id, text) {
+        const entry = state.listEditors[id];
+        if (!entry) {
+            return false;
+        }
+        const candidates = String(text)
+            .split(/\r?\n/)
+            .map(function (value) {
+                return value.trim();
+            })
+            .filter(Boolean);
+        const nextValues = normalizeStringList(entry.values.concat(candidates));
+        if (
+            nextValues.length === entry.values.length &&
+            nextValues.every(function (value, index) {
+                return value === entry.values[index];
+            })
+        ) {
+            return false;
+        }
+        entry.values = nextValues;
+        renderListEditor(id);
+        markFieldDirty(entry.hidden.dataset.field);
+        return true;
+    }
+
+    function commitListInput(id) {
+        const entry = state.listEditors[id];
+        if (!entry) {
+            return;
+        }
+        const text = entry.input.value.trim();
+        if (!text) {
+            return;
+        }
+        entry.input.value = '';
+        appendListValues(id, text);
+        entry.input.focus();
+    }
+
+    function commitAllListInputs() {
+        Object.keys(state.listEditors).forEach(function (id) {
+            commitListInput(id);
+        });
+    }
+
+    function removeListValue(id, index) {
+        const entry = state.listEditors[id];
+        if (!entry || !Number.isInteger(index) || index < 0 || index >= entry.values.length) {
+            return;
+        }
+        entry.values.splice(index, 1);
+        renderListEditor(id);
+        markFieldDirty(entry.hidden.dataset.field);
+    }
+
+    function renderListEditor(id) {
+        const entry = state.listEditors[id];
+        if (!entry) {
+            return;
+        }
+        entry.valuesRoot.replaceChildren();
+        if (!entry.values.length) {
+            const empty = document.createElement('span');
+            empty.className = 'tag-editor-empty';
+            empty.textContent = '尚未添加';
+            entry.valuesRoot.appendChild(empty);
+        } else {
+            entry.values.forEach(function (value, index) {
+                const chip = document.createElement('span');
+                chip.className = 'tag-chip';
+                const label = document.createElement('span');
+                label.className = 'tag-chip-label';
+                label.textContent = value;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'tag-chip-remove';
+                remove.dataset.listRemove = String(index);
+                remove.setAttribute('aria-label', '移除 ' + value);
+                remove.textContent = '×';
+                chip.append(label, remove);
+                entry.valuesRoot.appendChild(chip);
+            });
+        }
+        entry.hidden.value = entry.values.join('\n');
+    }
+
+    function renderChoiceGroup(root, options) {
+        if (!root) {
+            return;
+        }
+        root.replaceChildren();
+        options.forEach(function (option) {
+            const [value, label] = option;
+            const choice = document.createElement('label');
+            choice.className = 'choice-chip';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.value = value;
+            input.dataset.field = root.dataset.choiceGroup;
+            input.dataset.choiceValue = value;
+            const text = document.createElement('span');
+            text.textContent = label;
+            choice.append(input, text);
+            root.appendChild(choice);
+        });
+    }
+
+    function setChoiceValues(id, values) {
+        const root = elements[id];
+        if (!root) {
+            return;
+        }
+        const selected = new Set(normalizeStringList(values));
+        root.querySelectorAll('input[data-choice-value]').forEach(function (input) {
+            input.checked = selected.has(input.dataset.choiceValue);
+        });
+    }
+
+    function readChoiceValues(id) {
+        const root = elements[id];
+        if (!root) {
+            return [];
+        }
+        return Array.from(root.querySelectorAll('input[data-choice-value]:checked')).map(function (input) {
+            return input.dataset.choiceValue;
+        });
     }
 
     function updateSecretState() {
@@ -5847,8 +6342,16 @@ noscript {
         const target = event && event.target;
         const field = target && target.closest ? target.closest('[data-field]') : null;
         if (field && field.dataset.field) {
-            state.dirtyFields.add(field.dataset.field);
+            markFieldDirty(field.dataset.field);
         }
+        setDirty(true);
+    }
+
+    function markFieldDirty(field) {
+        if (!state.config || !field) {
+            return;
+        }
+        state.dirtyFields.add(field);
         setDirty(true);
     }
 
@@ -5894,9 +6397,13 @@ noscript {
             knowledge_top_k: function () { return readInteger('knowledgeTopK'); },
             search_ageing: function () { return readNumber('searchAgeing'); },
             max_message_length: function () { return readInteger('maxMessageLength'); },
-            enabled_groups: function () { return readLines('enabledGroups'); },
-            reply_keywords: function () { return readLines('replyKeywords'); },
-            ignore_prefixes: function () { return readLines('ignorePrefixes'); },
+            enabled_groups: function () { return readListValues('enabledGroups'); },
+            reply_keywords: function () { return readListValues('replyKeywords'); },
+            ignore_prefixes: function () { return readListValues('ignorePrefixes'); },
+            interaction_enabled: function () { return elements.interactionEnabled.checked; },
+            interaction_actions: function () { return readChoiceValues('interactionActions'); },
+            interaction_reactions: function () { return readChoiceValues('interactionReactions'); },
+            interaction_cooldown: function () { return readNumber('interactionCooldown'); },
             history_size_min: function () { return readInteger('historySizeMin'); },
             history_size: function () { return readInteger('historySize'); },
             history_dynamic: function () { return elements.historyDynamic.checked; },
@@ -5959,20 +6466,12 @@ noscript {
         return Number.isFinite(value) ? value : NaN;
     }
 
-    function readLines(id) {
-        return elements[id].value
-            .split(/\r?\n/)
-            .map(function (line) {
-                return line.trim();
-            })
-            .filter(Boolean);
-    }
-
     async function saveConfig() {
         if (!state.selectedBot || !state.config || !state.revision || state.conflict) {
             return;
         }
         clearFieldErrors();
+        commitAllListInputs();
         if (!elements.configForm.reportValidity()) {
             showToast('请先修正表单中的必填项或范围错误', true);
             return;
@@ -6036,6 +6535,10 @@ noscript {
             });
             if (input) {
                 input.setAttribute('aria-invalid', 'true');
+                const listRoot = input.closest('[data-list-editor]');
+                if (listRoot) {
+                    listRoot.classList.add('has-error');
+                }
             }
         });
         elements.configErrors.replaceChildren();
@@ -6056,6 +6559,9 @@ noscript {
         elements.configErrors.replaceChildren();
         document.querySelectorAll('[data-field][aria-invalid]').forEach(function (input) {
             input.removeAttribute('aria-invalid');
+        });
+        document.querySelectorAll('[data-list-editor].has-error').forEach(function (root) {
+            root.classList.remove('has-error');
         });
     }
 
@@ -6791,6 +7297,24 @@ noscript {
         elements.overviewImageCache.textContent = state.overview
             ? String(imageCacheCount) + ' 条'
             : '—';
+        const interactionActions = state.config && Array.isArray(state.config.interaction_actions)
+            ? state.config.interaction_actions.filter(function (action) {
+                return Object.prototype.hasOwnProperty.call(INTERACTION_ACTION_LABELS, action);
+            })
+            : [];
+        if (!state.config) {
+            elements.overviewInteraction.textContent = '—';
+        } else if (state.config.interaction_enabled !== true) {
+            elements.overviewInteraction.textContent = '关闭';
+        } else if (interactionActions.length === 0) {
+            elements.overviewInteraction.textContent = '启用但未选动作';
+        } else {
+            elements.overviewInteraction.textContent = '已启用 · ' + interactionActions
+                .map(function (action) {
+                    return INTERACTION_ACTION_LABELS[action];
+                })
+                .join('、');
+        }
         elements.overviewRevision.textContent = configRevisionTimeText(state.revision);
     }
 
