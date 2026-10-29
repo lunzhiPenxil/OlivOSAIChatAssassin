@@ -14,6 +14,7 @@ gConfigDir = './plugin/data/OlivOSAIChatAssassin'
 gConfigPath = './plugin/data/OlivOSAIChatAssassin/config.json'
 
 gGroupLock: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.SlackableFairLock]' = {}
+gHistoryWindowGuard = OlivOSAIChatAssassin.tools.HistoryWindowGuard()
 gGroupKnowledgeCounter: 'dict[tuple[str, str], int]' = {}
 gGroupKnowledgeCounterLimit: int = int(4 * 4)
 
@@ -93,8 +94,8 @@ configDefault = {
     'event_group_advanced_enabled': False,
     'ocr_api': {
         'api_key': '',
-        'api_base': 'https://api.siliconflow.cn/v1',
-        'model': 'Pro/moonshotai/Kimi-K2.5',
+        'api_base': 'https://api.deepseek.com/v1',
+        'model': 'deepseek-v4-flash',
         'mode': 'base64',
         'enable': False,
         "queue_size": 8

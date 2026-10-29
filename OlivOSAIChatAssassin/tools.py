@@ -123,6 +123,11 @@ def sleep(sleep_time: float):
     time.sleep(sleep_time)
 
 
+def run_cancel_check(cancel_check, phase=''):
+    if callable(cancel_check):
+        cancel_check(phase)
+
+
 def get_recommendRank(word1_in: str, word2_in: str, gate_rank: int = 1000, rate: float = 0.1):
     word1 = word1_in.lower()
     word2 = word2_in.lower()
@@ -213,7 +218,9 @@ def peak_up_recommendMatch(
     *,
     bot_hash: 'str|None' = None,
     top_k: int = 0,
+    cancel_check=None,
 ):
+    run_cancel_check(cancel_check, 'knowledge_match_start')
     timestamp = int(time.perf_counter())
     res = {}
     matchedList_this = matchedList if type(matchedList) is list else []
@@ -223,34 +230,50 @@ def peak_up_recommendMatch(
     except (TypeError, ValueError):
         top_k = 0
     bot_key = str(bot_hash) if bot_hash is not None else ''
-    bot_cache = OlivOSAIChatAssassin.data.gPeakUpCache.setdefault(bot_key, {})
-    named_cache = bot_cache.setdefault(dictName, {})
-    for cache_key in list(named_cache.keys()):
-        cached_at = named_cache.get(cache_key, {}).get('timestamp', 0)
-        if timestamp - cached_at >= ageing:
-            named_cache.pop(cache_key, None)
+    bot_cache = OlivOSAIChatAssassin.data.gPeakUpCache.get(bot_key)
+    named_cache = bot_cache.get(dictName) if isinstance(bot_cache, dict) else None
+    if isinstance(named_cache, dict):
+        for cache_key in list(named_cache.keys()):
+            cached_at = named_cache.get(cache_key, {}).get('timestamp', 0)
+            if timestamp - cached_at >= ageing:
+                named_cache.pop(cache_key, None)
 
     if type(dictMap) is not dict:
         return res
 
     cache_key = (str(target), float(rate), father or '')
-    cache_entry = named_cache.get(cache_key)
+    cache_entry = named_cache.get(cache_key) if isinstance(named_cache, dict) else None
     if isinstance(cache_entry, dict) and isinstance(cache_entry.get('matches'), list):
         matches = list(cache_entry['matches'])
         cached = True
     else:
         matches = []
-        for key in dictMap:
+        last_cancel_check = time.perf_counter()
+        for scan_index, key in enumerate(dictMap, 1):
+            if (
+                cancel_check is not None
+                and (
+                    scan_index == 1
+                    or scan_index % 32 == 0
+                    or time.perf_counter() - last_cancel_check >= 0.02
+                )
+            ):
+                run_cancel_check(cancel_check, 'knowledge_candidate_scan')
+                last_cancel_check = time.perf_counter()
             rank = OlivOSAIChatAssassin.tools.get_recommendRank(key, target, rate=rate)
             if OlivOSAIChatAssassin.tools.get_recommendMatch(rank):
                 matches.append({'key': key, 'rank': rank})
         matches.sort(key=lambda item: (item['rank'], str(item['key'])))
+        run_cancel_check(cancel_check, 'knowledge_before_cache_write')
+        bot_cache = OlivOSAIChatAssassin.data.gPeakUpCache.setdefault(bot_key, {})
+        named_cache = bot_cache.setdefault(dictName, {})
         named_cache[cache_key] = {
             'timestamp': timestamp,
             'matches': matches,
         }
         cached = False
 
+    run_cancel_check(cancel_check, 'knowledge_before_select')
     selected = []
     for item in matches:
         key = item.get('key')
@@ -300,6 +323,98 @@ class DynamicQueue:
 
     def __getitem__(self, index):
         return self.queue[index]
+
+    def would_retain(self, index: int, append_count: int):
+        '''投影追加若干条后某个索引是否仍保留；无法确定时返回 None。'''
+        if (
+            not isinstance(index, int)
+            or not isinstance(append_count, int)
+            or not isinstance(self.keep, int)
+            or not isinstance(self.max_grow, int)
+            or append_count < 0
+        ):
+            return None
+        length = len(self.queue)
+        if (
+            self.keep < 2
+            or self.max_grow <= 0
+            or self.max_grow < self.keep
+            or length > self.max_grow
+            or index < 0
+            or index >= length
+        ):
+            return None
+        for _ in range(append_count):
+            if length == self.max_grow:
+                removed = length - (self.keep - 1)
+                index -= removed
+                if index < 0:
+                    return False
+                length = self.keep - 1
+            length += 1
+        return True
+
+
+class HistoryArrivalToken:
+    '''一条待处理群消息的轻量登记；不保存消息正文。'''
+
+    __slots__ = ('key', 'token_id', 'guaranteed', 'signature')
+
+    def __init__(self, key, token_id: int, guaranteed: bool, signature):
+        self.key = key
+        self.token_id = token_id
+        self.guaranteed = bool(guaranteed)
+        self.signature = signature
+
+
+class HistoryWindowGuard:
+    '''按 bot/群统计确定会写入历史、但尚未完成摄入的消息。'''
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._pending = {}
+        self._next_token_id = 0
+
+    def register(self, key, guaranteed: bool, signature=None):
+        with self._lock:
+            self._next_token_id += 1
+            token = HistoryArrivalToken(
+                key,
+                self._next_token_id,
+                guaranteed,
+                signature,
+            )
+            if token.guaranteed:
+                bucket = self._pending.setdefault(key, {})
+                bucket[token.token_id] = token.signature
+        return token
+
+    def mark_appended(self, token):
+        self.discard(token)
+
+    def discard(self, token):
+        if token is None:
+            return
+        with self._lock:
+            bucket = self._pending.get(token.key)
+            if not bucket:
+                return
+            bucket.pop(token.token_id, None)
+            if not bucket:
+                self._pending.pop(token.key, None)
+
+    def pending_guaranteed_count(self, key, signature=None):
+        with self._lock:
+            bucket = self._pending.get(key, {})
+            return sum(
+                1
+                for item_signature in bucket.values()
+                if item_signature == signature
+            )
+
+    def clear_all(self):
+        with self._lock:
+            self._pending.clear()
 
 
 def opcode_parse_params(typeKey: str, markup: str) -> dict:

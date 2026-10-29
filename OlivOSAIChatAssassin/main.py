@@ -12,6 +12,7 @@ class Event:
         OlivOSAIChatAssassin.activity.clear_all()
         OlivOSAIChatAssassin.interaction.clear_all()
         OlivOSAIChatAssassin.eventInbox.clear_all()
+        OlivOSAIChatAssassin.data.gHistoryWindowGuard.clear_all()
         bot_hash_list = list(Proc.Proc_data['bot_info_dict'].keys())
         OlivOSAIChatAssassin.load.load_init_after()
         OlivOSAIChatAssassin.load.load_logger(Proc)
@@ -56,6 +57,7 @@ class Event:
         OlivOSAIChatAssassin.activity.clear_all()
         OlivOSAIChatAssassin.interaction.clear_all()
         OlivOSAIChatAssassin.eventInbox.clear_all()
+        OlivOSAIChatAssassin.data.gHistoryWindowGuard.clear_all()
 
     def menu(plugin_event, Proc):
         # 插件菜单事件监听
