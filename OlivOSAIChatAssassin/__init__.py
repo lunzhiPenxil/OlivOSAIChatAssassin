@@ -1,3 +1,4 @@
+from . import tools
 from . import data
 from . import activity
 from . import interaction
@@ -5,7 +6,6 @@ from . import eventInbox
 from . import main
 from . import load
 from . import logger
-from . import tools
 from . import webTools
 from . import msg
 from . import webUI

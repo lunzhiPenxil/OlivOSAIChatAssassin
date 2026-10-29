@@ -52,6 +52,81 @@ KNOWLEDGE_CACHE_SECTION = '知识缓存'
 MAX_DEEP_SEARCH_LAYERS = 8
 MAX_DEEP_SEARCH_EXPANSIONS = 64
 
+HISTORY_ARRIVAL_GUARANTEED = 'guaranteed'
+HISTORY_ARRIVAL_REJECTED = 'rejected'
+HISTORY_ARRIVAL_UNKNOWN = 'unknown'
+
+_HISTORY_TRANSFORM_MARKER_RE = re.compile(r'\[(?:OP|CQ):', re.IGNORECASE)
+_HISTORY_IMAGE_MARKER_RE = re.compile(r'\[(?:OP|CQ):image(?:,|\])', re.IGNORECASE)
+
+
+class _HistoryWindowCancelled(Exception):
+    def __init__(self, phase, pending, index):
+        super().__init__(phase)
+        self.phase = phase
+        self.pending = pending
+        self.index = index
+
+
+def _sequence_signature(value):
+    if isinstance(value, (list, tuple)):
+        return tuple(str(item) for item in value)
+    if value is None:
+        return ()
+    return (str(value),)
+
+
+def _history_admission_signature(config):
+    if not isinstance(config, dict) or not config:
+        return None
+    enabled_groups = None
+    if 'enabled_groups' in config:
+        enabled_groups = _sequence_signature(config.get('enabled_groups'))
+    return (
+        enabled_groups,
+        _sequence_signature(config.get('ignore_prefixes', ())),
+    )
+
+
+def _probe_history_admission(plugin_event, bot_hash: str, group_id: str):
+    '''在拿群锁前判断消息是否确定会进入历史，不执行清洗或外部请求。'''
+    try:
+        config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+    except Exception:
+        return HISTORY_ARRIVAL_UNKNOWN, None
+    if not config:
+        return HISTORY_ARRIVAL_REJECTED, None
+    signature = _history_admission_signature(config)
+    enabled_groups = config.get('enabled_groups') if 'enabled_groups' in config else None
+    if enabled_groups is not None and not isinstance(enabled_groups, (list, tuple)):
+        enabled_groups = [enabled_groups]
+    if (
+        enabled_groups is not None
+        and str(group_id) not in {str(item) for item in enabled_groups}
+        and 'all' not in {str(item) for item in enabled_groups}
+    ):
+        return HISTORY_ARRIVAL_REJECTED, signature
+    message = getattr(getattr(plugin_event, 'data', None), 'message', '')
+    if message is None:
+        message = ''
+    if not isinstance(message, str):
+        message = str(message)
+    if not message:
+        return HISTORY_ARRIVAL_REJECTED, signature
+    ignore_prefixes = config.get('ignore_prefixes', ())
+    if not isinstance(ignore_prefixes, (list, tuple)):
+        ignore_prefixes = [ignore_prefixes]
+    if ignore_prefixes:
+        if _HISTORY_TRANSFORM_MARKER_RE.search(message):
+            return HISTORY_ARRIVAL_UNKNOWN, signature
+        if any(message.startswith(str(prefix)) for prefix in ignore_prefixes):
+            return HISTORY_ARRIVAL_REJECTED, signature
+        return HISTORY_ARRIVAL_GUARANTEED, signature
+    if _HISTORY_IMAGE_MARKER_RE.search(message):
+        return HISTORY_ARRIVAL_UNKNOWN, signature
+    return HISTORY_ARRIVAL_GUARANTEED, signature
+
+
 JSON_RETRY_INSTRUCTION = '''
 输出格式纠正，优先级最高：
 上一次响应没有通过 json 格式校验，已经被丢弃。
@@ -584,6 +659,74 @@ def _get_group_lock(bot_hash: str, group_id: str):
     )
 
 
+def _register_history_arrival(plugin_event, bot_hash: str, group_id: str):
+    guard = getattr(OlivOSAIChatAssassin.data, 'gHistoryWindowGuard', None)
+    if guard is None:
+        return None
+    try:
+        admission, signature = _probe_history_admission(plugin_event, bot_hash, group_id)
+    except Exception:
+        admission, signature = HISTORY_ARRIVAL_UNKNOWN, None
+    return guard.register(
+        _history_key(bot_hash, group_id),
+        admission == HISTORY_ARRIVAL_GUARANTEED,
+        signature,
+    )
+
+
+def _history_window_state(bot_hash: str, group_id: str, history_entry, signature):
+    if history_entry is None or signature is None:
+        return None
+    try:
+        current_signature = _history_admission_signature(
+            OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+        )
+    except Exception:
+        return None
+    if current_signature != signature:
+        return None
+    history = _get_history(bot_hash, group_id)
+    if history is None or not hasattr(history, 'would_retain'):
+        return None
+    index = None
+    for candidate_index, entry in enumerate(history):
+        if entry is history_entry:
+            index = candidate_index
+            break
+    if index is None:
+        return None
+    guard = getattr(OlivOSAIChatAssassin.data, 'gHistoryWindowGuard', None)
+    if guard is None:
+        return None
+    pending = guard.pending_guaranteed_count(
+        _history_key(bot_hash, group_id),
+        signature,
+    )
+    retained = history.would_retain(index, pending)
+    return {
+        'pending': pending,
+        'index': index,
+        'retained': retained,
+    }
+
+
+def _raise_if_history_window_evicted(
+    bot_hash: str,
+    group_id: str,
+    history_entry,
+    signature,
+    phase: str,
+):
+    state = _history_window_state(bot_hash, group_id, history_entry, signature)
+    if state is None or state.get('retained') is not False:
+        return
+    raise _HistoryWindowCancelled(
+        phase,
+        state['pending'],
+        state['index'],
+    )
+
+
 def _get_image_cache(bot_hash: str, group_id: str):
     key = _history_key(bot_hash, group_id)
     cache = OlivOSAIChatAssassin.data.gImageCache.get(key)
@@ -636,7 +779,9 @@ def unity_group_message(plugin_event: OlivOS.API.Event, Proc):
     )
     finish_state = activity.STATE_FAILED
     finish_error = 'message_error'
+    arrival_token = None
     try:
+        arrival_token = _register_history_arrival(plugin_event, bot_hash, group_id)
         group_lock = _get_group_lock(bot_hash, group_id)
         wait_start = time.perf_counter()
         with group_lock:
@@ -648,14 +793,23 @@ def unity_group_message(plugin_event: OlivOS.API.Event, Proc):
                 plugin_event,
                 Proc,
                 activity_token=activity_token,
+                arrival_token=arrival_token,
             )
         finish_state = activity.STATE_FINISHED
         finish_error = None
     finally:
+        guard = getattr(OlivOSAIChatAssassin.data, 'gHistoryWindowGuard', None)
+        if guard is not None:
+            guard.discard(arrival_token)
         activity.finish(activity_token, finish_state, finish_error)
 
 
-def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc, activity_token=None):
+def unity_group_message_router(
+    plugin_event: OlivOS.API.Event,
+    Proc,
+    activity_token=None,
+    arrival_token=None,
+):
     group_id = str(plugin_event.data.group_id)
     bot_hash = plugin_event.bot_info.hash
 
@@ -690,12 +844,39 @@ def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc, activity_to
     message_id = plugin_event.data.message_id
     if -1 == message_id:
         message_id = None
-    add_message_to_history(
+    history_entry = add_message_to_history(
         group_id, message, plugin_event.data.user_id, plugin_event.data.sender.get('nickname', '用户'),
         message_id=message_id,
         bot_hash=bot_hash,
         role='user',
     )
+    if history_entry is not None and arrival_token is not None:
+        OlivOSAIChatAssassin.data.gHistoryWindowGuard.mark_appended(arrival_token)
+        try:
+            _raise_if_history_window_evicted(
+                bot_hash,
+                group_id,
+                history_entry,
+                arrival_token.signature,
+                'before_reply_sample',
+            )
+        except _HistoryWindowCancelled as exc:
+            OlivOSAIChatAssassin.logger.log(
+                f'RECALL - CANCEL [reason=out_of_window, phase={exc.phase}, '
+                f'pending={exc.pending}, index={exc.index}]'
+            )
+            activity.note(
+                activity_token,
+                activity.STAGE_PREPARING,
+                '已滑出历史窗口 · 让位',
+                activity.TRACE_WARNING,
+            )
+            activity.finish(
+                activity_token,
+                activity.STATE_SUPERSEDED,
+                'retrieval_out_of_window',
+            )
+            return
     activity.note(
         activity_token,
         activity.STAGE_PREPARING,
@@ -713,7 +894,14 @@ def unity_group_message_router(plugin_event: OlivOS.API.Event, Proc, activity_to
         OlivOSAIChatAssassin.logger.log('SHOULD NOT')
         activity.finish(activity_token, activity.STATE_SKIPPED, 'not_selected')
     else:
-        reply_to_group(plugin_event, group_id, message, activity_token=activity_token)
+        reply_to_group(
+            plugin_event,
+            group_id,
+            message,
+            activity_token=activity_token,
+            history_entry=history_entry,
+            arrival_token=arrival_token,
+        )
 
 
 def should_ignore(message, bot_hash: str):
@@ -739,7 +927,7 @@ def add_message_to_history(
 ):
     history = _get_history(bot_hash, group_id)
     if history is None:
-        return
+        return None
     if role not in ('user', 'assistant'):
         role = 'user'
     timestamp = time.time()
@@ -777,6 +965,7 @@ def add_message_to_history(
         if clean_reply_to:
             msg_entry['reply_to'] = clean_reply_to
     history.append(msg_entry)
+    return msg_entry
 
 
 def should_reply(group_id, message, plugin_event, bot_hash: str):
@@ -815,7 +1004,8 @@ def _limit_mapping(values: dict, limit: int) -> dict:
     return dict(list(values.items())[:limit])
 
 
-def _recall_knowledge(bot_hash: str, history: list) -> tuple:
+def _recall_knowledge(bot_hash: str, history: list, cancel_check=None) -> tuple:
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'knowledge_start')
     config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
     try:
         top_k = max(0, int(config.get(
@@ -844,11 +1034,13 @@ def _recall_knowledge(bot_hash: str, history: list) -> tuple:
     result = {}
     candidate_count = 0
     for source_name, source_data, rate in sources:
+        OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'knowledge_source')
         if not isinstance(source_data, dict):
             continue
         candidate_count += len(source_data)
         matched = {}
         for entry in query_history:
+            OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'knowledge_history')
             target = str(entry.get('message', ''))
             if not target:
                 continue
@@ -864,13 +1056,16 @@ def _recall_knowledge(bot_hash: str, history: list) -> tuple:
                 matchedList=list(matched.keys()),
                 bot_hash=bot_hash,
                 top_k=top_k,
+                cancel_check=cancel_check,
             ))
             if top_k > 0 and len(matched) >= top_k:
                 break
         for layer in range(search_depth):
+            OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'knowledge_deep_layer')
             expansions = 0
             layer_matches = {}
             for key, value in list(matched.items()):
+                OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'knowledge_deep_expand')
                 if expansions >= MAX_DEEP_SEARCH_EXPANSIONS:
                     break
                 expansions += 1
@@ -887,6 +1082,7 @@ def _recall_knowledge(bot_hash: str, history: list) -> tuple:
                     father=key,
                     bot_hash=bot_hash,
                     top_k=top_k,
+                    cancel_check=cancel_check,
                 ))
             if not layer_matches:
                 break
@@ -896,20 +1092,38 @@ def _recall_knowledge(bot_hash: str, history: list) -> tuple:
         matched = _limit_mapping(matched, top_k)
         if matched:
             result[source_name] = matched
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'knowledge_done')
     return result, candidate_count
 
 
-def _recall_people(bot_hash: str, history: list) -> dict:
+def _recall_people(bot_hash: str, history: list, cancel_check=None) -> dict:
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'people_start')
     memory = OlivOSAIChatAssassin.data.gData.getMemory(bot_hash).get('全局', {})
     users = _history_for_retrieval(history)
     user_ids = {str(entry.get('user_id')) for entry in users if entry.get('user_id') is not None}
+    user_messages = [str(entry.get('message', '')).casefold() for entry in users]
+    check_count = 0
+    last_check = time.perf_counter()
+
+    def checkpoint():
+        nonlocal check_count, last_check
+        if cancel_check is None:
+            return
+        check_count += 1
+        now = time.perf_counter()
+        if check_count == 1 or check_count % 32 == 0 or now - last_check >= 0.02:
+            OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'people_match')
+            last_check = now
+
     result = {}
     for section_name in ('人物关系', '用户侧写'):
+        OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'people_section')
         source = memory.get(section_name, {})
         if not isinstance(source, dict):
             continue
         matched = {}
         for key, value in source.items():
+            checkpoint()
             if str(key) in user_ids:
                 matched[key] = value
                 continue
@@ -919,14 +1133,20 @@ def _recall_people(bot_hash: str, history: list) -> dict:
             ]
             if not terms:
                 continue
-            if any(
-                term in str(entry.get('message', '')).casefold()
-                for term in terms
-                for entry in users
-            ):
+            found = False
+            for term in terms:
+                for user_message in user_messages:
+                    checkpoint()
+                    if term in user_message:
+                        found = True
+                        break
+                if found:
+                    break
+            if found:
                 matched[key] = value
         if matched:
             result[section_name] = matched
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'people_done')
     return result
 
 
@@ -1210,12 +1430,30 @@ def _submit_memory_extraction(
     )
 
 
-def _build_memory_payload(bot_hash: str, group_id: str, history: list) -> tuple:
+def _build_memory_payload(
+    bot_hash: str,
+    group_id: str,
+    history: list,
+    cancel_check=None,
+) -> tuple:
     """构造一次回复所需的记忆快照，并保留知识来源分区。"""
-    knowledge, candidate_count = _recall_knowledge(bot_hash, history)
-    people = _recall_people(bot_hash, history)
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'payload_start')
+    knowledge, candidate_count = _recall_knowledge(
+        bot_hash,
+        history,
+        cancel_check=cancel_check,
+    )
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'payload_after_knowledge')
+    people = _recall_people(
+        bot_hash,
+        history,
+        cancel_check=cancel_check,
+    )
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'payload_after_people')
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'payload_before_copy')
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = copy.deepcopy(OlivOSAIChatAssassin.data.gData.getMemory(bot_hash))
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'payload_after_copy')
     if not isinstance(memory, dict):
         memory = {}
     global_memory = memory.get('全局', {})
@@ -1245,6 +1483,7 @@ def _build_memory_payload(bot_hash: str, group_id: str, history: list) -> tuple:
         group_id,
         OlivOSAIChatAssassin.data.gMemoryDefaultStr,
     )
+    OlivOSAIChatAssassin.tools.run_cancel_check(cancel_check, 'payload_done')
     return (
         {
             '固定记忆': fixed_memory,
@@ -1255,8 +1494,15 @@ def _build_memory_payload(bot_hash: str, group_id: str, history: list) -> tuple:
     )
 
 
-def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
-                   activity_token=None):
+def reply_to_group(
+    plugin_event: OlivOS.API.Event,
+    group_id: str,
+    message: str,
+    activity_token=None,
+    *,
+    history_entry=None,
+    arrival_token=None,
+):
     bot_hash: str = str(plugin_event.bot_info.hash)
     total_start = time.perf_counter()
     config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
@@ -1280,14 +1526,45 @@ def reply_to_group(plugin_event: OlivOS.API.Event, group_id: str, message: str,
     activity.update(activity_token, stage=activity.STAGE_RECALLING)
     activity.note(activity_token, activity.STAGE_RECALLING, f'历史 {len(history)} 条')
 
+    if history_entry is not None and arrival_token is not None:
+        def window_cancel_check(phase):
+            _raise_if_history_window_evicted(
+                bot_hash,
+                group_id,
+                history_entry,
+                arrival_token.signature,
+                phase,
+            )
+    else:
+        window_cancel_check = None
+
     # 知识检索属于本条消息从接收后开始处理的成本，必须先完成再进入节奏等待，
     # 这样 slack() 只需等待剩余窗口，而不是在完整等待后额外叠加检索耗时。
     recall_start = time.perf_counter()
-    this_memory, candidate_count = _build_memory_payload(
-        bot_hash,
-        group_id,
-        history,
-    )
+    try:
+        this_memory, candidate_count = _build_memory_payload(
+            bot_hash,
+            group_id,
+            history,
+            cancel_check=window_cancel_check,
+        )
+    except _HistoryWindowCancelled as exc:
+        OlivOSAIChatAssassin.logger.log(
+            f'RECALL - CANCEL [reason=out_of_window, phase={exc.phase}, '
+            f'pending={exc.pending}, index={exc.index}]'
+        )
+        activity.note(
+            activity_token,
+            activity.STAGE_RECALLING,
+            '消息已滑出历史窗口 · 提前让出',
+            activity.TRACE_WARNING,
+        )
+        activity.finish(
+            activity_token,
+            activity.STATE_SUPERSEDED,
+            'retrieval_out_of_window',
+        )
+        return
     image_cache = _image_cache_mapping(bot_hash, group_id)
     recall_parts = []
     for memory_key, memory_label in (
