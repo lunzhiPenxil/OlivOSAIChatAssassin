@@ -12,6 +12,7 @@ class Event:
         OlivOSAIChatAssassin.activity.clear_all()
         OlivOSAIChatAssassin.interaction.clear_all()
         OlivOSAIChatAssassin.eventInbox.clear_all()
+        OlivOSAIChatAssassin.msg.clear_poke_state()
         OlivOSAIChatAssassin.data.gHistoryWindowGuard.clear_all()
         bot_hash_list = list(Proc.Proc_data['bot_info_dict'].keys())
         OlivOSAIChatAssassin.load.load_init_after()
@@ -29,7 +30,8 @@ class Event:
 
     def poke(plugin_event, Proc):
         # 戳一戳事件入口
-        OlivOSAIChatAssassin.eventInbox.receive_poke(plugin_event, Proc)
+        if OlivOSAIChatAssassin.eventInbox.receive_poke(plugin_event, Proc):
+            OlivOSAIChatAssassin.msg.unity_group_poke(plugin_event, Proc)
 
     def private_message_recall(plugin_event, Proc):
         OlivOSAIChatAssassin.eventInbox.receive_private_message_recall(plugin_event, Proc)
@@ -57,6 +59,7 @@ class Event:
         OlivOSAIChatAssassin.activity.clear_all()
         OlivOSAIChatAssassin.interaction.clear_all()
         OlivOSAIChatAssassin.eventInbox.clear_all()
+        OlivOSAIChatAssassin.msg.clear_poke_state()
         OlivOSAIChatAssassin.data.gHistoryWindowGuard.clear_all()
 
     def menu(plugin_event, Proc):

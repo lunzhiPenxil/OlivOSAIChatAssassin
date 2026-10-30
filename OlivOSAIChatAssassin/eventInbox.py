@@ -205,6 +205,7 @@ def receive_poke(plugin_event, Proc=None):
         group_id=group_id,
         user_id=getattr(data, 'user_id', ''),
         target_id=target_id,
+        actor_name=_sender_name(plugin_event),
     ))
 
 
@@ -381,8 +382,14 @@ def snapshot(bot_hash, limit=SNAPSHOT_LIMIT):
 def clear_bot(bot_hash):
     with _lock:
         _events.pop(_id_text(bot_hash), None)
+    clearer = getattr(getattr(OlivOSAIChatAssassin, 'msg', None), 'clear_poke_state', None)
+    if callable(clearer):
+        clearer(bot_hash)
 
 
 def clear_all():
     with _lock:
         _events.clear()
+    clearer = getattr(getattr(OlivOSAIChatAssassin, 'msg', None), 'clear_poke_state', None)
+    if callable(clearer):
+        clearer()

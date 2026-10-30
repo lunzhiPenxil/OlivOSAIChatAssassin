@@ -314,7 +314,7 @@ def execute_action(plugin_event, group_id, selection, activity_token=None):
         )
         return {'ok': False, 'action': action, 'error': 'platform_failed'}
 
-    OlivOSAIChatAssassin.logger.log(f'INTERACTION - {action.upper()} OK')
+    OlivOSAIChatAssassin.logger.log(f'INTERACTION - {action.upper()} DISPATCHED')
     activity.note(
         activity_token,
         activity.STAGE_INTERACTION,

@@ -291,6 +291,7 @@ def _config_warnings(config: dict):
         ('interaction_reactions', list, '互动表情'),
         ('event_private_message_enabled', bool, '私聊消息接收'),
         ('event_poke_enabled', bool, '戳一戳接收'),
+        ('interaction_response_enabled', bool, '戳一戳即时回应'),
         ('event_recall_enabled', bool, '撤回事件接收'),
         ('event_group_advanced_enabled', bool, '群高级事件接收'),
     )
@@ -661,6 +662,10 @@ def _validate_config_patch(patch: dict):
             if checked is not None:
                 result[key] = checked
         elif key == 'event_poke_enabled':
+            checked = _validate_bool(value, key, errors)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'interaction_response_enabled':
             checked = _validate_bool(value, key, errors)
             if checked is not None:
                 result[key] = checked
