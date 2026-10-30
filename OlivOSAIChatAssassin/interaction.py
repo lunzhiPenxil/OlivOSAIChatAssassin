@@ -18,8 +18,7 @@ ACTION_LABELS = {
     ACTION_POKE: '戳一戳',
 }
 
-# 语义名用于模型和界面，平台编号来自 QQ 系统表情 QSid。
-# Lagrange 对三位以内的 code 使用系统表情类型，因此这里只收录三位以内的编号。
+# 语义名用于模型和界面；编号由 OlivOS 通用反应接口接收。
 REACTION_CATALOG = (
     ('like', '赞', '76'),
     ('laugh', '笑', '13'),
@@ -49,24 +48,6 @@ REACTION_LABELS = {
 REACTION_FACE_IDS = {
     name: face_id for name, _label, face_id in REACTION_CATALOG
 }
-
-ONEBOT_REACTION_MODELS = frozenset((
-    'napcat',
-    'napcat_hide',
-    'napcat_show',
-    'napcat_show_new',
-    'napcat_show_new_9_9_19',
-    'napcat_show_old',
-    'napcat_default',
-    'llonebot_default',
-    'lagrange_default',
-))
-
-ONEBOT_POKE_MODELS = ONEBOT_REACTION_MODELS
-
-# OlivOS 当前把 Milky 事件上报为 sdk='onebot' + model='milky_*'，而公共
-# 动作 API 只在 sdk='milky' 分支分发；在核心路由修正前不要把静默无效的
-# 调用宣称为可用能力。
 
 FAILURE_COOLDOWN = 60.0
 _SAFE_TARGET_RE = re.compile(r'^[^\s\[\],&]{1,160}$')
@@ -106,16 +87,6 @@ def cooldown_seconds(config):
     return max(0.0, value)
 
 
-def platform_info(plugin_event):
-    platform = getattr(plugin_event, 'platform', None)
-    if not isinstance(platform, dict):
-        bot_info = getattr(plugin_event, 'bot_info', None)
-        platform = getattr(bot_info, 'platform', None)
-    if not isinstance(platform, dict):
-        return {}
-    return platform
-
-
 def _safe_target(value):
     if value is None:
         return ''
@@ -125,21 +96,21 @@ def _safe_target(value):
     return text
 
 
-def _numeric_target(value):
+def _action_target(value):
     text = _safe_target(value)
-    if text and text.isdigit() and int(text) > 0:
-        return text
-    return ''
+    if text in ('-1', '0'):
+        return ''
+    return text
 
 
 def _message_target(plugin_event):
     data = getattr(plugin_event, 'data', None)
-    return _safe_target(getattr(data, 'message_id', None))
+    return _action_target(getattr(data, 'message_id', None))
 
 
 def _user_target(plugin_event):
     data = getattr(plugin_event, 'data', None)
-    return _safe_target(getattr(data, 'user_id', None))
+    return _action_target(getattr(data, 'user_id', None))
 
 
 def _sender_is_bot(plugin_event):
@@ -150,29 +121,11 @@ def _sender_is_bot(plugin_event):
     return sender.get('is_bot') is True or sender.get('bot') is True
 
 
-def _supports_reaction(plugin_event):
-    platform = platform_info(plugin_event)
-    sdk = platform.get('sdk')
-    model = platform.get('model')
-    if sdk == 'onebot' and model in ONEBOT_REACTION_MODELS:
-        return bool(_numeric_target(_message_target(plugin_event)))
-    return False
-
-
-def _supports_poke(plugin_event, group_id):
-    platform = platform_info(plugin_event)
-    sdk = platform.get('sdk')
-    model = platform.get('model')
-    if sdk == 'onebot' and model in ONEBOT_POKE_MODELS:
-        return bool(_numeric_target(group_id) and _numeric_target(_user_target(plugin_event)))
-    return False
-
-
 def supports_action(action, plugin_event, group_id):
     if action == ACTION_REACTION:
-        return _supports_reaction(plugin_event)
+        return bool(_message_target(plugin_event))
     if action == ACTION_POKE:
-        return _supports_poke(plugin_event, group_id)
+        return bool(_action_target(group_id) and _user_target(plugin_event))
     return False
 
 
@@ -233,7 +186,7 @@ def select_action(raw_actions, config, plugin_event, group_id):
         if value not in REACTION_FACE_IDS:
             return _result(reason='reaction_unsupported')
     if not supports_action(action, plugin_event, group_id):
-        return _result(reason='platform_unsupported')
+        return _result(reason='target_missing')
 
     plugin_info = getattr(plugin_event, 'bot_info', None)
     bot_hash = getattr(plugin_info, 'hash', '')

@@ -4133,7 +4133,7 @@ noscript {
                     <fieldset class="form-section">
                         <legend>群内互动</legend>
                         <p class="muted form-note">默认关闭。动作只作用于当前群消息与当前发送者，模型不能指定目标；表情回应和戳一戳可以脱离文本单独执行。</p>
-                        <p class="muted form-note">当前仅对 OneBot V11 的 NapCat、LLOneBot、Lagrange 已验证模型生效；其它平台会保留配置但不会执行动作。</p>
+                        <p class="muted form-note">动作通过 OlivOS 通用消息接口提交；插件不判断 sdk、协议或模型，也不使用平台专有的 inde 接口，实际分发由宿主处理。</p>
                         <div class="form-grid">
                             <label class="check-field span-2" for="interactionEnabled">
                                 <input id="interactionEnabled" data-field="interaction_enabled" type="checkbox">
