@@ -15,6 +15,8 @@ gConfigPath = './plugin/data/OlivOSAIChatAssassin/config.json'
 
 gGroupLock: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.SlackableFairLock]' = {}
 gHistoryWindowGuard = OlivOSAIChatAssassin.tools.HistoryWindowGuard()
+gPokeDedupeLock = threading.Lock()
+gPokeDedupe: 'dict[tuple[str, str], dict]' = {}
 gGroupKnowledgeCounter: 'dict[tuple[str, str], int]' = {}
 gGroupKnowledgeCounterLimit: int = int(4 * 4)
 
@@ -90,6 +92,7 @@ configDefault = {
     'interaction_cooldown': 30,
     'event_private_message_enabled': False,
     'event_poke_enabled': False,
+    'interaction_response_enabled': False,
     'event_recall_enabled': False,
     'event_group_advanced_enabled': False,
     'ocr_api': {

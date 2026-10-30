@@ -3960,7 +3960,7 @@ noscript {
                                     <span class="activity-refresh-text">准备读取</span>
                                 </span>
                             </div>
-                            <p class="muted small-text">只读展示私聊、戳一戳、撤回与群高级事件，不会触发回复或发送动作。</p>
+                            <p class="muted small-text">展示事件日志快照；戳一戳是否进入群历史或触发回复由事件接收与即时回应开关决定。</p>
                         </div>
                         <div id="overviewInboundSummary" class="activity-summary" aria-live="polite">—</div>
                     </div>
@@ -4133,7 +4133,7 @@ noscript {
                     <fieldset class="form-section">
                         <legend>群内互动</legend>
                         <p class="muted form-note">默认关闭。动作只作用于当前群消息与当前发送者，模型不能指定目标；表情回应和戳一戳可以脱离文本单独执行。</p>
-                        <p class="muted form-note">当前仅对 OneBot V11 的 NapCat、LLOneBot、Lagrange 已验证模型生效；其它平台会保留配置但不会执行动作。</p>
+                        <p class="muted form-note">动作通过 OlivOS 通用消息接口提交；插件不判断 sdk、协议或模型，也不使用平台专有的 inde 接口，实际分发由宿主处理。</p>
                         <div class="form-grid">
                             <label class="check-field span-2" for="interactionEnabled">
                                 <input id="interactionEnabled" data-field="interaction_enabled" type="checkbox">
@@ -4155,7 +4155,7 @@ noscript {
 
                     <fieldset class="form-section">
                         <legend>事件接收</legend>
-                        <p class="muted form-note">只读接收并记录最近事件，不进入回复、记忆整理或互动发送链路。记录仅保存在内存中，重载插件后清空。</p>
+                        <p class="muted form-note">事件接收默认关闭。私聊、撤回和群高级事件只记录日志；开启戳一戳后，群戳一戳会作为结构化消息进入群历史。日志仅保存在内存中，重载插件后清空。</p>
                         <div class="form-grid">
                             <label class="check-field span-2" for="eventPrivateMessageEnabled">
                                 <input id="eventPrivateMessageEnabled" data-field="event_private_message_enabled" type="checkbox">
@@ -4165,6 +4165,12 @@ noscript {
                                 <input id="eventPokeEnabled" data-field="event_poke_enabled" type="checkbox">
                                 <span>接收戳一戳</span>
                             </label>
+                            <small class="muted span-2">连续相同戳击在 2 秒窗口内只保留一条历史；目标为他人时只进入历史，不即时触发模型。</small>
+                            <label class="check-field span-2" for="interactionResponseEnabled">
+                                <input id="interactionResponseEnabled" data-field="interaction_response_enabled" type="checkbox">
+                                <span>戳向机器人时进入正常回复判断</span>
+                            </label>
+                            <small class="muted span-2">仅在“接收戳一戳”已开启时生效；复用普通群消息的判断、节奏和发送链路。</small>
                             <label class="check-field span-2" for="eventRecallEnabled">
                                 <input id="eventRecallEnabled" data-field="event_recall_enabled" type="checkbox">
                                 <span>接收撤回事件</span>
@@ -4346,7 +4352,7 @@ noscript {
                     type="button">返回概览</button>
                 <div class="activity-fullscreen-title">
                     <h2 id="overviewInboundFullscreenTitle">最近接收</h2>
-                    <p class="muted small-text">只读浏览已载入事件，不会触发回复或发送动作。</p>
+                    <p class="muted small-text">只读浏览已载入的事件日志；戳一戳的回复行为由设置页开关决定。</p>
                 </div>
             </div>
             <div class="activity-fullscreen-meta">
@@ -4733,7 +4739,7 @@ noscript {
             'searchKnowledgeDeepin', 'knowledgeTopK', 'searchAgeing', 'maxMessageLength', 'enabledGroups',
             'interactionEnabled', 'interactionActions', 'interactionReactions', 'interactionCooldown',
             'eventPrivateMessageEnabled', 'eventPokeEnabled', 'eventRecallEnabled',
-            'eventGroupAdvancedEnabled',
+            'interactionResponseEnabled', 'eventGroupAdvancedEnabled',
             'replyKeywords', 'ignorePrefixes', 'historySizeMin', 'historySize', 'historyDynamic',
             'historyDynamicSize', 'contextBudgetChars', 'slackTime', 'slackCooldown', 'ocrEnable', 'ocrApiKey',
             'ocrApiKeyHint', 'ocrApiBase', 'ocrModel', 'ocrMode', 'ocrQueueSize', 'resetButton',
@@ -6153,6 +6159,7 @@ noscript {
         setValue('interactionCooldown', config.interaction_cooldown);
         elements.eventPrivateMessageEnabled.checked = config.event_private_message_enabled === true;
         elements.eventPokeEnabled.checked = config.event_poke_enabled === true;
+        elements.interactionResponseEnabled.checked = config.interaction_response_enabled === true;
         elements.eventRecallEnabled.checked = config.event_recall_enabled === true;
         elements.eventGroupAdvancedEnabled.checked = config.event_group_advanced_enabled === true;
         setValue('historySizeMin', config.history_size_min);
@@ -6943,6 +6950,7 @@ noscript {
             interaction_cooldown: function () { return readNumber('interactionCooldown'); },
             event_private_message_enabled: function () { return elements.eventPrivateMessageEnabled.checked; },
             event_poke_enabled: function () { return elements.eventPokeEnabled.checked; },
+            interaction_response_enabled: function () { return elements.interactionResponseEnabled.checked; },
             event_recall_enabled: function () { return elements.eventRecallEnabled.checked; },
             event_group_advanced_enabled: function () { return elements.eventGroupAdvancedEnabled.checked; },
             history_size_min: function () { return readInteger('historySizeMin'); },

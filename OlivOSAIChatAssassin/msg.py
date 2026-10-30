@@ -52,6 +52,8 @@ KNOWLEDGE_STATIC_SECTION = '知识库'
 KNOWLEDGE_CACHE_SECTION = '知识缓存'
 MAX_DEEP_SEARCH_LAYERS = 8
 MAX_DEEP_SEARCH_EXPANSIONS = 64
+POKE_MESSAGE_TYPE = 'poke'
+POKE_DEDUPE_WINDOW_SECONDS = 2.0
 
 HISTORY_ARRIVAL_GUARANTEED = 'guaranteed'
 HISTORY_ARRIVAL_REJECTED = 'rejected'
@@ -59,6 +61,9 @@ HISTORY_ARRIVAL_UNKNOWN = 'unknown'
 
 _HISTORY_TRANSFORM_MARKER_RE = re.compile(r'\[(?:OP|CQ):', re.IGNORECASE)
 _HISTORY_IMAGE_MARKER_RE = re.compile(r'\[(?:OP|CQ):image(?:,|\])', re.IGNORECASE)
+_POKE_MARKER_RE = re.compile(r'\[(?:OP|CQ):[^\]]*\]', re.IGNORECASE)
+_POKE_CONTROL_RE = re.compile(r'[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069]')
+_POKE_WHITESPACE_RE = re.compile(r'\s+')
 
 
 class _HistoryWindowCancelled(Exception):
@@ -666,6 +671,80 @@ def _get_group_lock(bot_hash: str, group_id: str):
     )
 
 
+def clear_poke_state(bot_hash=None):
+    with OlivOSAIChatAssassin.data.gPokeDedupeLock:
+        if bot_hash is None:
+            OlivOSAIChatAssassin.data.gPokeDedupe.clear()
+            return
+        wanted = str(bot_hash)
+        for key in list(OlivOSAIChatAssassin.data.gPokeDedupe):
+            if isinstance(key, tuple) and key and str(key[0]) == wanted:
+                OlivOSAIChatAssassin.data.gPokeDedupe.pop(key, None)
+
+
+def _clean_poke_field(value, limit=96):
+    if value is None:
+        return ''
+    text = str(value)
+    text = _POKE_MARKER_RE.sub(' ', text)
+    text = _POKE_CONTROL_RE.sub(' ', text)
+    text = _POKE_WHITESPACE_RE.sub(' ', text).strip()
+    if len(text) > limit:
+        text = text[:limit].rstrip()
+    return text
+
+
+def _poke_group_id(value):
+    text = _clean_poke_field(value, 96)
+    if text in ('', '-1', '0', 'None', 'null'):
+        return ''
+    return text
+
+
+def _poke_sender_name(plugin_event, user_id):
+    data = getattr(plugin_event, 'data', None)
+    sender = getattr(data, 'sender', None)
+    nickname = ''
+    if isinstance(sender, dict):
+        nickname = _clean_poke_field(sender.get('nickname') or sender.get('name') or '')
+    return nickname or user_id or '用户'
+
+
+def _poke_message_text(nickname, target_id, target_is_self):
+    actor = nickname or '用户'
+    if target_is_self:
+        return f'戳一戳：{actor}戳了戳你'
+    if target_id:
+        return f'戳一戳：{actor}戳了戳用户{target_id}'
+    return f'戳一戳：{actor}发起了戳一戳'
+
+
+def _poke_is_duplicate(bot_hash, group_id, dedupe_key, history):
+    now = time.monotonic()
+    last_entry = history[-1] if len(history) else None
+    key = _history_key(bot_hash, group_id)
+    with OlivOSAIChatAssassin.data.gPokeDedupeLock:
+        state = OlivOSAIChatAssassin.data.gPokeDedupe.get(key)
+        if (
+            isinstance(state, dict)
+            and state.get('dedupe_key') == dedupe_key
+            and state.get('entry') is last_entry
+            and now - state.get('at', 0.0) <= POKE_DEDUPE_WINDOW_SECONDS
+        ):
+            return True
+    return False
+
+
+def _remember_poke(bot_hash, group_id, dedupe_key, history_entry):
+    key = _history_key(bot_hash, group_id)
+    with OlivOSAIChatAssassin.data.gPokeDedupeLock:
+        OlivOSAIChatAssassin.data.gPokeDedupe[key] = {
+            'dedupe_key': dedupe_key,
+            'entry': history_entry,
+            'at': time.monotonic(),
+        }
+
+
 def _register_history_arrival(plugin_event, bot_hash: str, group_id: str):
     guard = getattr(OlivOSAIChatAssassin.data, 'gHistoryWindowGuard', None)
     if guard is None:
@@ -811,6 +890,192 @@ def unity_group_message(plugin_event: OlivOS.API.Event, Proc):
         activity.finish(activity_token, finish_state, finish_error)
 
 
+def unity_group_poke(plugin_event: OlivOS.API.Event, Proc=None):
+    event_data = getattr(plugin_event, 'data', None)
+    group_id = _poke_group_id(getattr(event_data, 'group_id', None))
+    if not group_id:
+        return
+
+    bot_hash = str(plugin_event.bot_info.hash)
+    user_id = _clean_poke_field(getattr(event_data, 'user_id', None))
+    if not user_id:
+        return
+    base_info = getattr(plugin_event, 'base_info', None)
+    if not isinstance(base_info, dict):
+        base_info = {}
+    self_id = _clean_poke_field(base_info.get('self_id'))
+    if self_id and user_id == self_id:
+        OlivOSAIChatAssassin.logger.log('POKE - IGNORE [self]')
+        return
+
+    target_id = _clean_poke_field(getattr(event_data, 'target_id', None))
+    target_is_self = bool(target_id and self_id and target_id == self_id)
+    nickname = _poke_sender_name(plugin_event, user_id)
+    message = _poke_message_text(nickname, target_id, target_is_self)
+    activity_token = activity.begin(
+        bot_hash,
+        group_id,
+        sender_name=nickname,
+        preview=message,
+    )
+    finish_state = activity.STATE_FAILED
+    finish_error = 'poke_error'
+    arrival_token = None
+    guard = getattr(OlivOSAIChatAssassin.data, 'gHistoryWindowGuard', None)
+    signature = None
+    try:
+        OlivOSAIChatAssassin.data.gData.reload(bot_hash)
+        config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+        if not config:
+            finish_state = activity.STATE_SKIPPED
+            finish_error = 'configuration_missing'
+            return
+
+        enabled_groups = config.get('enabled_groups') if 'enabled_groups' in config else None
+        if enabled_groups is not None and not isinstance(enabled_groups, (list, tuple)):
+            enabled_groups = [enabled_groups]
+        if (
+            enabled_groups is not None
+            and group_id not in {str(item) for item in enabled_groups}
+            and 'all' not in {str(item) for item in enabled_groups}
+        ):
+            finish_state = activity.STATE_SKIPPED
+            finish_error = 'group_disabled'
+            return
+
+        signature = _history_admission_signature(config)
+        if guard is not None:
+            arrival_token = guard.register(
+                _history_key(bot_hash, group_id),
+                True,
+                signature,
+            )
+        history = _ensure_history(bot_hash, group_id)
+        group_lock = _get_group_lock(bot_hash, group_id)
+        with group_lock:
+            activity.activate(activity_token, activity.STAGE_PREPARING)
+            dedupe_key = (user_id, target_id)
+            if _poke_is_duplicate(bot_hash, group_id, dedupe_key, history):
+                OlivOSAIChatAssassin.logger.log('POKE - HISTORY [deduplicated]')
+                activity.note(
+                    activity_token,
+                    activity.STAGE_PREPARING,
+                    '连续重复戳击 · 不重复写入',
+                    activity.TRACE_WARNING,
+                )
+                finish_state = activity.STATE_SKIPPED
+                finish_error = 'poke_duplicate'
+                return
+
+            history_entry = add_message_to_history(
+                group_id,
+                message,
+                user_id,
+                nickname,
+                bot_hash=bot_hash,
+                role='user',
+                message_type=POKE_MESSAGE_TYPE,
+                target_id=target_id or None,
+                target_is_self=target_is_self,
+            )
+            if history_entry is None:
+                finish_state = activity.STATE_FAILED
+                finish_error = 'history_write_failed'
+                return
+            _remember_poke(bot_hash, group_id, dedupe_key, history_entry)
+            if guard is not None:
+                guard.mark_appended(arrival_token)
+                try:
+                    _raise_if_history_window_evicted(
+                        bot_hash,
+                        group_id,
+                        history_entry,
+                        signature,
+                        'before_poke_reply',
+                    )
+                except _HistoryWindowCancelled as exc:
+                    OlivOSAIChatAssassin.logger.log(
+                        f'RECALL - CANCEL [reason=out_of_window, phase={exc.phase}, '
+                        f'pending={exc.pending}, index={exc.index}]'
+                    )
+                    activity.note(
+                        activity_token,
+                        activity.STAGE_PREPARING,
+                        '戳一戳已滑出历史窗口 · 让位',
+                        activity.TRACE_WARNING,
+                    )
+                    finish_state = activity.STATE_SUPERSEDED
+                    finish_error = 'retrieval_out_of_window'
+                    return
+
+            OlivOSAIChatAssassin.logger.log(
+                'POKE - HISTORY [added] target=%s' % ('self' if target_is_self else 'other')
+            )
+            activity.note(
+                activity_token,
+                activity.STAGE_PREPARING,
+                f'历史 {len(history)} 条',
+            )
+            if not target_is_self:
+                activity.note(
+                    activity_token,
+                    activity.STAGE_PREPARING,
+                    '目标为他人 · 仅写入历史',
+                    activity.TRACE_WARNING,
+                )
+                finish_state = activity.STATE_SKIPPED
+                finish_error = 'poke_passive'
+                return
+
+            response_enabled = config.get(
+                'interaction_response_enabled',
+                OlivOSAIChatAssassin.data.configDefault['interaction_response_enabled'],
+            )
+            if response_enabled is not True:
+                activity.note(
+                    activity_token,
+                    activity.STAGE_PREPARING,
+                    '即时回应未开启 · 仅写入历史',
+                    activity.TRACE_WARNING,
+                )
+                finish_state = activity.STATE_SKIPPED
+                finish_error = 'poke_response_disabled'
+                return
+
+            flag_reply = should_reply(
+                group_id,
+                message,
+                plugin_event,
+                bot_hash=bot_hash,
+                is_addressed=True,
+            )
+            activity.note(
+                activity_token,
+                activity.STAGE_PREPARING,
+                '命中回复条件' if flag_reply else '未命中回复条件',
+                activity.TRACE_DONE if flag_reply else activity.TRACE_WARNING,
+            )
+            if not flag_reply:
+                finish_state = activity.STATE_SKIPPED
+                finish_error = 'not_selected'
+                return
+
+            reply_to_group(
+                plugin_event,
+                group_id,
+                message,
+                activity_token=activity_token,
+                history_entry=history_entry,
+                arrival_token=arrival_token,
+            )
+            finish_state = activity.STATE_FINISHED
+            finish_error = None
+    finally:
+        if guard is not None:
+            guard.discard(arrival_token)
+        activity.finish(activity_token, finish_state, finish_error)
+
+
 def unity_group_message_router(
     plugin_event: OlivOS.API.Event,
     Proc,
@@ -931,6 +1196,9 @@ def add_message_to_history(
     role: str = 'user',
     replies: 'list[str]|None' = None,
     reply_to: 'dict|None' = None,
+    message_type: 'str|None' = None,
+    target_id: 'str|None' = None,
+    target_is_self: 'bool|None' = None,
 ):
     history = _get_history(bot_hash, group_id)
     if history is None:
@@ -971,16 +1239,28 @@ def add_message_to_history(
                 clean_reply_to[key] = str(value)
         if clean_reply_to:
             msg_entry['reply_to'] = clean_reply_to
+    if message_type is not None:
+        msg_entry['message_type'] = _clean_poke_field(message_type, 32)
+    if target_id not in (None, ''):
+        msg_entry['target_id'] = _clean_poke_field(target_id, 96)
+    if target_is_self is not None:
+        msg_entry['target_is_self'] = bool(target_is_self)
     history.append(msg_entry)
     return msg_entry
 
 
-def should_reply(group_id, message, plugin_event, bot_hash: str):
+def should_reply(group_id, message, plugin_event, bot_hash: str, is_addressed=False):
     if not OlivOSAIChatAssassin.data.gData.getConfig(bot_hash):
         return False
     # 检查是否被@
     self_id = plugin_event.base_info['self_id']
     mention_str = f'[OP:at,id={self_id}]'
+    if (
+        is_addressed is True
+        and OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get('mention_reply', True)
+    ):
+        OlivOSAIChatAssassin.logger.log('REPLY SAMPLE - POKE')
+        return True
     if OlivOSAIChatAssassin.data.gData.getConfig(bot_hash).get('mention_reply', True) and mention_str in message:
         OlivOSAIChatAssassin.logger.log('REPLY SAMPLE - MENTION')
         return True
@@ -1002,7 +1282,11 @@ def should_reply(group_id, message, plugin_event, bot_hash: str):
 
 
 def _history_for_retrieval(history: list) -> list:
-    return [entry for entry in history if _get_history_role(entry) == 'user']
+    return [
+        entry for entry in history
+        if _get_history_role(entry) == 'user'
+        and entry.get('message_type') != POKE_MESSAGE_TYPE
+    ]
 
 
 def _limit_mapping(values: dict, limit: int) -> dict:
@@ -1295,6 +1579,10 @@ def _run_memory_extraction(
         history_snapshot = list(_get_history(bot_hash, group_id) or [])
     else:
         history_snapshot = list(history_snapshot)
+    history_snapshot = [
+        entry for entry in history_snapshot
+        if entry.get('message_type') != POKE_MESSAGE_TYPE
+    ]
     if not history_snapshot:
         return activity.MEMORY_STATE_SKIPPED
     config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
@@ -1948,6 +2236,9 @@ def _history_entry_for_model(entry: dict) -> dict:
             result[key] = entry[key]
     if isinstance(entry.get('reply_to'), dict):
         result['reply_to'] = entry['reply_to']
+    for key in ('message_type', 'target_id', 'target_is_self'):
+        if key in entry:
+            result[key] = entry[key]
     return result
 
 
