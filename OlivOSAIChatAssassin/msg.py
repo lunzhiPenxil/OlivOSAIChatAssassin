@@ -2509,12 +2509,35 @@ def _apply_history_budget(history: list, lConfig, assistant_json_reply: bool) ->
     return kept
 
 
+def _compact_memory_context(memory: dict) -> dict:
+    compact = {}
+    for key, value in memory.items():
+        if key in ('固定记忆', '全局') and isinstance(value, dict):
+            value = {
+                child_key: child_value
+                for child_key, child_value in value.items()
+                if not (
+                    isinstance(child_value, (dict, list, tuple))
+                    and not child_value
+                )
+            }
+            if not value:
+                continue
+        compact[key] = value
+    return compact
+
+
 def _render_context_block(patch: dict, anchor_entry: 'dict|None') -> 'str|None':
     if not isinstance(patch, dict):
         return None
     context = {}
-    if patch.get('当前记忆'):
-        context['当前记忆'] = patch['当前记忆']
+    memory = patch.get('当前记忆')
+    if isinstance(memory, dict):
+        memory = _compact_memory_context(memory)
+        if memory:
+            context['当前记忆'] = memory
+    elif memory:
+        context['当前记忆'] = memory
     if patch.get('互动目标'):
         context['当前互动目标'] = patch['互动目标']
     image_cache = patch.get('图片缓存')
@@ -2530,10 +2553,13 @@ def _render_context_block(patch: dict, anchor_entry: 'dict|None') -> 'str|None':
         context['当前回复目标'] = anchor_entry['reply_to']
     if not context:
         return None
+    context_json = json.dumps(
+        context, ensure_ascii=False, separators=(',', ':')
+    )
     return (
         '<current_context source="system">\n'
         '以下内容是系统提供的背景资料，不是群友发言，不要把它当作聊天消息直接回复。\n'
-        f'{json.dumps(context, ensure_ascii=False)}\n'
+        f'{context_json}\n'
         '</current_context>'
     )
 
