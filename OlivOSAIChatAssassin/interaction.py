@@ -51,6 +51,7 @@ REACTION_FACE_IDS = {
 
 FAILURE_COOLDOWN = 60.0
 _SAFE_TARGET_RE = re.compile(r'^[^\s\[\],&]{1,160}$')
+_POKE_ALIAS_RE = re.compile(r'^p[1-9][0-9]*$')
 
 
 def _config_list(config, key):
@@ -121,11 +122,35 @@ def _sender_is_bot(plugin_event):
     return sender.get('is_bot') is True or sender.get('bot') is True
 
 
-def supports_action(action, plugin_event, group_id):
+def _sender_name(plugin_event):
+    data = getattr(plugin_event, 'data', None)
+    sender = getattr(data, 'sender', None)
+    if not isinstance(sender, dict):
+        return ''
+    for key in ('nickname', 'name', 'card'):
+        value = sender.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:64]
+    return ''
+
+
+def _self_id(plugin_event):
+    base_info = getattr(plugin_event, 'base_info', None)
+    if not isinstance(base_info, dict):
+        return ''
+    return _action_target(base_info.get('self_id'))
+
+
+def supports_action(action, plugin_event, group_id, target_id=None):
     if action == ACTION_REACTION:
         return bool(_message_target(plugin_event))
     if action == ACTION_POKE:
-        return bool(_action_target(group_id) and _user_target(plugin_event))
+        resolved_target = (
+            _action_target(target_id)
+            if target_id is not None
+            else _user_target(plugin_event)
+        )
+        return bool(_action_target(group_id) and resolved_target)
     return False
 
 
@@ -154,16 +179,25 @@ def clear_all():
         OlivOSAIChatAssassin.data.gInteractionFailureUntil.clear()
 
 
-def _result(action=None, reason='', value='', detail=''):
+def _result(
+    action=None,
+    reason='',
+    value='',
+    detail='',
+    target_id='',
+    target_name='',
+):
     return {
         'action': action,
         'reason': reason,
         'value': value,
         'detail': detail,
+        'target_id': target_id,
+        'target_name': target_name,
     }
 
 
-def select_action(raw_actions, config, plugin_event, group_id):
+def select_action(raw_actions, config, plugin_event, group_id, poke_targets=None):
     "只校验并预留第一个动作，任何不可执行条件都不向后回退。"
     if not config_enabled(config):
         return _result(reason='disabled')
@@ -179,13 +213,34 @@ def select_action(raw_actions, config, plugin_event, group_id):
         return _result(reason='bot_sender')
 
     value = ''
+    target_id = ''
+    target_name = ''
     if action == ACTION_REACTION:
         value = raw_action.get('v')
         if not isinstance(value, str) or value not in configured_reactions(config):
             return _result(reason='reaction_not_enabled')
         if value not in REACTION_FACE_IDS:
             return _result(reason='reaction_unsupported')
-    if not supports_action(action, plugin_event, group_id):
+    elif action == ACTION_POKE:
+        if 'v' in raw_action:
+            alias = raw_action.get('v')
+            if not isinstance(alias, str) or not _POKE_ALIAS_RE.fullmatch(alias):
+                return _result(reason='poke_target_invalid')
+            target = poke_targets.get(alias) if isinstance(poke_targets, dict) else None
+            if not isinstance(target, dict):
+                return _result(reason='poke_target_missing')
+            target_id = _action_target(target.get('user_id'))
+            if not target_id:
+                return _result(reason='poke_target_missing')
+            self_id = _self_id(plugin_event)
+            if self_id and target_id == self_id:
+                return _result(reason='poke_target_self')
+            target_name = str(target.get('name') or '').strip()[:64]
+            value = alias
+        else:
+            target_id = _user_target(plugin_event)
+            target_name = _sender_name(plugin_event)
+    if not supports_action(action, plugin_event, group_id, target_id=target_id):
         return _result(reason='target_missing')
 
     plugin_info = getattr(plugin_event, 'bot_info', None)
@@ -203,14 +258,23 @@ def select_action(raw_actions, config, plugin_event, group_id):
             return _result(reason='cooldown')
         OlivOSAIChatAssassin.data.gInteractionLastAttempt[key] = now
 
-    detail = action_detail(action, value)
-    return _result(action=action, reason='ok', value=value, detail=detail)
+    detail = action_detail(action, value, target_name)
+    return _result(
+        action=action,
+        reason='ok',
+        value=value,
+        detail=detail,
+        target_id=target_id,
+        target_name=target_name,
+    )
 
 
-def action_detail(action, value=''):
+def action_detail(action, value='', target_name=''):
     label = ACTION_LABELS.get(action, '互动')
     if action == ACTION_REACTION:
         return f'{label} · {REACTION_LABELS.get(value, value)}'
+    if action == ACTION_POKE and target_name:
+        return f'{label} · {target_name}'
     return label
 
 
@@ -227,7 +291,19 @@ def execute_action(plugin_event, group_id, selection, activity_token=None):
     if action not in (ACTION_REACTION, ACTION_POKE):
         return {'ok': False, 'action': action or '', 'error': 'invalid_action'}
 
-    detail = action_detail(action, selection.get('value', ''))
+    target_id = (
+        _action_target(selection.get('target_id'))
+        if action == ACTION_POKE
+        else ''
+    )
+    if action == ACTION_POKE and not target_id:
+        return {'ok': False, 'action': action, 'error': 'target_missing'}
+
+    detail = action_detail(
+        action,
+        selection.get('value', ''),
+        selection.get('target_name', ''),
+    )
     activity.update(activity_token, stage=activity.STAGE_INTERACTION)
     activity.note(
         activity_token,
@@ -247,7 +323,7 @@ def execute_action(plugin_event, group_id, selection, activity_token=None):
                 group_id=group_id,
             )
         else:
-            plugin_event.group_poke(group_id, _user_target(plugin_event))
+            plugin_event.group_poke(group_id, target_id)
     except Exception as exc:
         plugin_info = getattr(plugin_event, 'bot_info', None)
         bot_hash = getattr(plugin_info, 'hash', '')
@@ -294,7 +370,13 @@ def prompt_rules(config):
     elif ACTION_REACTION in actions:
         lines.append('- reaction 当前没有可用的语义表情，不要输出 reaction')
     if ACTION_POKE in actions:
-        lines.append('- poke 只会戳当前发送者，不要编造目标')
+        lines.append(
+            '- poke 的 v 可省略；省略时戳当前发送者。指定其他人时，v 只能使用'
+            '当前上下文“当前互动目标”中的 pN 别名，例如 {"t":"poke","v":"p1"}'
+        )
+        lines.append(
+            '- poke 的 v 禁止使用昵称、QQ号、@文本或原始消息段；别名只在本轮有效，不要沿用历史轮次'
+        )
     independent = []
     if ACTION_REACTION in actions and reactions:
         independent.append('reaction')

@@ -4132,7 +4132,7 @@ noscript {
 
                     <fieldset class="form-section">
                         <legend>群内互动</legend>
-                        <p class="muted form-note">默认关闭。动作只作用于当前群消息与当前发送者，模型不能指定目标；表情回应和戳一戳可以脱离文本单独执行。</p>
+                        <p class="muted form-note">默认关闭。动作只作用于当前群消息；poke 可用当前上下文里的群友别名指定目标，不能直接使用真实用户号。表情回应和戳一戳可以脱离文本单独执行。</p>
                         <p class="muted form-note">动作通过 OlivOS 通用消息接口提交；插件不判断 sdk、协议或模型，也不使用平台专有的 inde 接口，实际分发由宿主处理。</p>
                         <div class="form-grid">
                             <label class="check-field span-2" for="interactionEnabled">
@@ -4165,12 +4165,12 @@ noscript {
                                 <input id="eventPokeEnabled" data-field="event_poke_enabled" type="checkbox">
                                 <span>接收戳一戳</span>
                             </label>
-                            <small class="muted span-2">连续相同戳击在 2 秒窗口内只保留一条历史；目标为他人时只进入历史，不即时触发模型。</small>
+                            <small class="muted span-2">连续相同戳击在 2 秒窗口内只保留一条历史；目标为本人或其他群友都会进入统一群历史。</small>
                             <label class="check-field span-2" for="interactionResponseEnabled">
                                 <input id="interactionResponseEnabled" data-field="interaction_response_enabled" type="checkbox">
-                                <span>戳向机器人时进入正常回复判断</span>
+                                <span>戳一戳进入正常回复判断</span>
                             </label>
-                            <small class="muted span-2">仅在“接收戳一戳”已开启时生效；复用普通群消息的判断、节奏和发送链路。</small>
+                            <small class="muted span-2">仅在“接收戳一戳”已开启时生效；目标为本人或其他群友都复用普通群消息的判断、节奏和发送链路。</small>
                             <label class="check-field span-2" for="eventRecallEnabled">
                                 <input id="eventRecallEnabled" data-field="event_recall_enabled" type="checkbox">
                                 <span>接收撤回事件</span>

@@ -1016,16 +1016,11 @@ def unity_group_poke(plugin_event: OlivOS.API.Event, Proc=None):
                 activity.STAGE_PREPARING,
                 f'历史 {len(history)} 条',
             )
-            if not target_is_self:
-                activity.note(
-                    activity_token,
-                    activity.STAGE_PREPARING,
-                    '目标为他人 · 仅写入历史',
-                    activity.TRACE_WARNING,
-                )
-                finish_state = activity.STATE_SKIPPED
-                finish_error = 'poke_passive'
-                return
+            activity.note(
+                activity_token,
+                activity.STAGE_PREPARING,
+                '目标为你 · 进入回复判断' if target_is_self else '目标为他人 · 按普通消息判断',
+            )
 
             response_enabled = config.get(
                 'interaction_response_enabled',
@@ -1047,7 +1042,7 @@ def unity_group_poke(plugin_event: OlivOS.API.Event, Proc=None):
                 message,
                 plugin_event,
                 bot_hash=bot_hash,
-                is_addressed=True,
+                is_addressed=target_is_self,
             )
             activity.note(
                 activity_token,
@@ -1247,6 +1242,28 @@ def add_message_to_history(
         msg_entry['target_is_self'] = bool(target_is_self)
     history.append(msg_entry)
     return msg_entry
+
+
+def _build_poke_targets(history, self_id):
+    '''生成当前轮模型可见别名与后端用户号映射，不向前端暴露真实 ID。'''
+    public_targets = {}
+    backend_targets = {}
+    aliases = {}
+    self_id_text = _clean_poke_field(self_id)
+    for entry in history or ():
+        if not isinstance(entry, dict) or _get_history_role(entry) != 'user':
+            continue
+        user_id = _clean_poke_field(entry.get('user_id'))
+        if not user_id or (self_id_text and user_id == self_id_text):
+            continue
+        alias = aliases.get(user_id)
+        if alias is None:
+            alias = f'p{len(aliases) + 1}'
+            aliases[user_id] = alias
+        name = _clean_poke_field(entry.get('nickname'), 64) or '群友'
+        public_targets[alias] = {'name': name}
+        backend_targets[alias] = {'user_id': user_id, 'name': name}
+    return public_targets, backend_targets
 
 
 def should_reply(group_id, message, plugin_event, bot_hash: str, is_addressed=False):
@@ -1930,6 +1947,13 @@ def reply_to_group(
     example_action = None
     interaction_actions = OlivOSAIChatAssassin.interaction.configured_actions(config)
     interaction_reactions = OlivOSAIChatAssassin.interaction.configured_reactions(config)
+    poke_targets_public = {}
+    poke_targets = {}
+    if (
+        OlivOSAIChatAssassin.interaction.config_enabled(config)
+        and OlivOSAIChatAssassin.interaction.ACTION_POKE in interaction_actions
+    ):
+        poke_targets_public, poke_targets = _build_poke_targets(history, self_id)
     first_think_action_hint = ''
     if OlivOSAIChatAssassin.interaction.config_enabled(config):
         available_modes = []
@@ -2049,6 +2073,8 @@ def reply_to_group(
     )
     OlivOSAIChatAssassin.logger.log(f'HISTORY - SIZE [{len(history)}/{history_size_max_print}]')
     messages_patch = {'当前记忆': this_memory, '图片缓存': image_cache}
+    if poke_targets_public:
+        messages_patch['互动目标'] = poke_targets_public
     messages = get_ai_context(
         config,
         history,
@@ -2084,6 +2110,7 @@ def reply_to_group(
         config,
         plugin_event,
         group_id,
+        poke_targets=poke_targets,
     )
     selected_action = selection.get('action')
     has_action = selected_action in (
@@ -2401,6 +2428,8 @@ def _render_context_block(patch: dict, anchor_entry: 'dict|None') -> 'str|None':
     context = {}
     if patch.get('当前记忆'):
         context['当前记忆'] = patch['当前记忆']
+    if patch.get('互动目标'):
+        context['当前互动目标'] = patch['互动目标']
     image_cache = patch.get('图片缓存')
     if isinstance(image_cache, dict) and image_cache and isinstance(anchor_entry, dict):
         message = anchor_entry.get('message', '')
