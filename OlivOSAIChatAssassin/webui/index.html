@@ -1162,18 +1162,35 @@ body.activity-fullscreen-open {
     accent-color: var(--accent);
 }
 
+.check-field-with-description {
+    align-items: flex-start;
+}
+
+.check-field-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    line-height: 1.4;
+}
+
+.check-field-copy strong {
+    font-weight: 650;
+}
+
+.check-field-copy small {
+    min-height: 0;
+    line-height: 1.5;
+}
+
 @supports selector(:has(*)) {
     .check-field {
         position: relative;
         overflow: hidden;
-        --memory-check-left: 18px;
         -webkit-tap-highlight-color: transparent;
         transition: background-color 180ms ease, border-color 180ms ease,
             box-shadow 180ms ease, transform 120ms ease;
-    }
-
-    .memory-list-control.check-field {
-        --memory-check-left: 16px;
     }
 
     .check-field::before {
@@ -1188,20 +1205,6 @@ body.activity-fullscreen-open {
         background: color-mix(in srgb, var(--surface) 82%, transparent);
         transition: background-color 160ms ease, border-color 160ms ease,
             transform 160ms ease;
-    }
-
-    .check-field::after {
-        position: absolute;
-        top: 50%;
-        left: var(--memory-check-left);
-        width: 8px;
-        height: 4px;
-        content: "";
-        border-bottom: 1.8px solid #ffffff;
-        border-left: 1.8px solid #ffffff;
-        opacity: 0;
-        transform: translateY(-62%) rotate(-45deg) scale(0.35);
-        transition: opacity 120ms ease, transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
     .check-field:active {
@@ -1222,13 +1225,12 @@ body.activity-fullscreen-open {
 
     .check-field:has(input[type="checkbox"]:checked)::before {
         border-color: var(--accent);
-        background: var(--accent);
+        background-color: var(--accent);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpath d='M1.5 5.2 4.4 8.1 10.5 1.8' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 11px 9px;
         animation: memory-check-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-
-    .check-field:has(input[type="checkbox"]:checked)::after {
-        opacity: 1;
-        transform: translateY(-62%) rotate(-45deg) scale(1);
     }
 
     .check-field input[type="checkbox"] {
@@ -2040,6 +2042,192 @@ select[aria-invalid="true"] {
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
+}
+
+.group-manager-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 14px 0 4px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface-soft) 84%, var(--accent-soft));
+    transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.group-manager-row[data-state="off"] {
+    border-color: color-mix(in srgb, var(--danger) 24%, var(--border));
+    background: color-mix(in srgb, var(--surface-soft) 92%, var(--danger-soft));
+}
+
+.group-manager-row[data-state="immersive"] {
+    border-color: var(--border);
+    background: var(--surface-soft);
+}
+
+.group-manager-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 180px;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.group-manager-title {
+    font-size: 0.95rem;
+    line-height: 1.35;
+}
+
+.group-manager-state {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--surface) 72%, var(--surface-soft));
+    font-size: 0.78rem;
+    font-weight: 650;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.group-manager-state::before {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+}
+
+.group-manager-state[data-state="on"] {
+    color: var(--success);
+    background: var(--success-soft);
+}
+
+.group-manager-state[data-state="off"] {
+    color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.group-manager-state[data-state="immersive"] {
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+}
+
+.group-manager-note {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.group-manager-switch {
+    display: flex;
+    min-height: 44px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-left: auto;
+    padding: 2px 0 2px 4px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.group-manager-switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 0;
+}
+
+.group-manager-track {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    flex: none;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 34%, var(--border));
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: background-color 180ms ease, box-shadow 180ms ease,
+        transform 120ms ease;
+}
+
+.group-manager-track::after {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    content: "";
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        background-color 180ms ease;
+}
+
+.group-manager-switch input:checked + .group-manager-track {
+    background: var(--accent);
+    box-shadow: inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent),
+        0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.group-manager-switch input:checked + .group-manager-track::after {
+    transform: translateX(20px);
+}
+
+.group-manager-switch input:focus-visible + .group-manager-track {
+    outline: 3px solid color-mix(in srgb, var(--accent) 34%, transparent);
+    outline-offset: 3px;
+}
+
+.group-manager-switch:not(.is-disabled):active .group-manager-track {
+    transform: scale(0.96);
+}
+
+.group-manager-switch-text {
+    min-width: 2em;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 650;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.group-manager-switch.is-disabled {
+    cursor: not-allowed;
+}
+
+.group-manager-switch.is-disabled .group-manager-track,
+.group-manager-switch input:disabled + .group-manager-track {
+    opacity: 0.52;
+    box-shadow: none;
+}
+
+.group-manager-switch.is-disabled input:checked + .group-manager-track {
+    background: color-mix(in srgb, var(--muted) 52%, var(--border));
+}
+
+.group-manager-switch.is-saving {
+    cursor: progress;
+}
+
+.group-manager-switch.is-saving .group-manager-track {
+    animation: group-manager-pulse 900ms ease-in-out infinite alternate;
 }
 
 .memory-list-controls {
@@ -3342,6 +3530,28 @@ noscript {
         border-radius: 12px;
     }
 
+    .group-manager-row {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px 12px;
+        margin-top: 12px;
+        padding: 11px 12px;
+    }
+
+    .group-manager-copy {
+        flex-basis: 180px;
+    }
+
+    .group-manager-switch {
+        min-height: 48px;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .group-manager-note {
+        font-size: 0.78rem;
+    }
+
     .memory-sidebar h3 {
         margin-bottom: 8px;
     }
@@ -3788,13 +3998,24 @@ noscript {
     }
 }
 
+@keyframes group-manager-pulse {
+    from {
+        opacity: 0.58;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .memory-image-type-option,
     .memory-image-type-option::before,
     .memory-image-type-option::after,
     .check-field,
     .check-field::before,
-    .check-field::after {
+    .group-manager-row,
+    .group-manager-track,
+    .group-manager-track::after {
         animation: none;
         transition: none;
     }
@@ -3832,8 +4053,7 @@ noscript {
 
     .memory-image-type-option::before,
     .memory-image-type-option::after,
-    .check-field::before,
-    .check-field::after {
+    .check-field::before {
         display: none;
     }
 
@@ -3996,6 +4216,40 @@ noscript {
                     </div>
                     <div id="configErrors" class="error-box" role="alert" hidden></div>
                     <div id="configWarnings" class="warning-box" role="status" hidden></div>
+
+                    <fieldset class="form-section">
+                        <legend>运行开关</legend>
+                        <p class="muted form-note">群主或管理员可在群内发送带前缀的 power on、power off、power clear、power status；指令不进入历史，也不会调用模型。群覆盖保存在插件数据目录的独立文件中。</p>
+                        <div class="form-grid">
+                            <label class="check-field span-2 check-field-with-description" for="powerControlEnabled">
+                                <input id="powerControlEnabled" data-field="power_control_enabled" type="checkbox">
+                                <span class="check-field-copy">
+                                    <strong>指令开关</strong>
+                                    <small class="muted">开启后才启用带前缀的 power 指令和分群运行开关；关闭时忽略所有群覆盖，保持完全沉浸模式。</small>
+                                </span>
+                            </label>
+                            <div class="field span-2 config-list-field" data-list-editor="commandPrefixes">
+                                <span class="config-list-label" id="commandPrefixesLabel">指令前缀</span>
+                                <div class="tag-editor" role="group" aria-labelledby="commandPrefixesLabel">
+                                    <div class="tag-editor-values" data-list-values></div>
+                                    <div class="tag-editor-entry">
+                                        <input data-list-input type="text" autocomplete="off" spellcheck="false" placeholder="输入前缀，按 Enter 添加">
+                                        <button data-list-add class="button small secondary" type="button">添加</button>
+                                    </div>
+                                </div>
+                                <input id="commandPrefixes" data-field="command_prefixes" type="hidden">
+                                <small class="muted">只识别这些前缀开头的 power 指令；无前缀消息不会触发。默认 .、。、/。</small>
+                            </div>
+                            <label class="field" for="powerDefaultMode">
+                                <span>默认状态</span>
+                                <select id="powerDefaultMode" data-field="power_default_mode">
+                                    <option value="on">默认开启</option>
+                                    <option value="off">默认关闭</option>
+                                </select>
+                                <small class="muted">未设置群覆盖时使用此状态。</small>
+                            </label>
+                        </div>
+                    </fieldset>
 
                     <fieldset class="form-section">
                         <legend>模型与接口</legend>
@@ -4513,6 +4767,7 @@ noscript {
         memorySection: 'OlivOSAIChatAssassin_WebUI_GetMemorySection',
         memoryImage: 'OlivOSAIChatAssassin_WebUI_GetMemoryImage',
         saveMemory: 'OlivOSAIChatAssassin_WebUI_SaveMemory',
+        setGroupManager: 'OlivOSAIChatAssassin_WebUI_SetGroupManager',
     };
     const API_VERSION = 1;
     const REQUEST_TIMEOUT = 20000;
@@ -4732,7 +4987,7 @@ noscript {
             'overviewInboundFullscreenList', 'overviewInboundFullscreenPager',
             'overviewInboundFullscreenPrevious', 'overviewInboundFullscreenRange',
             'overviewInboundFullscreenNext', 'overviewInboundFullscreenNote',
-            'configWarnings', 'apiKey',
+            'configWarnings', 'apiKey', 'powerControlEnabled', 'powerDefaultMode', 'commandPrefixes',
             'apiKeyHint', 'apiBase', 'model', 'maxTokens', 'apiTimeout', 'temperature', 'thinkingEnabled',
             'reasoningEffort', 'firstThinking', 'firstThinkingCooldown', 'personality',
             'recordKnowledge', 'mentionReply', 'replyProbability', 'retryCount',
@@ -6131,6 +6386,9 @@ noscript {
         setValue('maxTokens', config.max_tokens);
         setValue('apiTimeout', config.api_timeout);
         setValue('temperature', config.temperature);
+        elements.powerControlEnabled.checked = config.power_control_enabled === true;
+        setListValues('commandPrefixes', config.command_prefixes);
+        setSelectValue('powerDefaultMode', config.power_default_mode, 'on');
         elements.thinkingEnabled.checked = thinking.type === 'enabled';
         setSelectValue('reasoningEffort', config.reasoning_effort, 'max');
         elements.firstThinking.checked = config.first_thinking === true;
@@ -6941,9 +7199,12 @@ noscript {
             knowledge_top_k: function () { return readInteger('knowledgeTopK'); },
             search_ageing: function () { return readNumber('searchAgeing'); },
             max_message_length: function () { return readInteger('maxMessageLength'); },
+            power_control_enabled: function () { return elements.powerControlEnabled.checked; },
+            power_default_mode: function () { return elements.powerDefaultMode.value; },
             enabled_groups: function () { return readListValues('enabledGroups'); },
             reply_keywords: function () { return readListValues('replyKeywords'); },
             ignore_prefixes: function () { return readListValues('ignorePrefixes'); },
+            command_prefixes: function () { return readListValues('commandPrefixes'); },
             interaction_enabled: function () { return elements.interactionEnabled.checked; },
             interaction_actions: function () { return readChoiceValues('interactionActions'); },
             interaction_reactions: function () { return readChoiceValues('interactionReactions'); },
@@ -10244,6 +10505,133 @@ noscript {
         return runMemorySectionLoad(payload, requestedOptions, ticket);
     }
 
+    function groupManagerView(manager) {
+        const controlEnabled = manager && manager.control_enabled === true;
+        if (!controlEnabled) {
+            return {
+                checked: true,
+                state: 'immersive',
+                badge: '完全沉浸 · 指令开关关闭',
+                switchLabel: '沉浸',
+                note: '所有群均按完全沉浸模式参与；群覆盖与默认状态暂不生效。可在设置中开启指令开关后再单独控制本群。',
+            };
+        }
+        const enabled = manager.mode === 'on';
+        const source = manager.source === 'override' ? '群覆盖' : '默认状态';
+        const defaultMode = manager.default_mode === 'off' ? '默认关闭' : '默认开启';
+        return {
+            checked: enabled,
+            state: enabled ? 'on' : 'off',
+            badge: (enabled ? '群内运行中' : '群内已暂停') + ' · ' + source,
+            switchLabel: enabled ? '运行' : '暂停',
+            note: manager.source === 'override'
+                ? '当前使用该群的独立覆盖，切换后立即生效。'
+                : '当前跟随默认状态（' + defaultMode + '）；切换后会保存为该群独立覆盖。',
+        };
+    }
+
+    function createGroupManagerCard(data, query) {
+        const manager = data.manager && typeof data.manager === 'object' ? data.manager : null;
+        if (!manager) {
+            return null;
+        }
+        const card = document.createElement('section');
+        card.className = 'group-manager-row';
+        card.dataset.groupManager = '1';
+
+        const copy = document.createElement('div');
+        copy.className = 'group-manager-copy';
+        const title = document.createElement('strong');
+        title.className = 'group-manager-title';
+        title.textContent = '本群运行状态';
+        const badge = document.createElement('span');
+        badge.className = 'group-manager-state';
+        badge.setAttribute('aria-live', 'polite');
+        const note = document.createElement('small');
+        note.className = 'group-manager-note';
+        copy.append(title, badge, note);
+
+        const switchLabel = document.createElement('label');
+        switchLabel.className = 'group-manager-switch';
+        const switchInput = document.createElement('input');
+        switchInput.type = 'checkbox';
+        switchInput.setAttribute('role', 'switch');
+        switchInput.dataset.groupManagerSwitch = '1';
+        const track = document.createElement('span');
+        track.className = 'group-manager-track';
+        track.setAttribute('aria-hidden', 'true');
+        const switchText = document.createElement('span');
+        switchText.className = 'group-manager-switch-text';
+        switchLabel.append(switchInput, track, switchText);
+        card.append(copy, switchLabel);
+
+        let currentManager = manager;
+
+        function applyManager(nextManager) {
+            currentManager = nextManager && typeof nextManager === 'object'
+                ? nextManager
+                : manager;
+            const view = groupManagerView(currentManager);
+            switchInput.checked = view.checked;
+            switchInput.disabled = currentManager.control_enabled !== true;
+            switchInput.setAttribute(
+                'aria-label',
+                switchInput.disabled
+                    ? '本群运行状态由指令开关控制'
+                    : '切换本群运行状态'
+            );
+            switchLabel.classList.toggle('is-disabled', switchInput.disabled);
+            switchText.textContent = view.switchLabel;
+            badge.textContent = view.badge;
+            badge.dataset.state = view.state;
+            note.textContent = view.note;
+            card.dataset.state = view.state;
+        }
+
+        switchInput.addEventListener('change', async function () {
+            if (currentManager.control_enabled !== true || state.busy || state.memoryLoading) {
+                applyManager(currentManager);
+                return;
+            }
+            const requested = switchInput.checked;
+            const previousManager = currentManager;
+            setBusy(true);
+            switchLabel.classList.add('is-saving');
+            switchInput.disabled = true;
+            try {
+                const response = await callApi(EVENTS.setGroupManager, {
+                    bot_hash: state.selectedBot,
+                    group_id: query.group_id,
+                    enabled: requested,
+                });
+                const latest = response && response.data ? response.data.manager : null;
+                if (!latest || typeof latest !== 'object') {
+                    throw new Error('群开关状态返回异常');
+                }
+                applyManager(latest);
+                showToast(requested ? '本群已恢复运行' : '本群已暂停');
+            } catch (error) {
+                let fallback = previousManager;
+                if (error && error.code === 'control_disabled') {
+                    fallback = Object.assign({}, previousManager, {
+                        control_enabled: false,
+                        effective_enabled: true,
+                    });
+                }
+                applyManager(fallback);
+                showToast(errorMessage(error), true);
+            } finally {
+                setBusy(false);
+                applyManager(currentManager);
+                switchLabel.classList.remove('is-saving');
+                syncMemoryControlLocks();
+            }
+        });
+
+        applyManager(manager);
+        return card;
+    }
+
     function renderMemorySection(data, query) {
         if (query.scope === 'group_index') {
             renderGroupMemoryIndex(data, query);
@@ -10294,6 +10682,13 @@ noscript {
         }
         headingRow.append(heading, headingActions);
         elements.memoryDetail.appendChild(headingRow);
+
+        if (query.scope === 'group') {
+            const managerCard = createGroupManagerCard(data, query);
+            if (managerCard) {
+                elements.memoryDetail.appendChild(managerCard);
+            }
+        }
 
         if (!sectionEditable) {
             const hint = document.createElement('p');

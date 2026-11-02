@@ -82,6 +82,18 @@ def _sequence_signature(value):
     return (str(value),)
 
 
+def _group_is_enabled(config, group_id):
+    if not isinstance(config, dict) or not config:
+        return False
+    enabled_groups = config.get('enabled_groups') if 'enabled_groups' in config else None
+    if enabled_groups is not None and not isinstance(enabled_groups, (list, tuple)):
+        enabled_groups = [enabled_groups]
+    if enabled_groups is None:
+        return True
+    normalized = {str(item) for item in enabled_groups}
+    return str(group_id) in normalized or 'all' in normalized
+
+
 def _history_admission_signature(config):
     if not isinstance(config, dict) or not config:
         return None
@@ -103,14 +115,7 @@ def _probe_history_admission(plugin_event, bot_hash: str, group_id: str):
     if not config:
         return HISTORY_ARRIVAL_REJECTED, None
     signature = _history_admission_signature(config)
-    enabled_groups = config.get('enabled_groups') if 'enabled_groups' in config else None
-    if enabled_groups is not None and not isinstance(enabled_groups, (list, tuple)):
-        enabled_groups = [enabled_groups]
-    if (
-        enabled_groups is not None
-        and str(group_id) not in {str(item) for item in enabled_groups}
-        and 'all' not in {str(item) for item in enabled_groups}
-    ):
+    if not _group_is_enabled(config, group_id):
         return HISTORY_ARRIVAL_REJECTED, signature
     message = getattr(getattr(plugin_event, 'data', None), 'message', '')
     if message is None:
@@ -653,6 +658,20 @@ def _ensure_history(bot_hash: str, group_id: str):
     return history
 
 
+def _discard_history_entry(history, entry):
+    """移除本轮刚追加的 assistant 条目，用于发送前被 power off 取消。"""
+    if history is None or entry is None:
+        return False
+    queue = getattr(history, 'queue', history)
+    if not isinstance(queue, list):
+        return False
+    for index in range(len(queue) - 1, -1, -1):
+        if queue[index] is entry:
+            del queue[index]
+            return True
+    return False
+
+
 def _get_group_lock(bot_hash: str, group_id: str):
     config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
     key = _history_key(bot_hash, group_id)
@@ -758,6 +777,17 @@ def _register_history_arrival(plugin_event, bot_hash: str, group_id: str):
         admission == HISTORY_ARRIVAL_GUARANTEED,
         signature,
     )
+
+
+def _stop_for_power_off(activity_token, phase, note='运行状态已关闭 · 跳过'):
+    OlivOSAIChatAssassin.logger.log(f'POWER - SKIP [{phase}]')
+    activity.note(
+        activity_token,
+        activity.STAGE_PREPARING,
+        note,
+        activity.TRACE_WARNING,
+    )
+    activity.finish(activity_token, activity.STATE_SKIPPED, 'power_off')
 
 
 def _history_window_state(bot_hash: str, group_id: str, history_entry, signature):
@@ -867,6 +897,35 @@ def unity_group_message(plugin_event: OlivOS.API.Event, Proc):
     finish_error = 'message_error'
     arrival_token = None
     try:
+        OlivOSAIChatAssassin.data.gData.reload(bot_hash)
+        config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+        if not config:
+            finish_state = activity.STATE_SKIPPED
+            finish_error = 'configuration_missing'
+            return
+        if not _group_is_enabled(config, group_id):
+            finish_state = activity.STATE_SKIPPED
+            finish_error = 'group_disabled'
+            return
+        command_result = OlivOSAIChatAssassin.manager.handle_command(
+            plugin_event,
+            group_id,
+            getattr(plugin_event.data, 'message', ''),
+            config,
+        )
+        if command_result is not None:
+            finish_state = (
+                activity.STATE_FINISHED
+                if command_result.get('ok')
+                else activity.STATE_FAILED
+            )
+            finish_error = 'power_command' if command_result.get('ok') else 'power_command_failed'
+            return
+        if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id, config):
+            _stop_for_power_off(activity_token, 'message_before_queue')
+            finish_state = activity.STATE_SKIPPED
+            finish_error = 'power_off'
+            return
         arrival_token = _register_history_arrival(plugin_event, bot_hash, group_id)
         group_lock = _get_group_lock(bot_hash, group_id)
         wait_start = time.perf_counter()
@@ -931,16 +990,14 @@ def unity_group_poke(plugin_event: OlivOS.API.Event, Proc=None):
             finish_error = 'configuration_missing'
             return
 
-        enabled_groups = config.get('enabled_groups') if 'enabled_groups' in config else None
-        if enabled_groups is not None and not isinstance(enabled_groups, (list, tuple)):
-            enabled_groups = [enabled_groups]
-        if (
-            enabled_groups is not None
-            and group_id not in {str(item) for item in enabled_groups}
-            and 'all' not in {str(item) for item in enabled_groups}
-        ):
+        if not _group_is_enabled(config, group_id):
             finish_state = activity.STATE_SKIPPED
             finish_error = 'group_disabled'
+            return
+        if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id, config):
+            _stop_for_power_off(activity_token, 'poke')
+            finish_state = activity.STATE_SKIPPED
+            finish_error = 'power_off'
             return
 
         signature = _history_admission_signature(config)
@@ -954,6 +1011,11 @@ def unity_group_poke(plugin_event: OlivOS.API.Event, Proc=None):
         group_lock = _get_group_lock(bot_hash, group_id)
         with group_lock:
             activity.activate(activity_token, activity.STAGE_PREPARING)
+            if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+                _stop_for_power_off(activity_token, 'poke_after_queue')
+                finish_state = activity.STATE_SKIPPED
+                finish_error = 'power_off'
+                return
             dedupe_key = (user_id, target_id)
             if _poke_is_duplicate(bot_hash, group_id, dedupe_key, history):
                 OlivOSAIChatAssassin.logger.log('POKE - HISTORY [deduplicated]')
@@ -1083,19 +1145,17 @@ def unity_group_message_router(
     # 仅在文件变化时重新加载配置和记忆（避免高频磁盘 I/O）
     activity.update(activity_token, stage=activity.STAGE_PREPARING)
     OlivOSAIChatAssassin.data.gData.reload(bot_hash)
-    if not OlivOSAIChatAssassin.data.gData.getConfig(bot_hash):
+    config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+    if not config:
         activity.finish(activity_token, activity.STATE_SKIPPED, 'configuration_missing')
         return
     activity.note(activity_token, activity.STAGE_PREPARING, '配置已加载')
     # 检查是否在启用群组列表中
-    if (
-        'enabled_groups' in OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
-        and (
-            group_id not in OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)['enabled_groups']
-            and 'all' not in OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)['enabled_groups']
-        )
-    ):
+    if not _group_is_enabled(config, group_id):
         activity.finish(activity_token, activity.STATE_SKIPPED, 'group_disabled')
+        return
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id, config):
+        _stop_for_power_off(activity_token, 'message_after_queue')
         return
     # 忽略前缀消息
     message = plugin_event.data.message
@@ -1105,6 +1165,9 @@ def unity_group_message_router(
     if should_ignore(message, bot_hash=bot_hash):
         OlivOSAIChatAssassin.logger.log('IGNORE')
         activity.finish(activity_token, activity.STATE_SKIPPED, 'ignored')
+        return
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+        _stop_for_power_off(activity_token, 'message_before_history')
         return
     # 添加消息到历史
     history = _ensure_history(bot_hash, group_id)
@@ -1591,6 +1654,8 @@ def _run_memory_extraction(
     activity_token=None,
     history_snapshot=None,
 ) -> str:
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+        return activity.MEMORY_STATE_SKIPPED
     start = time.perf_counter()
     if history_snapshot is None:
         history_snapshot = list(_get_history(bot_hash, group_id) or [])
@@ -1634,6 +1699,8 @@ def _run_memory_extraction(
     if payload is None:
         OlivOSAIChatAssassin.logger.warn('MEMORY FORMAT ERR - preserve old values')
         return activity.MEMORY_STATE_FAILED
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+        return activity.MEMORY_STATE_SKIPPED
     try:
         _apply_memory_data(bot_hash, group_id, payload, record_knowledge)
     except Exception as exc:
@@ -1821,6 +1888,9 @@ def reply_to_group(
     if not config or not config.get('api_key'):
         activity.finish(activity_token, activity.STATE_SKIPPED, 'api_not_configured')
         return
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id, config):
+        _stop_for_power_off(activity_token, 'reply_start')
+        return
 
     history: 'list[dict]' = list(_get_history(bot_hash, group_id) or [])
     if not history:
@@ -1900,6 +1970,9 @@ def reply_to_group(
         activity.STAGE_RECALLING,
         ' · '.join(recall_parts) if recall_parts else '无记忆命中',
     )
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+        _stop_for_power_off(activity_token, 'reply_after_recall')
+        return
 
     activity.update(activity_token, stage=activity.STAGE_PACING)
     group_lock = _get_group_lock(bot_hash, group_id)
@@ -1917,6 +1990,9 @@ def reply_to_group(
         activity.finish(activity_token, activity.STATE_SUPERSEDED, 'slack_canceled')
         return
     activity.note(activity_token, activity.STAGE_PACING, '发送窗口已通过')
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+        _stop_for_power_off(activity_token, 'reply_after_slack')
+        return
 
     self_id = plugin_event.base_info['self_id']
     mention_str = f'[OP:at,id={self_id}]'
@@ -2097,6 +2173,9 @@ def reply_to_group(
         messages_first_think,
         activity_token=activity_token,
     )
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+        _stop_for_power_off(activity_token, 'reply_before_commit', '运行状态已关闭 · 丢弃本轮输出')
+        return
     if reply_envelope is None:
         OlivOSAIChatAssassin.logger.log('NONE')
         return
@@ -2175,7 +2254,7 @@ def reply_to_group(
         reply_to['message_id'] = str(message_id)
     if user_id not in (None, '', '-1', -1):
         reply_to['user_id'] = str(user_id)
-    add_message_to_history(
+    assistant_entry = add_message_to_history(
         group_id,
         ''.join(history_replies),
         None,
@@ -2207,6 +2286,14 @@ def reply_to_group(
         )
 
     OlivOSAIChatAssassin.tools.sleep(1 + (random.random() * 2 - 1) * 0.95)
+    if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
+        _discard_history_entry(_get_history(bot_hash, group_id), assistant_entry)
+        _stop_for_power_off(
+            activity_token,
+            'reply_before_send',
+            '运行状态已关闭 · 丢弃本轮输出',
+        )
+        return
     try:
         reply(
             plugin_event,

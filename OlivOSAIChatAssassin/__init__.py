@@ -6,6 +6,7 @@ from . import eventInbox
 from . import main
 from . import load
 from . import logger
+from . import manager
 from . import webTools
 from . import msg
 from . import webUI

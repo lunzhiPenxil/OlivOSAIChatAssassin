@@ -17,6 +17,8 @@ class Event:
         bot_hash_list = list(Proc.Proc_data['bot_info_dict'].keys())
         OlivOSAIChatAssassin.load.load_init_after()
         OlivOSAIChatAssassin.load.load_logger(Proc)
+        OlivOSAIChatAssassin.manager.reset()
+        OlivOSAIChatAssassin.manager.reload()
         OlivOSAIChatAssassin.webUI.restore_webui_assets(Proc)
         OlivOSAIChatAssassin.load.load_bot(bot_hash_list)
         OlivOSAIChatAssassin.load.load_staticKnowledge()

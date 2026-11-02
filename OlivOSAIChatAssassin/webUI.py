@@ -24,6 +24,7 @@ EVENT_MEMORY_OVERVIEW = 'OlivOSAIChatAssassin_WebUI_GetMemoryOverview'
 EVENT_MEMORY_SECTION = 'OlivOSAIChatAssassin_WebUI_GetMemorySection'
 EVENT_MEMORY_IMAGE = 'OlivOSAIChatAssassin_WebUI_GetMemoryImage'
 EVENT_SAVE_MEMORY = 'OlivOSAIChatAssassin_WebUI_SaveMemory'
+EVENT_SET_GROUP_MANAGER = 'OlivOSAIChatAssassin_WebUI_SetGroupManager'
 
 SECRET_PATHS = ('api_key', 'ocr_api.api_key')
 GLOBAL_MEMORY_KEY = '全局'
@@ -282,11 +283,13 @@ def _public_config(config: dict):
 def _config_warnings(config: dict):
     warnings = []
     expected_types = (
+        ('power_control_enabled', bool, '指令开关'),
         ('thinking', dict, '思考配置'),
         ('ocr_api', dict, 'OCR 配置'),
         ('enabled_groups', list, '启用群列表'),
         ('reply_keywords', list, '回复关键词'),
         ('ignore_prefixes', list, '忽略前缀'),
+        ('command_prefixes', list, '指令前缀'),
         ('interaction_actions', list, '互动动作'),
         ('interaction_reactions', list, '互动表情'),
         ('event_private_message_enabled', bool, '私聊消息接收'),
@@ -294,6 +297,7 @@ def _config_warnings(config: dict):
         ('interaction_response_enabled', bool, '戳一戳进入回复判断'),
         ('event_recall_enabled', bool, '撤回事件接收'),
         ('event_group_advanced_enabled', bool, '群高级事件接收'),
+        ('power_default_mode', str, '默认状态'),
     )
     for field, expected_type, label in expected_types:
         if field in config and not isinstance(config[field], expected_type):
@@ -301,8 +305,16 @@ def _config_warnings(config: dict):
                 dict: '对象',
                 list: '列表',
                 bool: '布尔值',
+                str: '字符串',
             }.get(expected_type, '有效值')
             warnings.append(f'{label}（{field}）不是{type_name}，页面暂按默认值显示；请检查配置文件。')
+    if 'power_default_mode' not in config:
+        warnings.append('默认状态（power_default_mode）未配置，运行期暂按 on 处理。')
+    if (
+        isinstance(config.get('power_default_mode'), str)
+        and config.get('power_default_mode') not in ('on', 'off')
+    ):
+        warnings.append('默认状态（power_default_mode）只能是 on 或 off，运行期暂按 on 处理。')
     return warnings
 
 
@@ -627,10 +639,23 @@ def _validate_config_patch(patch: dict):
             checked = _validate_string_list(value, key, errors)
             if checked is not None:
                 result[key] = checked
+        elif key == 'command_prefixes':
+            checked = _validate_string_list(value, key, errors)
+            if checked is not None:
+                result[key] = checked
+        elif key == 'power_control_enabled':
+            checked = _validate_bool(value, key, errors)
+            if checked is not None:
+                result[key] = checked
         elif key == 'max_message_length':
             checked = _validate_number(value, key, errors, 1, integer=True)
             if checked is not None:
                 result[key] = checked
+        elif key == 'power_default_mode':
+            if value not in ('on', 'off'):
+                _add_field_error(errors, key, '必须是 on 或 off')
+            else:
+                result[key] = value
         elif key == 'interaction_enabled':
             checked = _validate_bool(value, key, errors)
             if checked is not None:
@@ -1167,6 +1192,7 @@ def _handle_bootstrap(payload, Proc):
             'memory_read': True,
             'memory_write': True,
             'inbound_events_read': True,
+            'group_manager_write': True,
         },
     })
 
@@ -1353,6 +1379,7 @@ def _handle_memory_section(payload, Proc):
         if group_id not in memory:
             raise WebUIError('not_found', '该群记忆不存在')
         text, truncated = _display_memory_value(memory[group_id])
+        config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
         return _ok({
             'scope': 'group',
             'group_id': group_id,
@@ -1361,6 +1388,7 @@ def _handle_memory_section(payload, Proc):
             'truncated': truncated,
             'editable': not truncated,
             'can_delete': True,
+            'manager': OlivOSAIChatAssassin.manager.group_status(bot_hash, group_id, config),
         }, revision)
 
     if scope != 'global':
@@ -1822,6 +1850,43 @@ def _handle_save_memory(payload, Proc):
     return _ok(result, revision)
 
 
+def _handle_set_group_manager(payload, Proc):
+    bot_hash, _bot_info = _require_bot(Proc, payload)
+    group_id = _validate_memory_name(payload.get('group_id'), 'group_id', 'group_id')
+    if group_id == GLOBAL_MEMORY_KEY:
+        raise WebUIError('validation_error', '不能把全局记忆当作群开关目标')
+    enabled = payload.get('enabled')
+    if type(enabled) is not bool:
+        raise WebUIError(
+            'validation_error',
+            'enabled 必须是布尔值',
+            {'enabled': '必须是布尔值'},
+        )
+
+    memory = OlivOSAIChatAssassin.data.gData.getMemory(bot_hash)
+    if not isinstance(memory, dict) or group_id not in memory:
+        raise WebUIError('not_found', '该群记忆不存在')
+    config = OlivOSAIChatAssassin.data.gData.getConfig(bot_hash)
+    ok, reason = OlivOSAIChatAssassin.manager.set_group_enabled(
+        bot_hash,
+        group_id,
+        enabled,
+        config,
+    )
+    if not ok:
+        if reason == 'control_disabled':
+            raise WebUIError(
+                'control_disabled',
+                '请先在设置中开启指令开关',
+                {'enabled': '指令开关未开启'},
+            )
+        raise WebUIError('write_failed', '群开关保存失败')
+    return _ok({
+        'group_id': group_id,
+        'manager': OlivOSAIChatAssassin.manager.group_status(bot_hash, group_id, config),
+    })
+
+
 _HANDLERS = {
     EVENT_BOOTSTRAP: _handle_bootstrap,
     EVENT_ACTIVITY: _handle_activity,
@@ -1832,6 +1897,7 @@ _HANDLERS = {
     EVENT_MEMORY_SECTION: _handle_memory_section,
     EVENT_MEMORY_IMAGE: _handle_memory_image,
     EVENT_SAVE_MEMORY: _handle_save_memory,
+    EVENT_SET_GROUP_MANAGER: _handle_set_group_manager,
 }
 
 
