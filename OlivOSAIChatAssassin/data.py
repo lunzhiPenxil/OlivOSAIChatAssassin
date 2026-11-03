@@ -7,11 +7,14 @@ import OlivOSAIChatAssassin
 gProc: 'OlivOS.pluginAPI.shallow|None' = None
 gPluginName = '群聊刺客'
 gMessageHistory: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.DynamicQueue]' = {}
+gHistoryDir = './plugin/data/OlivOSAIChatAssassin/history'
+gHistoryStore: 'OlivOSAIChatAssassin.load.HistoryStore|None' = None
 
 gData: 'OlivOSAIChatAssassin.load.DataManager|None' = None
 
 gConfigDir = './plugin/data/OlivOSAIChatAssassin'
 gConfigPath = './plugin/data/OlivOSAIChatAssassin/config.json'
+gPowerPath = './plugin/data/OlivOSAIChatAssassin/power_overrides.json'
 
 gGroupLock: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.SlackableFairLock]' = {}
 gHistoryWindowGuard = OlivOSAIChatAssassin.tools.HistoryWindowGuard()
@@ -86,6 +89,9 @@ configDefault = {
     'mention_reply': True,
     'ignore_prefixes': [],
     'max_message_length': 2048,
+    'power_control_enabled': False,
+    'command_prefixes': ['.', '。', '/'],
+    'power_default_mode': 'on',
     'interaction_enabled': False,
     'interaction_actions': [],
     'interaction_reactions': [],
