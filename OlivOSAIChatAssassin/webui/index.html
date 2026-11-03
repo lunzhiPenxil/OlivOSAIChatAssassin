@@ -4768,9 +4768,14 @@ noscript {
         memoryImage: 'OlivOSAIChatAssassin_WebUI_GetMemoryImage',
         saveMemory: 'OlivOSAIChatAssassin_WebUI_SaveMemory',
         setGroupManager: 'OlivOSAIChatAssassin_WebUI_SetGroupManager',
+        getNavigation: 'OlivOSAIChatAssassin_WebUI_GetNavigation',
+        saveNavigation: 'OlivOSAIChatAssassin_WebUI_SaveNavigation',
     };
     const API_VERSION = 1;
+    const NAVIGATION_VERSION = 1;
+    const NAVIGATION_ACTIVE_TABS = ['overview', 'settings', 'memory', 'about'];
     const REQUEST_TIMEOUT = 20000;
+    const NAVIGATION_REQUEST_TIMEOUT = 5000;
     const MEMORY_REQUEST_TIMEOUT = 90000;
     const MEMORY_IMAGE_REQUEST_TIMEOUT = 60000;
     const MEMORY_IMAGE_CONCURRENCY = 4;
@@ -4960,6 +4965,12 @@ noscript {
         requestSequence: 0,
         requestTickets: {config: 0, overview: 0, memory: 0},
         botEpoch: 0,
+        navigationSnapshot: null,
+        navigationRestoring: true,
+        navigationReady: false,
+        navigationSaving: false,
+        navigationPendingSnapshot: null,
+        navigationClientUpdatedAt: 0,
         toastTimer: null,
     };
 
@@ -5205,7 +5216,7 @@ noscript {
         });
 
         state.ready = true;
-        loadBootstrap();
+        loadInitialState();
     }
 
     function enhanceCustomSelects(root) {
@@ -5737,6 +5748,268 @@ noscript {
         return response;
     }
 
+    function isNavigationSnapshot(value) {
+        if (!value || typeof value !== 'object' || value.version !== NAVIGATION_VERSION) {
+            return false;
+        }
+        if (!NAVIGATION_ACTIVE_TABS.includes(value.active_tab)) {
+            return false;
+        }
+        if (!Number.isInteger(value.client_updated_at) || value.client_updated_at < 0) {
+            return false;
+        }
+        if (value.bot_hash !== null && typeof value.bot_hash !== 'string') {
+            return false;
+        }
+        return Boolean(
+            value.overview && typeof value.overview === 'object' &&
+            value.memory && typeof value.memory === 'object'
+        );
+    }
+
+    async function loadNavigationSnapshot() {
+        state.navigationSnapshot = null;
+        try {
+            const response = await callApi(EVENTS.getNavigation, {}, {
+                timeout: NAVIGATION_REQUEST_TIMEOUT,
+            });
+            const navigation = response.data && response.data.navigation;
+            if (!isNavigationSnapshot(navigation)) {
+                return null;
+            }
+            state.navigationSnapshot = navigation;
+            state.navigationClientUpdatedAt = Math.max(
+                0,
+                Number(navigation.client_updated_at) || 0
+            );
+            return navigation;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function navigationTabName(value) {
+        return NAVIGATION_ACTIVE_TABS.includes(value) ? value : 'overview';
+    }
+
+    function navigationTargetBotHash() {
+        const snapshot = state.navigationSnapshot;
+        if (!snapshot || typeof snapshot.bot_hash !== 'string') {
+            return '';
+        }
+        return snapshot.bot_hash;
+    }
+
+    function navigationMemorySeed(snapshot, activeTab) {
+        if (activeTab !== 'memory' || !snapshot || !snapshot.memory ||
+            typeof snapshot.memory !== 'object') {
+            return null;
+        }
+        const memory = snapshot.memory;
+        if (memory.scope === 'global' && typeof memory.section === 'string' && memory.section) {
+            return {
+                scope: 'global',
+                section: memory.section,
+                offset: 0,
+                limit: MEMORY_PAGE_SIZE,
+            };
+        }
+        return {
+            scope: 'group_index',
+            offset: Math.max(0, Number(memory.group_index_offset) || 0),
+            limit: MEMORY_PAGE_SIZE,
+        };
+    }
+
+    function nextNavigationClientTimestamp() {
+        state.navigationClientUpdatedAt = Math.max(
+            Date.now(),
+            state.navigationClientUpdatedAt + 1,
+            1
+        );
+        return state.navigationClientUpdatedAt;
+    }
+
+    function buildNavigationSnapshot() {
+        const activeTab = navigationTabName(state.activeTab);
+        const query = state.memoryQuery && typeof state.memoryQuery === 'object'
+            ? state.memoryQuery
+            : null;
+        let activityFullscreen = activeTab === 'overview' &&
+            state.activityFullscreenOpen === true;
+        let inboundFullscreen = activeTab === 'overview' &&
+            state.inboundFullscreenOpen === true;
+        if (activityFullscreen && inboundFullscreen) {
+            activityFullscreen = false;
+            inboundFullscreen = false;
+        }
+        let memory = {
+            scope: 'group_index',
+            section: null,
+            group_index_offset: Math.max(0, Number(state.memoryGroupIndexOffset) || 0),
+        };
+        if (query && query.scope === 'global' && typeof query.section === 'string' && query.section) {
+            memory = {
+                scope: 'global',
+                section: query.section,
+                group_index_offset: 0,
+            };
+        } else if (query && (query.scope === 'group_index' || query.scope === 'group')) {
+            memory.group_index_offset = Math.max(
+                0,
+                Number(state.memoryGroupIndexOffset) || 0
+            );
+        }
+        return {
+            version: NAVIGATION_VERSION,
+            client_updated_at: nextNavigationClientTimestamp(),
+            bot_hash: state.selectedBot || null,
+            active_tab: activeTab,
+            overview: {
+                activity_fullscreen: activityFullscreen,
+                inbound_fullscreen: inboundFullscreen,
+                inbound_page: Math.max(0, Number(state.inboundPage) || 0),
+            },
+            memory: memory,
+        };
+    }
+
+    function scheduleNavigationSave() {
+        if (state.navigationRestoring || !state.navigationReady || !state.ready) {
+            return;
+        }
+        state.navigationPendingSnapshot = buildNavigationSnapshot();
+        if (!state.navigationSaving) {
+            flushNavigationSaveQueue();
+        }
+    }
+
+    async function flushNavigationSaveQueue() {
+        if (state.navigationSaving) {
+            return;
+        }
+        const snapshot = state.navigationPendingSnapshot;
+        if (!snapshot) {
+            return;
+        }
+        state.navigationPendingSnapshot = null;
+        state.navigationSaving = true;
+        try {
+            await callApi(EVENTS.saveNavigation, {snapshot: snapshot}, {
+                timeout: NAVIGATION_REQUEST_TIMEOUT,
+            });
+        } catch (error) {
+            return;
+        } finally {
+            state.navigationSaving = false;
+            if (state.navigationPendingSnapshot && !state.navigationRestoring) {
+                flushNavigationSaveQueue();
+            }
+        }
+    }
+
+    async function restoreOverviewNavigation(overview) {
+        if (!overview || typeof overview !== 'object') {
+            return;
+        }
+        const activityFullscreen = overview.activity_fullscreen === true;
+        const inboundFullscreen = overview.inbound_fullscreen === true;
+        if (activityFullscreen && inboundFullscreen) {
+            return;
+        }
+        if (inboundFullscreen) {
+            await openInboundFullscreen({
+                page: Math.max(0, Number(overview.inbound_page) || 0),
+                persist: false,
+                focus: false,
+            });
+            return;
+        }
+        if (activityFullscreen) {
+            openActivityFullscreen({persist: false, focus: false});
+        }
+    }
+
+    function globalMemorySectionAvailable(section) {
+        const name = String(section || '');
+        if (!name) {
+            return false;
+        }
+        if (isSpecialMemorySection(name)) {
+            return true;
+        }
+        const sections = state.overview && Array.isArray(state.overview.global_sections)
+            ? state.overview.global_sections
+            : [];
+        return sections.some(function (item) {
+            return item && String(item.name) === name;
+        });
+    }
+
+    function clampGroupMemoryOffset(total, offset) {
+        const safeTotal = Math.max(0, Number(total) || 0);
+        if (safeTotal <= 0) {
+            return 0;
+        }
+        const maxOffset = Math.floor((safeTotal - 1) / MEMORY_PAGE_SIZE) * MEMORY_PAGE_SIZE;
+        const requested = Math.max(0, Number(offset) || 0);
+        return Math.min(requested - (requested % MEMORY_PAGE_SIZE), maxOffset);
+    }
+
+    async function restoreMemoryNavigation(memory) {
+        const saved = memory && typeof memory === 'object' ? memory : {};
+        if (saved.scope === 'global' &&
+            typeof saved.section === 'string' &&
+            globalMemorySectionAvailable(saved.section)) {
+            let loaded = false;
+            try {
+                loaded = await loadMemorySection('global', saved.section, 0, null);
+            } catch (error) {
+                loaded = false;
+            }
+            if (loaded) {
+                return true;
+            }
+        }
+        const total = state.overview && state.overview.group_count;
+        const offset = clampGroupMemoryOffset(total, saved.group_index_offset);
+        try {
+            return await loadMemorySection('group_index', null, offset, null);
+        } catch (error) {
+            return false;
+        }
+    }
+
+    async function restoreNavigationSnapshot() {
+        const snapshot = state.navigationSnapshot;
+        if (!snapshot || !state.selectedBot) {
+            return false;
+        }
+        const activeTab = navigationTabName(snapshot.active_tab);
+        activateTab(activeTab, {persist: false});
+        if (activeTab === 'memory') {
+            await restoreMemoryNavigation(snapshot.memory);
+        }
+        if (activeTab === 'overview') {
+            await restoreOverviewNavigation(snapshot.overview);
+        }
+        return true;
+    }
+
+    async function loadInitialState() {
+        state.navigationRestoring = true;
+        try {
+            await loadNavigationSnapshot();
+            await loadBootstrap();
+        } finally {
+            state.navigationRestoring = false;
+            state.navigationReady = true;
+            if (state.selectedBot && state.overview) {
+                scheduleNavigationSave();
+            }
+        }
+    }
+
     async function loadBootstrap() {
         setBusy(true);
         try {
@@ -5753,7 +6026,23 @@ noscript {
                 showBanner('当前没有已加载的 bot 账号。请先在 OlivOS 中配置并启用账号。', false);
                 return;
             }
-            await loadBotData(state.bots[0].hash, true);
+            let targetBot = state.bots[0];
+            const savedBotHash = navigationTargetBotHash();
+            if (savedBotHash) {
+                targetBot = state.bots.find(function (bot) {
+                    return bot.hash === savedBotHash;
+                }) || targetBot;
+            }
+            const snapshot = state.navigationSnapshot;
+            const activeTab = navigationTabName(
+                snapshot && snapshot.active_tab ? snapshot.active_tab : 'overview'
+            );
+            const loaded = await loadBotData(targetBot.hash, true, {
+                memoryQuery: navigationMemorySeed(snapshot, activeTab),
+            });
+            if (loaded) {
+                await restoreNavigationSnapshot();
+            }
         } catch (error) {
             elements.pluginMeta.textContent = '无法读取插件状态';
             showBanner(errorMessage(error), false);
@@ -5788,16 +6077,20 @@ noscript {
             elements.botSelect.value = state.selectedBot || '';
             return;
         }
-        await loadBotData(botHash, true);
+        const loaded = await loadBotData(botHash, true);
+        if (loaded) {
+            scheduleNavigationSave();
+        }
     }
 
-    async function loadBotData(botHash, force) {
+    async function loadBotData(botHash, force, options) {
         if (!botHash) {
-            return;
+            return false;
         }
         if (!force && state.dirty && !window.confirm('当前设置尚未保存，确定重新加载吗？')) {
-            return;
+            return false;
         }
+        const loadOptions = options && typeof options === 'object' ? options : {};
         const epoch = state.botEpoch + 1;
         state.botEpoch = epoch;
         closeImageViewer();
@@ -5817,6 +6110,11 @@ noscript {
         state.dirtyFields.clear();
         state.conflict = false;
         state.memoryQuery = null;
+        if (loadOptions.memoryQuery && typeof loadOptions.memoryQuery === 'object') {
+            state.memoryQuery = Object.assign({}, loadOptions.memoryQuery, {
+                limit: MEMORY_PAGE_SIZE,
+            });
+        }
         state.memoryOtherExpanded = false;
         state.memoryGroupIndexOffset = 0;
         state.memoryRevision = '';
@@ -5840,14 +6138,16 @@ noscript {
         empty.textContent = '选择左侧分类查看或编辑内容。';
         elements.memoryDetail.appendChild(empty);
         setBusy(true);
+        let loaded = false;
         try {
             await Promise.all([
                 loadConfig(botHash, epoch),
                 loadOverview(botHash),
             ]);
+            loaded = true;
         } catch (error) {
             if (epoch !== state.botEpoch) {
-                return;
+                return false;
             }
             showBanner(errorMessage(error), false);
             showToast(errorMessage(error), true);
@@ -5862,6 +6162,7 @@ noscript {
                 loadInboundEvents();
             }
         }
+        return loaded;
     }
 
     async function loadConfig(botHash, epoch) {
@@ -5933,7 +6234,7 @@ noscript {
         state.activity = null;
         state.activityLoading = false;
         state.activityError = '';
-        closeActivityFullscreen(false);
+        closeActivityFullscreen(false, {persist: false});
         state.activityRenderedSignature = '';
         state.activityTimingNodes = [];
         state.activityTimingAnchor = 0;
@@ -6013,7 +6314,7 @@ noscript {
         state.inboundError = '';
         state.inboundPage = 0;
         state.inboundRenderedSignature = '';
-        closeInboundFullscreen(false);
+        closeInboundFullscreen(false, {persist: false});
         renderInboundEvents(true);
     }
 
@@ -6122,6 +6423,11 @@ noscript {
 
     function inboundPageCount(total) {
         return Math.max(1, Math.ceil(Math.max(0, total) / INBOUND_PAGE_SIZE));
+    }
+
+    function clampInboundPageIndex(page, eventCount) {
+        const pageCount = inboundPageCount(eventCount);
+        return Math.max(0, Math.min(pageCount - 1, Number(page) || 0));
     }
 
     function renderInboundFullscreenPager(offset, entryCount, total) {
@@ -6242,13 +6548,23 @@ noscript {
         if (body) {
             body.scrollTop = 0;
         }
+        scheduleNavigationSave();
     }
 
-    function openInboundFullscreen() {
+    async function openInboundFullscreen(options) {
+        const openOptions = options && typeof options === 'object' ? options : {};
         if (state.inboundFullscreenOpen) {
+            if (Number.isInteger(openOptions.page)) {
+                const data = state.inbound && typeof state.inbound === 'object'
+                    ? state.inbound
+                    : null;
+                const events = data && Array.isArray(data.events) ? data.events : [];
+                state.inboundPage = clampInboundPageIndex(openOptions.page, events.length);
+                renderInboundEvents(true);
+            }
             return;
         }
-        closeActivityFullscreen(false);
+        closeActivityFullscreen(false, {persist: false});
         state.inboundFullscreenOpen = true;
         state.inboundPage = 0;
         elements.overviewInboundFullscreenButton.setAttribute('aria-expanded', 'true');
@@ -6259,13 +6575,28 @@ noscript {
             pageShell.inert = true;
         }
         renderInboundEvents(true);
-        loadInboundEvents(INBOUND_FULLSCREEN_LIMIT);
-        window.requestAnimationFrame(function () {
-            elements.overviewInboundFullscreenBackButton.focus({preventScroll: true});
-        });
+        const loaded = loadInboundEvents(INBOUND_FULLSCREEN_LIMIT);
+        if (Number.isInteger(openOptions.page)) {
+            await loaded;
+            const data = state.inbound && typeof state.inbound === 'object'
+                ? state.inbound
+                : null;
+            const events = data && Array.isArray(data.events) ? data.events : [];
+            state.inboundPage = clampInboundPageIndex(openOptions.page, events.length);
+            renderInboundEvents(true);
+        }
+        if (openOptions.persist !== false) {
+            scheduleNavigationSave();
+        }
+        if (openOptions.focus !== false) {
+            window.requestAnimationFrame(function () {
+                elements.overviewInboundFullscreenBackButton.focus({preventScroll: true});
+            });
+        }
     }
 
-    function closeInboundFullscreen(restoreFocus) {
+    function closeInboundFullscreen(restoreFocus, options) {
+        const closeOptions = options && typeof options === 'object' ? options : {};
         const wasOpen = state.inboundFullscreenOpen;
         state.inboundFullscreenOpen = false;
         if (elements.overviewInboundFullscreen) {
@@ -6287,6 +6618,9 @@ noscript {
                 target.focus({preventScroll: true});
             }
         }
+        if (closeOptions.persist !== false) {
+            scheduleNavigationSave();
+        }
     }
 
     function handleInboundFullscreenKeydown(event) {
@@ -6297,11 +6631,12 @@ noscript {
         closeInboundFullscreen();
     }
 
-    function openActivityFullscreen() {
+    function openActivityFullscreen(options) {
+        const openOptions = options && typeof options === 'object' ? options : {};
         if (state.activityFullscreenOpen) {
             return;
         }
-        closeInboundFullscreen(false);
+        closeInboundFullscreen(false, {persist: false});
         state.activityFullscreenOpen = true;
         elements.overviewActivityFullscreenButton.setAttribute('aria-expanded', 'true');
         elements.overviewActivityFullscreen.hidden = false;
@@ -6311,13 +6646,19 @@ noscript {
             pageShell.inert = true;
         }
         renderActivity(true);
-        window.requestAnimationFrame(function () {
-            scrollActivityStreams(elements.overviewActivityFullscreenList);
-            elements.overviewActivityFullscreenBackButton.focus({preventScroll: true});
-        });
+        if (openOptions.focus !== false) {
+            window.requestAnimationFrame(function () {
+                scrollActivityStreams(elements.overviewActivityFullscreenList);
+                elements.overviewActivityFullscreenBackButton.focus({preventScroll: true});
+            });
+        }
+        if (openOptions.persist !== false) {
+            scheduleNavigationSave();
+        }
     }
 
-    function closeActivityFullscreen(restoreFocus) {
+    function closeActivityFullscreen(restoreFocus, options) {
+        const closeOptions = options && typeof options === 'object' ? options : {};
         const wasOpen = state.activityFullscreenOpen;
         state.activityFullscreenOpen = false;
         if (elements.overviewActivityFullscreen) {
@@ -6338,6 +6679,9 @@ noscript {
             if (target) {
                 target.focus({preventScroll: true});
             }
+        }
+        if (closeOptions.persist !== false) {
+            scheduleNavigationSave();
         }
     }
 
@@ -10488,6 +10832,7 @@ noscript {
         state.requestTickets.memory = ticket;
         state.memoryQuery = payload;
         markMemorySelection(scope, section);
+        scheduleNavigationSave();
         if (state.memoryActiveTicket !== 0) {
             state.memoryQueuedLoad = {
                 payload: payload,
@@ -11024,32 +11369,37 @@ noscript {
         showToast('记忆已刷新');
     }
 
-    function activateTab(tabName) {
-        state.activeTab = tabName;
-        if (tabName !== 'overview') {
-            closeActivityFullscreen(false);
-            closeInboundFullscreen(false);
+    function activateTab(tabName, options) {
+        const activeTab = navigationTabName(tabName);
+        const tabOptions = options && typeof options === 'object' ? options : {};
+        state.activeTab = activeTab;
+        if (activeTab !== 'overview') {
+            closeActivityFullscreen(false, {persist: false});
+            closeInboundFullscreen(false, {persist: false});
         }
         document.querySelectorAll('.tab-button').forEach(function (button) {
-            const selected = button.dataset.tab === tabName;
+            const selected = button.dataset.tab === activeTab;
             button.classList.toggle('selected', selected);
             button.setAttribute('aria-selected', selected ? 'true' : 'false');
             button.tabIndex = selected ? 0 : -1;
         });
         document.querySelectorAll('.tab-panel').forEach(function (panel) {
-            panel.hidden = panel.id !== 'panel-' + tabName;
+            panel.hidden = panel.id !== 'panel-' + activeTab;
         });
-        if (tabName === 'settings') {
+        if (activeTab === 'settings') {
             scheduleTextareaResize();
         }
-        if (tabName === 'overview' && shouldPollActivity()) {
+        if (activeTab === 'overview' && shouldPollActivity()) {
             loadActivity();
             loadInboundEvents();
         }
-        if (tabName === 'memory' && state.selectedBot && !state.overview) {
+        if (activeTab === 'memory' && state.selectedBot && !state.overview) {
             loadOverview(state.selectedBot).catch(function (error) {
                 showToast(errorMessage(error), true);
             });
+        }
+        if (tabOptions.persist !== false) {
+            scheduleNavigationSave();
         }
     }
 
