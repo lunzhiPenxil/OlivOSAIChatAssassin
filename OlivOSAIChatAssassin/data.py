@@ -15,6 +15,7 @@ gData: 'OlivOSAIChatAssassin.load.DataManager|None' = None
 gConfigDir = './plugin/data/OlivOSAIChatAssassin'
 gConfigPath = './plugin/data/OlivOSAIChatAssassin/config.json'
 gPowerPath = './plugin/data/OlivOSAIChatAssassin/power_overrides.json'
+gNavigationPath = './plugin/data/OlivOSAIChatAssassin/ui_navigation.json'
 
 gGroupLock: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.SlackableFairLock]' = {}
 gHistoryWindowGuard = OlivOSAIChatAssassin.tools.HistoryWindowGuard()

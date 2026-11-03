@@ -1,5 +1,6 @@
 import base64
 import copy
+import hashlib
 import io
 import json
 import math
@@ -25,6 +26,8 @@ EVENT_MEMORY_SECTION = 'OlivOSAIChatAssassin_WebUI_GetMemorySection'
 EVENT_MEMORY_IMAGE = 'OlivOSAIChatAssassin_WebUI_GetMemoryImage'
 EVENT_SAVE_MEMORY = 'OlivOSAIChatAssassin_WebUI_SaveMemory'
 EVENT_SET_GROUP_MANAGER = 'OlivOSAIChatAssassin_WebUI_SetGroupManager'
+EVENT_GET_NAVIGATION = 'OlivOSAIChatAssassin_WebUI_GetNavigation'
+EVENT_SAVE_NAVIGATION = 'OlivOSAIChatAssassin_WebUI_SaveNavigation'
 
 SECRET_PATHS = ('api_key', 'ocr_api.api_key')
 GLOBAL_MEMORY_KEY = '全局'
@@ -59,10 +62,18 @@ IMAGE_CACHE_INDEX_TTL = 5.0
 MAX_IMAGE_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_REQUEST_BYTES = 1024 * 1024
 WEBUI_ASSET_FILES = ('webui/index.html',)
+NAVIGATION_VERSION = 1
+NAVIGATION_SESSION_LIMIT = 32
+NAVIGATION_TTL_SECONDS = 7 * 24 * 3600
+NAVIGATION_MAX_PAGE = 1000000
+NAVIGATION_MAX_CLIENT_UPDATED_AT = 10 ** 16
+NAVIGATION_ACTIVE_TABS = ('overview', 'settings', 'memory', 'about')
+NAVIGATION_MEMORY_SCOPES = ('group_index', 'global')
 
 _manifest_cache = None
 _webui_asset_cache = None
 _image_cache_index_lock = threading.Lock()
+_navigation_store_lock = threading.Lock()
 _image_cache_index_state = {
     'directory': '',
     'signature': None,
@@ -250,6 +261,194 @@ def _as_payload(payload):
             {'api_version': f'当前仅支持 {API_VERSION}'},
         )
     return payload
+
+
+def _navigation_session_key(session):
+    if not isinstance(session, str) or not session or len(session) > 512:
+        return None
+    return hashlib.sha256(session.encode('utf-8')).hexdigest()[:32]
+
+
+def _navigation_integer(value, name, minimum, maximum):
+    if type(value) is not int or value < minimum or value > maximum:
+        raise WebUIError(
+            'validation_error',
+            f'{name} 无效',
+            {name: f'必须是 {minimum} 到 {maximum} 之间的整数'},
+        )
+    return value
+
+
+def _canonical_navigation_snapshot(value):
+    if not isinstance(value, dict):
+        raise WebUIError('validation_error', '导航快照必须是对象')
+    if type(value.get('version')) is not int or value.get('version') != NAVIGATION_VERSION:
+        raise WebUIError('validation_error', '导航快照版本无效', {'version': '当前仅支持 1'})
+
+    active_tab = value.get('active_tab')
+    if active_tab not in NAVIGATION_ACTIVE_TABS:
+        raise WebUIError('validation_error', '当前页面无效', {'active_tab': '页面标识无效'})
+
+    bot_hash = value.get('bot_hash')
+    if bot_hash is not None and (not isinstance(bot_hash, str) or len(bot_hash) > 128):
+        raise WebUIError('validation_error', 'bot_hash 无效', {'bot_hash': '必须是字符串或 null'})
+    if bot_hash == '':
+        bot_hash = None
+
+    overview = value.get('overview')
+    if not isinstance(overview, dict):
+        raise WebUIError('validation_error', 'overview 必须是对象')
+    activity_fullscreen = overview.get('activity_fullscreen')
+    inbound_fullscreen = overview.get('inbound_fullscreen')
+    if type(activity_fullscreen) is not bool or type(inbound_fullscreen) is not bool:
+        raise WebUIError('validation_error', '全屏状态必须是布尔值')
+
+    memory = value.get('memory')
+    if not isinstance(memory, dict):
+        raise WebUIError('validation_error', 'memory 必须是对象')
+    scope = memory.get('scope')
+    if scope not in NAVIGATION_MEMORY_SCOPES:
+        raise WebUIError('validation_error', '记忆导航范围无效', {'scope': '必须是 group_index 或 global'})
+    section = memory.get('section')
+    if scope == 'global':
+        if not isinstance(section, str) or not section or len(section) > MEMORY_NAME_LIMIT:
+            raise WebUIError('validation_error', '记忆分类无效', {'section': '必须是非空分类名'})
+    else:
+        section = None
+
+    return {
+        'version': NAVIGATION_VERSION,
+        'client_updated_at': _navigation_integer(
+            value.get('client_updated_at'),
+            'client_updated_at',
+            0,
+            NAVIGATION_MAX_CLIENT_UPDATED_AT,
+        ),
+        'bot_hash': bot_hash,
+        'active_tab': active_tab,
+        'overview': {
+            'activity_fullscreen': activity_fullscreen,
+            'inbound_fullscreen': inbound_fullscreen,
+            'inbound_page': _navigation_integer(
+                overview.get('inbound_page'),
+                'inbound_page',
+                0,
+                NAVIGATION_MAX_PAGE,
+            ),
+        },
+        'memory': {
+            'scope': scope,
+            'section': section,
+            'group_index_offset': _navigation_integer(
+                memory.get('group_index_offset'),
+                'group_index_offset',
+                0,
+                NAVIGATION_MAX_PAGE,
+            ),
+        },
+    }
+
+
+class NavigationStore:
+    '''按 WebUI 会话摘要保存最小导航快照，读写失败不得影响页面本身。'''
+
+    def __init__(self, path):
+        self.path = str(path)
+
+    @staticmethod
+    def _empty_document():
+        return {'version': NAVIGATION_VERSION, 'sessions': {}}
+
+    def _read_locked(self):
+        if not os.path.exists(self.path):
+            return self._empty_document()
+        try:
+            with open(self.path, 'r', encoding='utf-8') as file_obj:
+                document = json.load(file_obj)
+            if not isinstance(document, dict):
+                raise ValueError('navigation document is not an object')
+            if type(document.get('version')) is not int or document.get('version') != NAVIGATION_VERSION:
+                raise ValueError('unsupported navigation document version')
+            sessions = document.get('sessions')
+            if not isinstance(sessions, dict):
+                raise ValueError('navigation sessions is not an object')
+        except Exception as exc:
+            OlivOSAIChatAssassin.logger.warn(
+                f'NAVIGATION LOAD IGNORED [{type(exc).__name__}]'
+            )
+            return self._empty_document()
+
+        now = time.time()
+        cleaned = {}
+        for key, entry in sessions.items():
+            if not isinstance(key, str) or not key or len(key) > 128 or not isinstance(entry, dict):
+                continue
+            updated_at = entry.get('updated_at')
+            if not isinstance(updated_at, (int, float)) or isinstance(updated_at, bool):
+                continue
+            if updated_at <= now - NAVIGATION_TTL_SECONDS:
+                continue
+            try:
+                snapshot = _canonical_navigation_snapshot(entry.get('snapshot'))
+            except WebUIError:
+                continue
+            cleaned[key] = {
+                'updated_at': float(updated_at),
+                'snapshot': snapshot,
+            }
+        return {'version': NAVIGATION_VERSION, 'sessions': cleaned}
+
+    def get(self, session):
+        key = _navigation_session_key(session)
+        if key is None:
+            return None
+        with _navigation_store_lock:
+            document = self._read_locked()
+            entry = document['sessions'].get(key)
+            if not isinstance(entry, dict):
+                return None
+            return copy.deepcopy(entry['snapshot'])
+
+    def save(self, session, snapshot):
+        key = _navigation_session_key(session)
+        if key is None:
+            return False
+        canonical = _canonical_navigation_snapshot(snapshot)
+        with _navigation_store_lock:
+            document = self._read_locked()
+            entry = document['sessions'].get(key)
+            if isinstance(entry, dict):
+                previous = entry.get('snapshot', {})
+                previous_updated = previous.get('client_updated_at', -1)
+                if canonical['client_updated_at'] <= previous_updated:
+                    return False
+            document['sessions'][key] = {
+                'updated_at': time.time(),
+                'snapshot': canonical,
+            }
+            ordered = sorted(
+                document['sessions'].items(),
+                key=lambda item: item[1].get('updated_at', 0),
+                reverse=True,
+            )[:NAVIGATION_SESSION_LIMIT]
+            document['sessions'] = dict(ordered)
+            try:
+                OlivOSAIChatAssassin.load.DataManager._write_json_atomic(self.path, document)
+            except Exception as exc:
+                OlivOSAIChatAssassin.logger.warn(
+                    f'NAVIGATION SAVE FAILED [{type(exc).__name__}]'
+                )
+                return False
+        return True
+
+
+def _webui_session(webui_context):
+    if not isinstance(webui_context, dict):
+        return None
+    session = webui_context.get('session')
+    if not isinstance(session, str) or not session or len(session) > 512:
+        return None
+    return session
 
 
 def _deep_merge_defaults(base: dict, current: dict) -> dict:
@@ -1197,6 +1396,24 @@ def _handle_bootstrap(payload, Proc):
     })
 
 
+def _handle_get_navigation(payload, Proc, webui_context):
+    session = _webui_session(webui_context)
+    if session is None:
+        return _ok({'navigation': None})
+    store = NavigationStore(OlivOSAIChatAssassin.data.gNavigationPath)
+    return _ok({'navigation': store.get(session)})
+
+
+def _handle_save_navigation(payload, Proc, webui_context):
+    session = _webui_session(webui_context)
+    if session is None:
+        return _ok({'saved': False})
+    snapshot = payload.get('snapshot')
+    canonical = _canonical_navigation_snapshot(snapshot)
+    store = NavigationStore(OlivOSAIChatAssassin.data.gNavigationPath)
+    return _ok({'saved': store.save(session, canonical)})
+
+
 def _handle_activity(payload, Proc):
     bot_hash, _bot_info = _require_bot(Proc, payload)
     return _ok(OlivOSAIChatAssassin.activity.snapshot(bot_hash))
@@ -1898,14 +2115,21 @@ _HANDLERS = {
     EVENT_MEMORY_IMAGE: _handle_memory_image,
     EVENT_SAVE_MEMORY: _handle_save_memory,
     EVENT_SET_GROUP_MANAGER: _handle_set_group_manager,
+    EVENT_GET_NAVIGATION: _handle_get_navigation,
+    EVENT_SAVE_NAVIGATION: _handle_save_navigation,
 }
 
+_NAVIGATION_HANDLERS = (EVENT_GET_NAVIGATION, EVENT_SAVE_NAVIGATION)
 
-def _dispatch(event_name, payload, Proc):
+
+def _dispatch(event_name, payload, Proc, webui_context=None):
     handler = _HANDLERS.get(event_name)
     if handler is None:
         raise WebUIError('unknown_event', '未知的 WebUI 事件')
-    return handler(_as_payload(payload), Proc)
+    parsed = _as_payload(payload)
+    if event_name in _NAVIGATION_HANDLERS:
+        return handler(parsed, Proc, webui_context)
+    return handler(parsed, Proc)
 
 
 def handle_menu(plugin_event, Proc):
@@ -1922,7 +2146,7 @@ def handle_menu(plugin_event, Proc):
     event_name = getattr(event_data, 'event', None)
     payload = getattr(event_data, 'payload', None)
     try:
-        response = _dispatch(event_name, payload, Proc)
+        response = _dispatch(event_name, payload, Proc, webui_context)
     except WebUIError as exc:
         response = _error(exc.code, exc.message, exc.fields)
     except Exception as exc:
