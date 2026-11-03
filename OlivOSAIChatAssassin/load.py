@@ -2,8 +2,11 @@ import os
 import json
 import threading
 import copy
+import hashlib
+from datetime import datetime
 from enum import Enum
 from typing import Dict, Optional
+from urllib.parse import quote
 
 import OlivOSAIChatAssassin
 
@@ -14,17 +17,226 @@ class DataRevisionConflict(Exception):
         self.current_revision = current_revision
 
 
+class HistoryStore:
+    '''按 bot 与群分片持久化模型可见历史，加载失败不会阻断聊天链路。'''
+
+    VERSION = 1
+
+    def __init__(self, history_dir: str):
+        self.history_dir = history_dir
+        self._lock = threading.RLock()
+        self._path_locks = {}
+        self._pending = set()
+
+    @staticmethod
+    def _key_ref(bot_hash, group_id) -> str:
+        raw = f'{bot_hash}\0{group_id}'.encode('utf-8', errors='replace')
+        return hashlib.sha256(raw).hexdigest()[:12]
+
+    @staticmethod
+    def _encode_component(value) -> str:
+        return quote(str(value), safe='') or '_'
+
+    def history_path(self, bot_hash, group_id) -> str:
+        base = os.path.abspath(self.history_dir)
+        path = os.path.abspath(os.path.join(
+            base,
+            f'bot_{self._encode_component(bot_hash)}',
+            f'group_{self._encode_component(group_id)}.json',
+        ))
+        if os.path.commonpath([base, path]) != base:
+            raise ValueError('history path escaped base directory')
+        return path
+
+    def _path_lock(self, path: str):
+        with self._lock:
+            lock = self._path_locks.get(path)
+            if lock is None:
+                lock = threading.Lock()
+                self._path_locks[path] = lock
+            return lock
+
+    @classmethod
+    def _sanitize_entry(cls, entry):
+        if not isinstance(entry, dict):
+            return None
+        message = entry.get('message')
+        if 'role' in entry:
+            role = entry.get('role')
+        else:
+            role = 'assistant' if entry.get('nickname') is None else 'user'
+        if not isinstance(message, str) or role not in ('user', 'assistant'):
+            return None
+
+        result = {
+            'message': message,
+            'role': role,
+        }
+        timestamp = entry.get('timestamp')
+        if isinstance(timestamp, (int, float)) and not isinstance(timestamp, bool):
+            result['timestamp'] = timestamp
+        for key in ('time', 'message_id', 'message_type', 'target_id'):
+            value = entry.get(key)
+            if isinstance(value, str):
+                result[key] = value
+        for key in ('user_id', 'nickname'):
+            if key not in entry:
+                continue
+            value = entry.get(key)
+            if value is None or isinstance(value, (str, int, float, bool)):
+                result[key] = value
+        replies = entry.get('replies')
+        if isinstance(replies, list):
+            result['replies'] = [item for item in replies if isinstance(item, str)]
+        reply_to = entry.get('reply_to')
+        if isinstance(reply_to, dict):
+            clean_reply_to = {}
+            for key in ('message_id', 'user_id'):
+                value = reply_to.get(key)
+                if isinstance(value, str) and value:
+                    clean_reply_to[key] = value
+            if clean_reply_to:
+                result['reply_to'] = clean_reply_to
+        target_is_self = entry.get('target_is_self')
+        if isinstance(target_is_self, bool):
+            result['target_is_self'] = target_is_self
+        return result
+
+    @classmethod
+    def _sanitize_entries(cls, entries):
+        cleaned = []
+        skipped = 0
+        for entry in entries:
+            normalized = cls._sanitize_entry(entry)
+            if normalized is None:
+                skipped += 1
+                continue
+            cleaned.append(normalized)
+        return cleaned, skipped
+
+    def load(self, bot_hash, group_id):
+        try:
+            path = self.history_path(bot_hash, group_id)
+        except Exception as exc:
+            OlivOSAIChatAssassin.logger.warn(
+                f'HISTORY LOAD IGNORED [{self._key_ref(bot_hash, group_id)}] '
+                f'[{type(exc).__name__}]'
+            )
+            return []
+        with self._path_lock(path):
+            if not os.path.exists(path):
+                return None
+            try:
+                with open(path, 'r', encoding='utf-8') as file_obj:
+                    document = json.load(file_obj)
+                if not isinstance(document, dict):
+                    raise ValueError('history document is not an object')
+                if type(document.get('version')) is not int or document.get('version') != self.VERSION:
+                    raise ValueError('unsupported history version')
+                if str(document.get('bot_hash')) != str(bot_hash):
+                    raise ValueError('history bot mismatch')
+                if str(document.get('group_id')) != str(group_id):
+                    raise ValueError('history group mismatch')
+                raw_entries = document.get('entries')
+                if not isinstance(raw_entries, list):
+                    raise ValueError('history entries is not a list')
+            except Exception as exc:
+                OlivOSAIChatAssassin.logger.warn(
+                    f'HISTORY LOAD IGNORED [{self._key_ref(bot_hash, group_id)}] '
+                    f'[{type(exc).__name__}]'
+                )
+                return []
+
+        entries, skipped = self._sanitize_entries(raw_entries)
+        if skipped:
+            OlivOSAIChatAssassin.logger.warn(
+                f'HISTORY LOAD SKIPPED [{self._key_ref(bot_hash, group_id)}] [{skipped}]'
+            )
+        return entries
+
+    def save(self, bot_hash, group_id, entries) -> bool:
+        try:
+            path = self.history_path(bot_hash, group_id)
+            entries = list(entries)
+            clean_entries, skipped = self._sanitize_entries(entries)
+            document = {
+                'version': self.VERSION,
+                'bot_hash': str(bot_hash),
+                'group_id': str(group_id),
+                'saved_at': datetime.now().astimezone().replace(microsecond=0).isoformat(),
+                'entries': clean_entries,
+            }
+            with self._path_lock(path):
+                DataManager._write_json_atomic(path, document)
+            self.clear_pending(bot_hash, group_id)
+            if skipped:
+                OlivOSAIChatAssassin.logger.warn(
+                    f'HISTORY SAVE SKIPPED [{self._key_ref(bot_hash, group_id)}] [{skipped}]'
+                )
+            return True
+        except Exception as exc:
+            self.mark_pending(bot_hash, group_id)
+            OlivOSAIChatAssassin.logger.warn(
+                f'HISTORY SAVE FAILED [{self._key_ref(bot_hash, group_id)}] '
+                f'[{type(exc).__name__}]'
+            )
+            return False
+
+    def mark_pending(self, bot_hash, group_id):
+        with self._lock:
+            self._pending.add((str(bot_hash), str(group_id)))
+
+    def clear_pending(self, bot_hash, group_id):
+        with self._lock:
+            self._pending.discard((str(bot_hash), str(group_id)))
+
+    def pending_keys(self):
+        with self._lock:
+            return list(self._pending)
+
+    def flush_pending(self, history_map) -> int:
+        flushed = 0
+        for bot_hash, group_id in self.pending_keys():
+            history = history_map.get((bot_hash, group_id))
+            if history is None:
+                self.clear_pending(bot_hash, group_id)
+                continue
+            queue = getattr(history, 'queue', history)
+            if not isinstance(queue, list):
+                self.clear_pending(bot_hash, group_id)
+                continue
+            if self.save(bot_hash, group_id, list(queue)):
+                flushed += 1
+        return flushed
+
+
 def load_logger(Proc):
     OlivOSAIChatAssassin.data.gProc = Proc
 
 
 def load_init_after():
     OlivOSAIChatAssassin.data.gMessageHistory = {}
+    OlivOSAIChatAssassin.data.gHistoryStore = HistoryStore(
+        OlivOSAIChatAssassin.data.gHistoryDir
+    )
     OlivOSAIChatAssassin.data.gData = OlivOSAIChatAssassin.load.DataManager(
         config_dir=OlivOSAIChatAssassin.data.gConfigDir,
         memory_dir=OlivOSAIChatAssassin.data.gMemoryDir,
         default_config=OlivOSAIChatAssassin.data.configDefault
     )
+
+
+def flush_history() -> int:
+    store = OlivOSAIChatAssassin.data.gHistoryStore
+    if store is None:
+        return 0
+    try:
+        return store.flush_pending(OlivOSAIChatAssassin.data.gMessageHistory)
+    except Exception as exc:
+        OlivOSAIChatAssassin.logger.warn(
+            f'HISTORY FLUSH FAILED [{type(exc).__name__}]'
+        )
+        return 0
 
 
 def load_bot(bot_hash_list: str):

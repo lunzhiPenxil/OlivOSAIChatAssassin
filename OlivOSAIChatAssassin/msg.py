@@ -614,6 +614,50 @@ def _new_history(bot_hash: str):
     )
 
 
+def _persist_history(bot_hash, group_id, history=None) -> bool:
+    if bot_hash is None or group_id is None:
+        return False
+    store = getattr(OlivOSAIChatAssassin.data, 'gHistoryStore', None)
+    if store is None:
+        return False
+    if history is None:
+        history = _get_history(bot_hash, group_id)
+    queue = getattr(history, 'queue', history)
+    if not isinstance(queue, list):
+        return False
+    try:
+        return bool(store.save(bot_hash, group_id, list(queue)))
+    except Exception as exc:
+        OlivOSAIChatAssassin.logger.warn(
+            f'HISTORY PERSIST FAILED [{type(exc).__name__}]'
+        )
+        return False
+
+
+def _restore_history(bot_hash: str, group_id: str):
+    if bot_hash is None or group_id is None:
+        return None
+    store = getattr(OlivOSAIChatAssassin.data, 'gHistoryStore', None)
+    if store is None:
+        return None
+    try:
+        entries = store.load(bot_hash, group_id)
+    except Exception as exc:
+        OlivOSAIChatAssassin.logger.warn(
+            f'HISTORY RESTORE FAILED [{type(exc).__name__}]'
+        )
+        return None
+    if entries is None:
+        return None
+    history = _new_history(bot_hash)
+    max_grow = getattr(history, 'max_grow', None)
+    if isinstance(max_grow, int) and not isinstance(max_grow, bool):
+        entries = entries[-max_grow:] if max_grow > 0 else []
+    history.queue = list(entries)
+    OlivOSAIChatAssassin.data.gMessageHistory[_history_key(bot_hash, group_id)] = history
+    return history
+
+
 def _claim_legacy_history(bot_hash: str, group_id: str, legacy):
     key = _history_key(bot_hash, group_id)
     legacy_owner = None
@@ -642,7 +686,7 @@ def _get_history(bot_hash: str, group_id: str):
     legacy = OlivOSAIChatAssassin.data.gMessageHistory.get(group_id)
     if legacy is not None:
         return _claim_legacy_history(bot_hash, group_id, legacy)
-    return None
+    return _restore_history(bot_hash, group_id)
 
 
 def _ensure_history(bot_hash: str, group_id: str):
@@ -653,12 +697,15 @@ def _ensure_history(bot_hash: str, group_id: str):
     legacy = OlivOSAIChatAssassin.data.gMessageHistory.get(group_id)
     if legacy is not None:
         return _claim_legacy_history(bot_hash, group_id, legacy)
+    history = _restore_history(bot_hash, group_id)
+    if history is not None:
+        return history
     history = _new_history(bot_hash)
     OlivOSAIChatAssassin.data.gMessageHistory[key] = history
     return history
 
 
-def _discard_history_entry(history, entry):
+def _discard_history_entry(history, entry, bot_hash=None, group_id=None):
     """移除本轮刚追加的 assistant 条目，用于发送前被 power off 取消。"""
     if history is None or entry is None:
         return False
@@ -668,6 +715,7 @@ def _discard_history_entry(history, entry):
     for index in range(len(queue) - 1, -1, -1):
         if queue[index] is entry:
             del queue[index]
+            _persist_history(bot_hash, group_id, history)
             return True
     return False
 
@@ -1257,6 +1305,7 @@ def add_message_to_history(
     message_type: 'str|None' = None,
     target_id: 'str|None' = None,
     target_is_self: 'bool|None' = None,
+    persist: bool = True,
 ):
     history = _get_history(bot_hash, group_id)
     if history is None:
@@ -1304,6 +1353,8 @@ def add_message_to_history(
     if target_is_self is not None:
         msg_entry['target_is_self'] = bool(target_is_self)
     history.append(msg_entry)
+    if persist:
+        _persist_history(bot_hash, group_id, history)
     return msg_entry
 
 
@@ -2263,6 +2314,7 @@ def reply_to_group(
         role='assistant',
         replies=history_replies,
         reply_to=reply_to or None,
+        persist=False,
     )
     OlivOSAIChatAssassin.logger.log(f'REPLY - {reply_list}')
     activity.set_outgoing(activity_token, reply_list)
@@ -2287,7 +2339,12 @@ def reply_to_group(
 
     OlivOSAIChatAssassin.tools.sleep(1 + (random.random() * 2 - 1) * 0.95)
     if not OlivOSAIChatAssassin.manager.is_enabled(bot_hash, group_id):
-        _discard_history_entry(_get_history(bot_hash, group_id), assistant_entry)
+        _discard_history_entry(
+            _get_history(bot_hash, group_id),
+            assistant_entry,
+            bot_hash=bot_hash,
+            group_id=group_id,
+        )
         _stop_for_power_off(
             activity_token,
             'reply_before_send',
@@ -2308,6 +2365,7 @@ def reply_to_group(
             '文本发送失败',
             activity.TRACE_FAILED,
         )
+        _persist_history(bot_hash, group_id)
         if has_action:
             OlivOSAIChatAssassin.interaction.execute_action(
                 plugin_event,
@@ -2317,6 +2375,7 @@ def reply_to_group(
             )
         raise
 
+    _persist_history(bot_hash, group_id)
     if has_action:
         OlivOSAIChatAssassin.interaction.execute_action(
             plugin_event,

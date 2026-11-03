@@ -58,6 +58,7 @@ class Event:
 
     def save(plugin_event, Proc):
         # 插件卸载时执行的保存流程
+        OlivOSAIChatAssassin.load.flush_history()
         OlivOSAIChatAssassin.activity.clear_all()
         OlivOSAIChatAssassin.interaction.clear_all()
         OlivOSAIChatAssassin.eventInbox.clear_all()
