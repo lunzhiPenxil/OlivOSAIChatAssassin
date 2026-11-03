@@ -7,7 +7,7 @@ import OlivOSAIChatAssassin
 gProc: 'OlivOS.pluginAPI.shallow|None' = None
 gPluginName = '群聊刺客'
 gMessageHistory: 'dict[tuple[str, str], OlivOSAIChatAssassin.tools.DynamicQueue]' = {}
-gHistoryDir = './plugin/data/OlivOSAIChatAssassin/history'
+gHistoryDir = './plugin/data/OlivOSAIChatAssassin/History'
 gHistoryStore: 'OlivOSAIChatAssassin.load.HistoryStore|None' = None
 
 gData: 'OlivOSAIChatAssassin.load.DataManager|None' = None
