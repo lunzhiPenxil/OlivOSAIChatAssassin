@@ -93,15 +93,18 @@ def history_messages(history):
     return [entry['message'] for entry in history]
 
 
+# 历史目录名使用首字母大写的 History。
 def test_history_directory_uses_capitalized_name():
     assert data.gHistoryDir == './plugin/data/OlivOSAIChatAssassin/History'
 
 
+# 历史文件不存在时不会主动创建。
 def test_missing_history_file_is_not_created(history_env):
     assert history_env.load(BOT_HASH, GROUP_ID) is None
     assert not Path(history_env.history_dir).exists()
 
 
+# 历史读写往返会保留约定的字段。
 def test_history_round_trip_preserves_contract_fields(history_env):
     entries = [
         make_entry(1, message_id='message-1'),
@@ -135,6 +138,7 @@ def test_history_round_trip_preserves_contract_fields(history_env):
     assert 'unknown' not in loaded[2]
 
 
+# 缺少 role 的旧记录会推断为用户消息。
 @pytest.mark.parametrize(
     'entry, expected_role',
     (
@@ -150,6 +154,7 @@ def test_legacy_entry_without_role_is_inferred(history_env, entry, expected_role
     assert loaded[0]['role'] == expected_role
 
 
+# 无效历史文档会被忽略。
 @pytest.mark.parametrize(
     'payload',
     (
@@ -168,6 +173,7 @@ def test_invalid_history_documents_are_ignored(history_env, payload):
     assert history_env.load(BOT_HASH, GROUP_ID) == []
 
 
+# 延迟恢复时会裁剪到当前上下文窗口。
 def test_lazy_restore_trims_to_current_window(history_env, monkeypatch):
     monkeypatch.setattr(
         data,
@@ -193,6 +199,7 @@ def test_lazy_restore_trims_to_current_window(history_env, monkeypatch):
     assert history_messages(history) == ['消息6', '消息7']
 
 
+# 同群内不同 bot 的历史互相隔离。
 def test_lazy_restore_separates_bots_for_same_group(history_env):
     history_env.save('bot-a', GROUP_ID, [make_entry(1, message='A')])
     history_env.save('bot-b', GROUP_ID, [make_entry(2, message='B')])
@@ -205,6 +212,7 @@ def test_lazy_restore_separates_bots_for_same_group(history_env):
     assert history_messages(history_b) == ['B']
 
 
+# 记忆重置不会删除用户历史。
 def test_user_history_survives_memory_reset(history_env, monkeypatch):
     monkeypatch.setattr(
         data,
@@ -228,6 +236,7 @@ def test_user_history_survives_memory_reset(history_env, monkeypatch):
     assert history_messages(restored) == [f'消息{index}' for index in range(1, 7)]
 
 
+# assistant 消息只有显式提交后才会持久化。
 def test_assistant_is_only_persisted_after_explicit_commit(history_env):
     msg._ensure_history(BOT_HASH, GROUP_ID)
     msg.add_message_to_history(
@@ -257,6 +266,7 @@ def test_assistant_is_only_persisted_after_explicit_commit(history_env):
     ]
 
 
+# 丢弃 assistant 消息后会重写持久化历史。
 def test_discard_assistant_rewrites_persisted_history(history_env):
     history = msg._ensure_history(BOT_HASH, GROUP_ID)
     msg.add_message_to_history(
@@ -289,6 +299,7 @@ def test_discard_assistant_rewrites_persisted_history(history_env):
     assert [entry['role'] for entry in loaded] == ['user']
 
 
+# 写入失败时保留内存状态，并在刷新时重试。
 def test_write_failure_keeps_memory_and_flush_retries(history_env, monkeypatch):
     original_write = load.DataManager._write_json_atomic
     state = {'fail': True}
@@ -322,6 +333,7 @@ def test_write_failure_keeps_memory_and_flush_retries(history_env, monkeypatch):
     assert history_messages(history_env.load(BOT_HASH, GROUP_ID)) == ['仍应进入内存']
 
 
+# 恶意会话 ID 不会逃逸历史目录。
 def test_history_path_is_safe_for_hostile_ids(history_env):
     path = history_env.history_path('bot/../x', '../../群 : 1')
     base = os.path.abspath(history_env.history_dir)
@@ -330,6 +342,7 @@ def test_history_path_is_safe_for_hostile_ids(history_env):
     assert path.startswith(base + os.sep)
 
 
+# 并发保存仍会生成合法 JSON。
 def test_concurrent_saves_keep_valid_json(history_env):
     errors = []
 
@@ -352,6 +365,7 @@ def test_concurrent_saves_keep_valid_json(history_env):
     assert len(document['entries']) == 1
 
 
+# 主流程保存会先刷新历史再清理内存。
 def test_main_save_flushes_history_before_clearing(history_env, monkeypatch):
     calls = []
     monkeypatch.setattr(load, 'flush_history', lambda: calls.append('history'))
@@ -367,6 +381,7 @@ def test_main_save_flushes_history_before_clearing(history_env, monkeypatch):
     assert calls[1:] == ['activity', 'interaction', 'inbox', 'poke', 'guard']
 
 
+# 插件初始化时只初始化历史存储，不扫描已有历史。
 def test_load_init_after_initializes_store_without_scanning(tmp_path, monkeypatch):
     history_dir = tmp_path / 'history-store'
     monkeypatch.setattr(data, 'gHistoryDir', str(history_dir))

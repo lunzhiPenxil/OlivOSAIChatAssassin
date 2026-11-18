@@ -80,6 +80,7 @@ def opk_installation(tmp_path, monkeypatch):
         sys.modules.update(previous)
 
 
+# 真实 OPK 可以被加载，并提供单页 WebUI。
 def test_real_plugin_opk_loads_and_serves_single_webui_page(opk_installation):
     host, loader, package, packaged_files = opk_installation
     packaged_names = {relative for _, relative in packaged_files}
@@ -176,6 +177,7 @@ def test_real_plugin_opk_loads_and_serves_single_webui_page(opk_installation):
     ]
 
 
+# 真实 OPK 中的戳一戳复用共享历史与回复链路。
 def test_real_plugin_opk_routes_poke_through_shared_history_and_reply_path(
     opk_installation,
     tmp_path,

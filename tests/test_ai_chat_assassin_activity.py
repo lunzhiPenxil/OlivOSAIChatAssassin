@@ -24,6 +24,7 @@ def clear_activity():
     activity.clear_all()
 
 
+# 预览会移除消息桥标记、控制字符与换行，并限制长度。
 def test_activity_preview_removes_bridge_markup_and_control_characters():
     preview = activity.sanitize_preview('[OP:at,id=10001]\n你好\x00  世界 ' + '长' * 200)
     assert preview.startswith('你好 世界')
@@ -33,6 +34,7 @@ def test_activity_preview_removes_bridge_markup_and_control_characters():
     assert preview.endswith('…')
 
 
+# 新会话先进入排队状态，并暴露队列深度与消息预览。
 def test_activity_begin_exposes_a_queued_session():
     activity.begin('bot-a', '123', '群友', '今晚开黑吗')
     snapshot = activity.snapshot('bot-a')
@@ -47,6 +49,7 @@ def test_activity_begin_exposes_a_queued_session():
     assert session['message_preview'] == '今晚开黑吗'
 
 
+# 会话激活后，阶段和尝试次数更新会出现在快照中。
 def test_activity_activation_and_stage_updates_are_visible():
     token = activity.begin('bot-a', '123', '群友', '查一下资料')
     activity.activate(token)
@@ -59,6 +62,7 @@ def test_activity_activation_and_stage_updates_are_visible():
     assert session['stage_elapsed_ms'] >= 0
 
 
+# 轨迹保留不同步骤的结果，并受固定条数上限约束。
 def test_activity_trace_keeps_distinct_steps_and_applies_a_hard_limit():
     token = activity.begin('bot-a', '123', '群友', '轨迹')
     activity.activate(token)
@@ -78,6 +82,7 @@ def test_activity_trace_keeps_distinct_steps_and_applies_a_hard_limit():
     activity.finish(token)
 
 
+# 同一步骤复用一条记录，发送进度不会无限增长。
 def test_activity_trace_updates_same_step_and_outgoing_progress_is_bounded():
     token = activity.begin('bot-a', '123', '群友', '发送')
     activity.activate(token)
@@ -118,6 +123,7 @@ def test_activity_trace_updates_same_step_and_outgoing_progress_is_bounded():
     assert terminal['trace']
 
 
+# 记忆任务可与发送并行，并在终态交接时保留完成状态。
 def test_activity_memory_task_runs_alongside_sending_and_survives_terminal_handoff():
     token = activity.begin('bot-a', '123', '群友', '并行处理')
     activity.activate(token)
@@ -144,6 +150,7 @@ def test_activity_memory_task_runs_alongside_sending_and_survives_terminal_hando
     assert completed['memory_task']['elapsed_ms'] >= 0
 
 
+# 旧记忆任务的迟到完成不能修改同群的新会话。
 def test_activity_late_memory_completion_cannot_modify_a_new_session():
     old = activity.begin('bot-a', '123', '甲', '旧消息')
     activity.activate(old)
@@ -161,6 +168,7 @@ def test_activity_late_memory_completion_cannot_modify_a_new_session():
     activity.finish(current)
 
 
+# 新消息接管同群时，会清理上一条记忆任务状态。
 def test_activity_memory_task_is_cleared_when_the_next_message_takes_over():
     old = activity.begin('bot-a', '123', '甲', '当前消息')
     activity.activate(old)
@@ -176,6 +184,7 @@ def test_activity_memory_task_is_cleared_when_the_next_message_takes_over():
     activity.finish(queued)
 
 
+# 正常结束后保留短期终态快照供前端展示。
 @pytest.mark.parametrize(
     ('terminal_state', 'count_key', 'error_code'),
     (
@@ -204,6 +213,7 @@ def test_activity_terminal_finish_keeps_a_short_lived_snapshot(
     assert session['expires_in_ms'] > 0
 
 
+# 终态快照会在固定 TTL 后过期。
 @pytest.mark.parametrize(
     ('terminal_state', 'count_key', 'error_code'),
     (
@@ -245,6 +255,7 @@ def test_activity_terminal_snapshot_expires_after_fixed_ttl(
     assert expired[count_key] == 0
 
 
+# 同群消息会聚合队列深度并正确交接预览。
 def test_activity_same_group_aggregates_queue_depth_and_hands_off_preview():
     first = activity.begin('bot-a', '123', '甲', '第一条')
     activity.activate(first)
@@ -264,6 +275,7 @@ def test_activity_same_group_aggregates_queue_depth_and_hands_off_preview():
     assert queued['queue_depth'] == 1
 
 
+# 被新消息取代的完成不会保留终态快照。
 def test_activity_superseded_finish_does_not_keep_terminal_snapshot():
     token = activity.begin('bot-a', '123', '群友', '退避中的消息')
     activity.activate(token)
@@ -275,6 +287,7 @@ def test_activity_superseded_finish_does_not_keep_terminal_snapshot():
     assert snapshot['superseded_count'] == 0
 
 
+# 被取代的会话完成时，下一条消息仍保持排队。
 def test_activity_superseded_finish_keeps_next_message_queued():
     old = activity.begin('bot-a', '123', '甲', '退避中的消息')
     activity.activate(old)
@@ -292,6 +305,7 @@ def test_activity_superseded_finish_keeps_next_message_queued():
     activity.finish(new)
 
 
+# 新消息会立即替换同群的终态卡片。
 @pytest.mark.parametrize(
     ('terminal_state', 'count_key'),
     (
@@ -321,6 +335,7 @@ def test_activity_new_message_replaces_terminal_card_immediately(terminal_state,
     activity.finish(queued)
 
 
+# 完成结果会保留，且多个 bot 的活动数据互相隔离。
 def test_activity_finish_keeps_completed_result_and_keeps_multi_bot_isolated():
     first = activity.begin('bot-a', '123', '甲', '同一群')
     second = activity.begin('bot-b', '123', '乙', '同一群')
@@ -338,6 +353,7 @@ def test_activity_finish_keeps_completed_result_and_keeps_multi_bot_isolated():
     assert second_snapshot['completed_count'] == 0
 
 
+# 失败结束会保留短期失败快照。
 def test_activity_failed_finish_keeps_a_short_lived_failure_snapshot():
     token = activity.begin('bot-a', '123', '群友', '失败消息')
     activity.activate(token)
@@ -355,6 +371,7 @@ def test_activity_failed_finish_keeps_a_short_lived_failure_snapshot():
     assert 0 < session['expires_in_ms'] <= activity.ACTIVITY_TERMINAL_TTL_MS
 
 
+# 旧 token 不能更新或删除新会话。
 def test_activity_old_token_cannot_update_or_remove_new_session():
     old = activity.begin('bot-a', '123', '甲', '旧消息')
     activity.activate(old)
@@ -370,6 +387,7 @@ def test_activity_old_token_cannot_update_or_remove_new_session():
     activity.finish(current)
 
 
+# 快照返回脱离对象，并按运行中会话优先排序。
 def test_activity_snapshot_returns_detached_data_and_orders_running_first():
     queued = activity.begin('bot-a', 'queued-group', '甲', '排队')
     running = activity.begin('bot-a', 'running-group', '乙', '运行')
@@ -384,6 +402,7 @@ def test_activity_snapshot_returns_detached_data_and_orders_running_first():
     activity.finish(queued)
 
 
+# 快照数量受限时会报告被省略的会话数。
 def test_activity_snapshot_limit_reports_omitted_sessions():
     tokens = [
         activity.begin('bot-a', str(index), '群友', '消息')
@@ -397,6 +416,7 @@ def test_activity_snapshot_limit_reports_omitted_sessions():
         activity.finish(token)
 
 
+# 活动注册表异常按 best-effort 处理，不影响主流程。
 def test_activity_registry_failure_is_best_effort(monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError('activity unavailable')

@@ -124,6 +124,7 @@ def api_payload(**values):
     return payload
 
 
+# app.json 只注册单文件 WebUI 页面，且页面资源自包含。
 def test_webui_manifest_registers_single_file_page():
     manifest_path = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'app.json'
     raw_manifest = manifest_path.read_bytes()
@@ -151,6 +152,7 @@ def test_webui_manifest_registers_single_file_page():
     assert './assets/' not in html
 
 
+# 活动接口只返回所选 bot 的快照，不读取记忆。
 def test_webui_activity_endpoint_returns_only_selected_bot_memory_snapshot(plugin_api, monkeypatch):
     activity = OlivOSAIChatAssassin.activity
     activity.clear_all()
@@ -262,6 +264,7 @@ def test_webui_activity_endpoint_returns_only_selected_bot_memory_snapshot(plugi
         activity.clear_all()
 
 
+# 概览前端只轮询可见区域，并保留已有内容。
 def test_webui_activity_frontend_polls_only_visible_overview_and_preserves_content():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -345,6 +348,7 @@ def test_webui_activity_frontend_polls_only_visible_overview_and_preserves_conte
     assert 'OlivOSAIChatAssassin_WebUI_GetActivity' in html
 
 
+# 活动卡紧凑展示轨迹与发送进度。
 def test_webui_activity_frontend_renders_trace_and_outgoing_progress_compactly():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -384,6 +388,7 @@ def test_webui_activity_frontend_renders_trace_and_outgoing_progress_compactly()
     assert 'innerHTML' not in html
 
 
+# 设置页暴露 API 超时字段。
 def test_webui_settings_exposes_api_timeout_field():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -394,6 +399,7 @@ def test_webui_settings_exposes_api_timeout_field():
     assert 'max=' not in timeout_input.group(0)
 
 
+# 设置页暴露上下文预算与知识 top_k。
 def test_webui_settings_exposes_context_budget_and_knowledge_top_k():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -409,6 +415,7 @@ def test_webui_settings_exposes_context_budget_and_knowledge_top_k():
     assert "api_timeout: function () { return readNumber('apiTimeout'); }," in html
 
 
+# 思考开关位于思考强度之前。
 def test_webui_settings_places_thinking_toggle_before_reasoning_effort():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -416,6 +423,7 @@ def test_webui_settings_places_thinking_toggle_before_reasoning_effort():
     assert html.index('id="thinkingEnabled"') < html.index('id="reasoningEffort"')
 
 
+# 设置页暴露互动相关开关。
 def test_webui_settings_exposes_interaction_controls():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -451,6 +459,7 @@ def test_webui_settings_exposes_interaction_controls():
     assert "interaction: '互动动作'," in html
 
 
+# 字符串列表使用标签编辑器。
 def test_webui_settings_uses_tag_editors_for_string_lists():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -474,6 +483,7 @@ def test_webui_settings_uses_tag_editors_for_string_lists():
     assert "textContent = '尚未添加';" in html
 
 
+# 选项值与后端目录一致。
 def test_webui_choice_options_match_backend_catalog():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -491,6 +501,7 @@ def test_webui_choice_options_match_backend_catalog():
     ]
 
 
+# 设置页提供额外配置字段编辑器。
 def test_webui_settings_exposes_extra_config_field_editor():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -508,6 +519,7 @@ def test_webui_settings_exposes_extra_config_field_editor():
     assert 'remove_fields: requestData.remove_fields' in html
 
 
+# 关于页包含宣言，并移除旧提示。
 def test_webui_about_panel_contains_manifesto_without_old_notices():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -558,6 +570,7 @@ def test_webui_about_panel_contains_manifesto_without_old_notices():
         assert removed not in about
 
 
+# 插件清单在首次请求前预缓存。
 def test_webui_manifest_is_cached_before_first_request(plugin_api, tmp_path, monkeypatch):
     manifest = json.loads((PLUGIN_ROOT / 'app.json').read_text(encoding='utf-8'))
     assert OlivOSAIChatAssassin.webUI._manifest_cache is not None
@@ -572,6 +585,7 @@ def test_webui_manifest_is_cached_before_first_request(plugin_api, tmp_path, mon
     assert response['data']['plugin']['compatible_svn'] == manifest['compatible_svn']
 
 
+# OPK 资源可从导入缓存恢复。
 def test_webui_opk_assets_are_restored_from_import_cache(tmp_path):
     cache = OlivOSAIChatAssassin.webUI._webui_asset_cache
     assert set(cache) == {'webui/index.html'}
@@ -592,6 +606,7 @@ def test_webui_opk_assets_are_restored_from_import_cache(tmp_path):
     assert OlivOSAIChatAssassin.webUI.restore_webui_assets(proc) is False
 
 
+# 前端遵守插件 iframe 沙盒契约。
 def test_webui_frontend_stays_inside_sandbox_contract():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -606,6 +621,7 @@ def test_webui_frontend_stays_inside_sandbox_contract():
     assert 'id="configWarnings"' in html
 
 
+# 下拉框使用跟随主题的自定义列表。
 def test_webui_selects_use_theme_aware_custom_listboxes():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -675,6 +691,7 @@ def test_webui_selects_use_theme_aware_custom_listboxes():
     assert html.count('--popover:') == 2
 
 
+# 编辑器和记忆区域展开显示，不出现内部滚动。
 def test_webui_editor_and_memory_boxes_expand_instead_of_scrolling():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -688,6 +705,7 @@ def test_webui_editor_and_memory_boxes_expand_instead_of_scrolling():
     assert not re.search(r'\.memory-detail pre\s*\{[^}]*overflow:\s*auto', html)
 
 
+# 概览使用图片缓存计数，并移除生效提示。
 def test_webui_overview_uses_image_cache_count_without_activation_notice():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -706,6 +724,7 @@ def test_webui_overview_uses_image_cache_count_without_activation_notice():
     assert 'elements.overviewRevision.textContent = configRevisionTimeText(state.revision);' in html
 
 
+# 设置项不定义上限。
 def test_webui_settings_do_not_define_upper_limits():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -717,6 +736,7 @@ def test_webui_settings_do_not_define_upper_limits():
     assert not re.search(r'\bmaxlength\s*=', settings)
 
 
+# 群记忆从统一记忆分类进入。
 def test_webui_group_memory_is_browsed_from_unified_memory_categories():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -760,6 +780,7 @@ def test_webui_group_memory_is_browsed_from_unified_memory_categories():
     assert "next.textContent = '下一页'" in html
 
 
+# 人物关系视图渲染结构化人物条目。
 def test_webui_relationship_view_renders_structured_people_entries():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -796,6 +817,7 @@ def test_webui_relationship_view_renders_structured_people_entries():
         assert marker in html
 
 
+# 所有记忆分页器在空页和单页时仍显示。
 def test_webui_all_memory_list_pagers_are_visible_for_empty_and_single_page_views():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -824,6 +846,7 @@ def test_webui_all_memory_list_pagers_are_visible_for_empty_and_single_page_view
     ) == 2
 
 
+# 记忆刷新保留已有内容，并显示有界加载状态。
 def test_webui_memory_reload_keeps_content_and_shows_bounded_loading_state():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -867,6 +890,7 @@ def test_webui_memory_reload_keeps_content_and_shows_bounded_loading_state():
     assert '}, {timeout: 30000});' not in html
 
 
+# 加载与删除控件不会顶开相邻按钮。
 def test_webui_memory_loading_and_delete_controls_do_not_shift_adjacent_buttons():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -900,6 +924,7 @@ def test_webui_memory_loading_and_delete_controls_do_not_shift_adjacent_buttons(
     assert "row.classList.add('editable');" in html
 
 
+# 记忆条目类型标签随悬停或选中显示。
 def test_webui_memory_entry_kind_labels_follow_hover_and_selection_state():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -919,6 +944,7 @@ def test_webui_memory_entry_kind_labels_follow_hover_and_selection_state():
     assert 'owner.classList.add(\'selected\');' in html
 
 
+# 窄屏操作按钮覆盖文本，并带渐变遮罩。
 def test_webui_narrow_memory_actions_overlay_text_with_gradient_scrim():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -950,6 +976,7 @@ def test_webui_narrow_memory_actions_overlay_text_with_gradient_scrim():
     assert html.count("row.classList.add('actionable');") == 2
 
 
+# 移动端使用安全触控尺寸与底部面板。
 def test_webui_mobile_layout_uses_safe_touch_targets_and_bottom_sheet():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -1111,6 +1138,7 @@ def test_webui_mobile_layout_uses_safe_touch_targets_and_bottom_sheet():
     assert html.count("actions.className = 'memory-entry-actions';") == 2
 
 
+# 记忆编辑器使用模态框和版本化保存。
 def test_webui_memory_editors_use_modal_and_revisioned_save_api():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -1209,6 +1237,7 @@ def test_webui_memory_editors_use_modal_and_revisioned_save_api():
     assert '保存本页' not in html
 
 
+# 图片编辑中的缩略图打开原图预览且不保存。
 def test_webui_image_editor_thumbnail_opens_non_saving_original_viewer():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -1220,6 +1249,7 @@ def test_webui_image_editor_thumbnail_opens_non_saving_original_viewer():
     assert 'if (!context || context.fromEditor || !context.entry' in html
 
 
+# 记忆增删不会给图片缓存增加新条目。
 def test_webui_memory_create_delete_does_not_grant_image_cache_new_entries():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -1238,6 +1268,7 @@ def test_webui_memory_create_delete_does_not_grant_image_cache_new_entries():
     assert "action: 'create'" not in image_function.group(0)
 
 
+# 启动数据会脱敏 bot 密钥。
 def test_webui_bootstrap_redacts_bot_secrets(plugin_api):
     response = call_bridge(plugin_api, OlivOSAIChatAssassin.webUI.EVENT_BOOTSTRAP, api_payload())
     assert response['ok'] is True
@@ -1251,6 +1282,7 @@ def test_webui_bootstrap_redacts_bot_secrets(plugin_api):
     assert 'private-session' not in serialized
 
 
+# WebUI 菜单桥只回复发起请求的会话。
 def test_webui_real_menu_bridge_replies_only_to_requesting_session(plugin_api, bridge_host):
     session = bridge_host.new_session()
     other_session = bridge_host.new_session()
@@ -1285,24 +1317,28 @@ def test_webui_real_menu_bridge_replies_only_to_requesting_session(plugin_api, b
     assert bridge_host.snapshot('events', session=other_session) == []
 
 
+# 原生菜单事件不由 WebUI 处理。
 def test_webui_native_menu_is_not_handled(plugin_api):
     event = FakeEvent('OlivOSAIChatAssassin_Menu', webui=False)
     assert OlivOSAIChatAssassin.webUI.handle_menu(event, plugin_api.proc) is False
     assert event.sent == []
 
 
+# 无效 request_id 不回复。
 def test_webui_invalid_request_id_is_not_replied(plugin_api):
     event = FakeEvent(OlivOSAIChatAssassin.webUI.EVENT_BOOTSTRAP, api_payload(), request_id='')
     assert OlivOSAIChatAssassin.webUI.handle_menu(event, plugin_api.proc) is False
     assert event.sent == []
 
 
+# 未知事件返回错误。
 def test_webui_unknown_event_returns_error(plugin_api):
     response = call_bridge(plugin_api, 'OlivOSAIChatAssassin_WebUI_Unknown', api_payload())
     assert response['ok'] is False
     assert response['error']['code'] == 'unknown_event'
 
 
+# 超大请求载荷会被拒绝。
 def test_webui_rejects_oversized_payload(plugin_api):
     response = call_bridge(
         plugin_api,
@@ -1314,6 +1350,7 @@ def test_webui_rejects_oversized_payload(plugin_api):
     assert 'payload' in response['error']['fields']
 
 
+# 配置读取会脱敏密钥并保留未知字段。
 def test_webui_config_read_redacts_keys_and_keeps_unknown_fields(plugin_api):
     config = plugin_api.manager.getConfig(BOT_HASH)
     config['api_key'] = 'main-secret'
@@ -1337,6 +1374,7 @@ def test_webui_config_read_redacts_keys_and_keeps_unknown_fields(plugin_api):
     assert response['revision']
 
 
+# 配置读取会报告额外字段类型。
 def test_webui_config_read_reports_extra_field_types(plugin_api):
     config = plugin_api.manager.getConfig(BOT_HASH)
     config['future_text'] = 'value'
@@ -1369,6 +1407,7 @@ def test_webui_config_read_reports_extra_field_types(plugin_api):
     assert 'future_text' not in response['data']['known_fields']
 
 
+# 配置读取会警告畸形嵌套结构。
 def test_webui_config_read_warns_about_malformed_nested_structures(plugin_api):
     config = plugin_api.manager.getConfig(BOT_HASH)
     config['thinking'] = 'invalid'
@@ -1396,6 +1435,7 @@ def test_webui_config_read_warns_about_malformed_nested_structures(plugin_api):
     assert 'power_default_mode' in warnings
 
 
+# 配置读取会警告缺少 power 默认模式。
 def test_webui_config_warns_when_power_default_mode_is_missing():
     warnings = '\n'.join(OlivOSAIChatAssassin.webUI._config_warnings({}))
 
@@ -1403,6 +1443,7 @@ def test_webui_config_warns_when_power_default_mode_is_missing():
     assert '运行期暂按 on 处理' in warnings
 
 
+# 配置保存合并补丁并保留密钥。
 def test_webui_config_save_merges_patch_and_preserves_secrets(plugin_api):
     config = plugin_api.manager.getConfig(BOT_HASH)
     config['api_key'] = 'main-secret'
@@ -1440,6 +1481,7 @@ def test_webui_config_save_merges_patch_and_preserves_secrets(plugin_api):
     assert saved['future_field'] == ['keep']
 
 
+# 保存互动设置会清除 bot 冷却。
 def test_webui_config_save_persists_interaction_settings_and_clears_bot_cooldown(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1483,6 +1525,7 @@ def test_webui_config_save_persists_interaction_settings_and_clears_bot_cooldown
         state.gInteractionFailureUntil.clear()
 
 
+# 配置保存可更新和移除额外字段。
 def test_webui_config_save_updates_and_removes_extra_fields(plugin_api):
     config = plugin_api.manager.getConfig(BOT_HASH)
     config['legacy_field'] = {'remove': True}
@@ -1528,6 +1571,7 @@ def test_webui_config_save_updates_and_removes_extra_fields(plugin_api):
     assert response_types['future_null'] == 'null'
 
 
+# 配置保存可替换额外对象值。
 def test_webui_config_save_replaces_extra_object_value(plugin_api):
     config = plugin_api.manager.getConfig(BOT_HASH)
     config['future_object'] = {'keep': True, 'remove': True}
@@ -1552,6 +1596,7 @@ def test_webui_config_save_replaces_extra_object_value(plugin_api):
     assert saved['future_object'] == {'keep': False}
 
 
+# 配置保存拒绝移除已知字段。
 def test_webui_config_save_rejects_removing_known_field(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1575,6 +1620,7 @@ def test_webui_config_save_rejects_removing_known_field(plugin_api):
     assert 'remove_fields.0' in response['error']['fields']
 
 
+# 配置保存拒绝非有限数值的额外字段。
 def test_webui_config_save_rejects_non_finite_extra_values(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1597,6 +1643,7 @@ def test_webui_config_save_rejects_non_finite_extra_values(plugin_api):
     assert 'future_number' in response['error']['fields']
 
 
+# 保存结果对新的数据管理器可见。
 def test_webui_config_save_is_visible_to_fresh_data_manager(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1626,6 +1673,7 @@ def test_webui_config_save_is_visible_to_fresh_data_manager(plugin_api):
     assert persisted['api_timeout'] == 60
 
 
+# 配置保存拒绝过期版本。
 def test_webui_config_save_rejects_stale_revision(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1652,6 +1700,7 @@ def test_webui_config_save_rejects_stale_revision(plugin_api):
     assert plugin_api.manager.snapshot_config(BOT_HASH)[0]['temperature'] == 0.5
 
 
+# 配置保存拒绝外部文件变更。
 def test_webui_config_save_rejects_external_file_change(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1702,6 +1751,7 @@ def test_webui_config_save_rejects_external_file_change(plugin_api):
     assert persisted['external_field'] == {'preserve': True}
 
 
+# 配置保存会按字段校验非法值。
 @pytest.mark.parametrize(
     'patch, field',
     [
@@ -1747,6 +1797,7 @@ def test_webui_config_save_validates_fields(plugin_api, patch, field):
     assert field in response['error']['fields']
 
 
+# 配置保存接受无上限的数值。
 def test_webui_config_save_accepts_values_without_upper_limits(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1808,6 +1859,7 @@ def test_webui_config_save_accepts_values_without_upper_limits(plugin_api):
             assert saved[field] == value
 
 
+# 配置保存拒绝非有限数字。
 @pytest.mark.parametrize('value', [float('nan'), float('inf'), float('-inf')])
 def test_webui_config_save_rejects_non_finite_numbers(plugin_api, value):
     current = call_bridge(
@@ -1829,6 +1881,7 @@ def test_webui_config_save_rejects_non_finite_numbers(plugin_api, value):
     assert 'temperature' in response['error']['fields']
 
 
+# 配置保存可以清除密钥。
 def test_webui_config_save_can_clear_secrets(plugin_api):
     config = plugin_api.manager.getConfig(BOT_HASH)
     config['api_key'] = 'main-secret'
@@ -1855,6 +1908,7 @@ def test_webui_config_save_can_clear_secrets(plugin_api):
     assert response['data']['secrets']['api_key']['configured'] is False
 
 
+# 配置保存拒绝嵌套密钥的设置与清除。
 def test_webui_config_save_rejects_nested_secret_set_and_clear(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -1876,6 +1930,7 @@ def test_webui_config_save_rejects_nested_secret_set_and_clear(plugin_api):
     assert 'clear_secrets.0' in response['error']['fields']
 
 
+# 磁盘写入失败时保留记忆。
 def test_webui_config_save_keeps_memory_when_disk_write_fails(plugin_api, monkeypatch):
     current = call_bridge(
         plugin_api,
@@ -1906,6 +1961,7 @@ def test_webui_config_save_keeps_memory_when_disk_write_fails(plugin_api, monkey
     assert list(config_path.parent.glob(config_path.name + '.tmp-*')) == []
 
 
+# 记忆总览支持分页。
 def test_webui_memory_overview_and_pagination(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -1984,6 +2040,7 @@ def test_webui_memory_overview_and_pagination(plugin_api):
     assert group['data']['can_delete'] is True
 
 
+# 特殊记忆区缺失时显示为空。
 @pytest.mark.parametrize(
     'section',
     ('用户侧写', '人物关系', '知识缓存', '知识搜索', '图片缓存'),
@@ -2010,6 +2067,7 @@ def test_webui_missing_special_memory_section_is_empty(plugin_api, image_cache_d
         assert response['data']['relationship'] is True
 
 
+# 其它记忆区缺失时返回未找到。
 def test_webui_missing_other_memory_section_is_not_found(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2025,6 +2083,7 @@ def test_webui_missing_other_memory_section_is_not_found(plugin_api):
     assert response['error']['code'] == 'not_found'
 
 
+# 记忆总览保留全局区的文件内顺序。
 def test_webui_memory_overview_preserves_global_section_file_order(plugin_api):
     section_order = ['常识', '图片缓存', '用户侧写', '知识缓存', '人物关系']
     with OlivOSAIChatAssassin.data.gMemoryLock:
@@ -2045,6 +2104,7 @@ def test_webui_memory_overview_preserves_global_section_file_order(plugin_api):
     assert [section['name'] for section in overview['data']['global_sections']] == section_order
 
 
+# 记忆总览中的群按最新优先排序。
 def test_webui_memory_overview_lists_groups_newest_first(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2064,6 +2124,7 @@ def test_webui_memory_overview_lists_groups_newest_first(plugin_api):
     ]
 
 
+# 群记忆索引按最新优先分页。
 def test_webui_group_memory_index_paginates_newest_first(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2112,6 +2173,7 @@ def test_webui_group_memory_index_paginates_newest_first(plugin_api):
     ]
 
 
+# 群记忆可编辑并保存。
 def test_webui_group_memory_can_be_edited_and_saved(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2144,6 +2206,7 @@ def test_webui_group_memory_can_be_edited_and_saved(plugin_api):
     assert disk['123456'] == '编辑后的摘要'
 
 
+# 群记忆详情报告管理器状态。
 def test_webui_group_memory_detail_reports_manager_state(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2167,6 +2230,7 @@ def test_webui_group_memory_detail_reports_manager_state(plugin_api):
     }
 
 
+# 群管理开关需要控制开启，并写入覆盖记录。
 def test_webui_group_manager_switch_requires_control_and_writes_override(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2215,6 +2279,7 @@ def test_webui_group_manager_switch_requires_control_and_writes_override(plugin_
     assert override_document['bots'][BOT_HASH]['123456'] == 'off'
 
 
+# 群管理开关拒绝未知群。
 def test_webui_group_manager_switch_rejects_unknown_group(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -2241,6 +2306,7 @@ def test_webui_group_manager_switch_rejects_unknown_group(plugin_api):
     assert response['error']['code'] == 'not_found'
 
 
+# 群管理页面渲染触控友好的开关。
 def test_webui_group_manager_page_renders_touch_friendly_switch():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -2258,6 +2324,7 @@ def test_webui_group_manager_page_renders_touch_friendly_switch():
     assert 'min-height: 48px;\n        padding-top: 0;' in html
 
 
+# 群记忆支持新增和删除。
 def test_webui_group_memory_can_be_created_and_deleted(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2323,6 +2390,7 @@ def test_webui_group_memory_can_be_created_and_deleted(plugin_api):
     assert disk['existing-group'] == '保留的群摘要'
 
 
+# 字典类记忆支持新增和删除。
 @pytest.mark.parametrize(
     ('section', 'key', 'value'),
     (
@@ -2396,6 +2464,7 @@ def test_webui_dict_memory_entries_can_be_created_and_deleted(plugin_api, sectio
     assert revision == deleted['revision']
 
 
+# 仅文本记忆拒绝非文本创建。
 @pytest.mark.parametrize(
     ('scope', 'section', 'value'),
     (
@@ -2438,6 +2507,7 @@ def test_webui_text_only_memory_creation_rejects_non_text(plugin_api, scope, sec
     assert revision_after == revision
 
 
+# 记忆增删拒绝受限和重复条目。
 def test_webui_memory_create_delete_rejects_restricted_and_duplicate_entries(plugin_api, image_cache_dir):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2527,6 +2597,7 @@ def test_webui_memory_create_delete_rejects_restricted_and_duplicate_entries(plu
     assert revision_after == revision
 
 
+# 记忆创建拒绝过期版本。
 def test_webui_memory_create_rejects_stale_revision(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2561,6 +2632,7 @@ def test_webui_memory_create_rejects_stale_revision(plugin_api):
     assert memory['race-group'] == 'AI 并发写入'
 
 
+# 全局记忆条目可编辑并保存。
 def test_webui_global_memory_entries_can_be_edited_and_saved(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2599,6 +2671,7 @@ def test_webui_global_memory_entries_can_be_edited_and_saved(plugin_api):
     assert revision == response['revision']
 
 
+# 知识搜索按字典结构编辑。
 def test_webui_knowledge_search_is_dictionary_with_editable_entries(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2669,6 +2742,7 @@ def test_webui_knowledge_search_is_dictionary_with_editable_entries(plugin_api):
     assert disk['全局']['知识搜索'] == {'保留问题': '保留答案'}
 
 
+# 知识搜索拒绝非字典结构。
 def test_webui_knowledge_search_rejects_non_dictionary_structure(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2708,6 +2782,7 @@ def test_webui_knowledge_search_rejects_non_dictionary_structure(plugin_api):
     assert revision == current['revision']
 
 
+# 其它全局记忆区只读展示。
 def test_webui_other_global_memory_sections_are_rendered_read_only(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         global_memory = plugin_api.manager.getMemory(BOT_HASH).setdefault('全局', {})
@@ -2738,6 +2813,7 @@ def test_webui_other_global_memory_sections_are_rendered_read_only(plugin_api):
     assert dict_page['entries'][0]['editable'] is False
 
 
+# 其它全局记忆区拒绝写入。
 @pytest.mark.parametrize(
     ('section', 'change'),
     (
@@ -2770,6 +2846,7 @@ def test_webui_other_global_memory_sections_reject_writes(plugin_api, section, c
     assert memory_after == memory_before
 
 
+# 结构化群记忆往返后类型不变。
 def test_webui_structured_group_memory_round_trips_without_type_change(plugin_api):
     original = {'summary': '旧摘要', 'tags': ['旧标签']}
     with OlivOSAIChatAssassin.data.gMemoryLock:
@@ -2801,6 +2878,7 @@ def test_webui_structured_group_memory_round_trips_without_type_change(plugin_ap
     assert revision == response['revision']
 
 
+# 记忆保存拒绝过期版本。
 def test_webui_memory_save_rejects_stale_revision(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         plugin_api.manager.getMemory(BOT_HASH)['123456'] = '初版'
@@ -2830,6 +2908,7 @@ def test_webui_memory_save_rejects_stale_revision(plugin_api):
     assert plugin_api.manager.snapshot_memory(BOT_HASH)[0]['123456'] == 'AI 刚刚写入的新版本'
 
 
+# 记忆保存拒绝非法图片字段和未知条目。
 def test_webui_memory_save_rejects_invalid_image_fields_and_unknown_entries(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -2879,6 +2958,7 @@ def test_webui_memory_save_rejects_invalid_image_fields_and_unknown_entries(plug
     }
 
 
+# 记忆保存磁盘失败时保留内存。
 def test_webui_memory_save_keeps_memory_when_disk_write_fails(plugin_api, monkeypatch):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         plugin_api.manager.getMemory(BOT_HASH)['123456'] = '磁盘旧值'
@@ -2909,6 +2989,7 @@ def test_webui_memory_save_keeps_memory_when_disk_write_fails(plugin_api, monkey
     assert list(path.parent.glob(path.name + '.tmp-*')) == []
 
 
+# 图片缓存返回字段和文件状态。
 def test_webui_memory_image_cache_returns_fields_and_file_statuses(plugin_api, image_cache_dir):
     present_path = image_cache_dir / 'present.png'
     write_test_png(present_path)
@@ -2986,6 +3067,7 @@ def test_webui_memory_image_cache_returns_fields_and_file_statuses(plugin_api, i
     assert 'LEGACY-PROVIDER-MARKER' not in serialized
 
 
+# 图片目录索引在 TTL 内复用扫描结果。
 def test_webui_image_cache_directory_index_reuses_scan_until_ttl_expires(image_cache_dir, monkeypatch):
     write_test_png(image_cache_dir / 'photo.png')
     webui_api = OlivOSAIChatAssassin.webUI
@@ -3011,6 +3093,7 @@ def test_webui_image_cache_directory_index_reuses_scan_until_ttl_expires(image_c
     assert refreshed is not first
 
 
+# 目录变化后图片索引会刷新。
 def test_webui_image_cache_directory_index_refreshes_after_directory_changes(image_cache_dir):
     webui_api = OlivOSAIChatAssassin.webUI
     write_test_png(image_cache_dir / 'first.png')
@@ -3033,6 +3116,7 @@ def test_webui_image_cache_directory_index_refreshes_after_directory_changes(ima
     assert webui_api._image_cache_name_key('added.png') in removed
 
 
+# 图片列表不会逐个解析缺失文件。
 def test_webui_image_cache_list_does_not_resolve_each_missing_file(plugin_api, image_cache_dir, monkeypatch):
     webui_api = OlivOSAIChatAssassin.webUI
     with OlivOSAIChatAssassin.data.gMemoryLock:
@@ -3067,6 +3151,7 @@ def test_webui_image_cache_list_does_not_resolve_each_missing_file(plugin_api, i
     assert resolved == []
 
 
+# 图片列表支持文件名和方向排序。
 def test_webui_memory_image_list_supports_file_name_and_direction_sorting(plugin_api, image_cache_dir):
     def fields(content):
         return {'content': content, 'intent': 'test', 'type': 'image'}
@@ -3112,6 +3197,7 @@ def test_webui_memory_image_list_supports_file_name_and_direction_sorting(plugin
     assert [entry['key'] for entry in ascending_file_order['entries']] == ['zeta.png', 'Alpha.png', 'beta.png']
 
 
+# 图片搜索按字段匹配并优先缓存命中。
 def test_webui_memory_image_list_searches_fields_and_prioritizes_cache_hits(plugin_api, image_cache_dir):
     write_test_png(image_cache_dir / 'hit-a.png')
     write_test_png(image_cache_dir / 'Hit-B.PNG')
@@ -3187,6 +3273,7 @@ def test_webui_memory_image_list_searches_fields_and_prioritizes_cache_hits(plug
     ]
 
 
+# 图片列表按类型关键词和其它过滤。
 def test_webui_memory_image_list_filters_type_keywords_and_other(plugin_api, image_cache_dir):
     def fields(type_name):
         return {'content': '', 'intent': '', 'type': type_name}
@@ -3263,6 +3350,7 @@ def test_webui_memory_image_list_filters_type_keywords_and_other(plugin_api, ima
     assert [entry['key'] for entry in combined_with_search['entries']] == ['shot.png']
 
 
+# 图片列表在搜索过滤后分页。
 def test_webui_memory_image_list_paginates_after_search_filtering(plugin_api, image_cache_dir):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -3313,6 +3401,7 @@ def test_webui_memory_image_list_paginates_after_search_filtering(plugin_api, im
     assert [entry['key'] for entry in second['data']['entries']] == ['z.png']
 
 
+# 字典记忆列表支持文件顺序与搜索。
 def test_webui_memory_dict_list_supports_file_order_and_search(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -3353,6 +3442,7 @@ def test_webui_memory_dict_list_supports_file_order_and_search(plugin_api):
     assert [entry['key'] for entry in searched['entries']] == ['Alpha']
 
 
+# 人物关系覆盖支持的值形态。
 def test_webui_person_relationship_view_covers_supported_shapes(plugin_api):
     relationships = {
         'single-id': ['花卷', '关系描述'],
@@ -3426,6 +3516,7 @@ def test_webui_person_relationship_view_covers_supported_shapes(plugin_api):
     ]
 
 
+# 人物关系名称排序使用别名。
 def test_webui_person_relationship_name_sort_uses_alias_names(plugin_api):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -3457,6 +3548,7 @@ def test_webui_person_relationship_name_sort_uses_alias_names(plugin_api):
     ]
 
 
+# 图片列表拒绝非法查询选项。
 @pytest.mark.parametrize(
     'options',
     [
@@ -3491,6 +3583,7 @@ def test_webui_memory_image_list_rejects_invalid_query_options(plugin_api, optio
     assert response['error']['code'] == 'validation_error'
 
 
+# 图片接口生成缩略图和原图。
 def test_webui_memory_image_endpoint_generates_thumbnail_and_original(plugin_api, image_cache_dir):
     image_path = image_cache_dir / 'photo.png'
     write_test_png(image_path, size=(800, 600))
@@ -3522,6 +3615,7 @@ def test_webui_memory_image_endpoint_generates_thumbnail_and_original(plugin_api
     assert original['data']['bytes'] == image_path.stat().st_size
 
 
+# 图片接口只检查被请求的文件。
 def test_webui_memory_image_endpoint_checks_only_requested_file(plugin_api, image_cache_dir, monkeypatch):
     image_path = image_cache_dir / 'single.png'
     write_test_png(image_path)
@@ -3548,6 +3642,7 @@ def test_webui_memory_image_endpoint_checks_only_requested_file(plugin_api, imag
     assert response['data']['source_bytes'] == image_path.stat().st_size
 
 
+# 图片接口报告缓存文件已删除。
 def test_webui_memory_image_endpoint_reports_deleted_cache_file(plugin_api, image_cache_dir):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -3563,6 +3658,7 @@ def test_webui_memory_image_endpoint_reports_deleted_cache_file(plugin_api, imag
     assert response['error']['code'] == 'image_missing'
 
 
+# 图片接口拒绝未知和不安全键。
 def test_webui_memory_image_endpoint_rejects_unknown_and_unsafe_keys(
     plugin_api,
     image_cache_dir,
@@ -3591,6 +3687,7 @@ def test_webui_memory_image_endpoint_rejects_unknown_and_unsafe_keys(
     assert unsafe['error']['code'] == 'image_invalid'
 
 
+# 图片保存时若文件已删除仍保留额外字段。
 def test_webui_memory_image_save_preserves_extra_fields_when_file_is_deleted(
     plugin_api,
     image_cache_dir,
@@ -3636,6 +3733,7 @@ def test_webui_memory_image_save_preserves_extra_fields_when_file_is_deleted(
     assert not (image_cache_dir / 'deleted.png').exists()
 
 
+# 图片保存迁移旧标量值。
 def test_webui_memory_image_save_migrates_legacy_scalar_value(plugin_api, image_cache_dir):
     with OlivOSAIChatAssassin.data.gMemoryLock:
         memory = plugin_api.manager.getMemory(BOT_HASH)
@@ -3665,6 +3763,7 @@ def test_webui_memory_image_save_migrates_legacy_scalar_value(plugin_api, image_
     }
 
 
+# 图片缓存隐藏畸形值。
 def test_webui_memory_image_cache_hides_malformed_value(plugin_api):
     marker = 'MALFORMED-BASE64-SECRET-MARKER'
     with OlivOSAIChatAssassin.data.gMemoryLock:
@@ -3692,6 +3791,7 @@ def test_webui_memory_image_cache_hides_malformed_value(plugin_api):
     assert response['data']['entries'] == []
 
 
+# 记忆值预览使用有界编码。
 def test_webui_memory_value_preview_uses_bounded_encoding():
     text, truncated = OlivOSAIChatAssassin.webUI._display_memory_value(
         {'content': 'x' * 100000},
@@ -3701,6 +3801,7 @@ def test_webui_memory_value_preview_uses_bounded_encoding():
     assert len(text) == 64
 
 
+# 设置页暴露事件接收开关。
 def test_webui_settings_exposes_event_receive_controls():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -3741,6 +3842,7 @@ def test_webui_settings_exposes_event_receive_controls():
     assert 'function closeInboundFullscreen(restoreFocus, options)' in html
 
 
+# 设置顺序为控制开关、前缀、默认状态。
 def test_webui_settings_orders_power_control_before_prefixes_and_default_mode():
     page_root = PLUGIN_APP / 'OlivOSAIChatAssassin' / 'webui'
     html = (page_root / 'index.html').read_text(encoding='utf-8')
@@ -3770,6 +3872,7 @@ def test_webui_settings_orders_power_control_before_prefixes_and_default_mode():
     assert '.check-field::after {' not in html
 
 
+# 保存事件接收开关。
 def test_webui_config_save_persists_event_receive_switches(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -3801,6 +3904,7 @@ def test_webui_config_save_persists_event_receive_switches(plugin_api):
     assert saved['event_group_advanced_enabled'] is True
 
 
+# 保存 power 默认模式。
 def test_webui_config_save_persists_power_default_mode(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -3821,6 +3925,7 @@ def test_webui_config_save_persists_power_default_mode(plugin_api):
     assert plugin_api.manager.snapshot_config(BOT_HASH)[0]['power_default_mode'] == 'off'
 
 
+# 保存 power 控制开关。
 def test_webui_config_save_persists_power_control_switch(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -3841,6 +3946,7 @@ def test_webui_config_save_persists_power_control_switch(plugin_api):
     assert plugin_api.manager.snapshot_config(BOT_HASH)[0]['power_control_enabled'] is True
 
 
+# 保存指令前缀。
 def test_webui_config_save_persists_command_prefixes(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -3861,6 +3967,7 @@ def test_webui_config_save_persists_command_prefixes(plugin_api):
     assert plugin_api.manager.snapshot_config(BOT_HASH)[0]['command_prefixes'] == ['!', '。', '/']
 
 
+# 入站事件接口返回只读快照。
 def test_webui_inbound_events_endpoint_returns_read_only_snapshot(plugin_api):
     current = call_bridge(
         plugin_api,
@@ -3897,6 +4004,7 @@ def test_webui_inbound_events_endpoint_returns_read_only_snapshot(plugin_api):
     assert event['summary'] == '戳了戳你'
 
 
+# 入站事件接口遵守数量上限。
 def test_webui_inbound_events_endpoint_honors_bounded_limit(plugin_api):
     OlivOSAIChatAssassin.eventInbox.clear_bot(BOT_HASH)
     for index in range(35):

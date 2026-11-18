@@ -87,6 +87,7 @@ def inbound_config(monkeypatch):
     return config
 
 
+# 事件接收开关默认全部关闭。
 def test_event_receive_defaults_are_disabled():
     for field in (
         'event_private_message_enabled',
@@ -98,6 +99,7 @@ def test_event_receive_defaults_are_disabled():
         assert data.configDefault[field] is False
 
 
+# 私聊消息开关只记录事件，不触发发送。
 def test_private_message_receive_switch_records_without_sending(inbound_config):
     event = FakeEvent(
         user_id='20002',
@@ -120,6 +122,7 @@ def test_private_message_receive_switch_records_without_sending(inbound_config):
     assert event.sent == []
 
 
+# 戳一戳开关区分群聊戳和私聊戳。
 def test_poke_switch_distinguishes_group_and_private_pokes(inbound_config):
     inbound_config['event_poke_enabled'] = True
     private_event = FakeEvent(group_id=None, user_id='20002', target_id='10001')
@@ -136,6 +139,7 @@ def test_poke_switch_distinguishes_group_and_private_pokes(inbound_config):
     assert group_event.sent == []
 
 
+# 私聊撤回需要私聊消息开关开启。
 def test_private_recall_requires_private_message_switch(inbound_config):
     inbound_config['event_recall_enabled'] = True
     private_event = FakeEvent(user_id='20002', message_id='private-message')
@@ -159,6 +163,7 @@ def test_private_recall_requires_private_message_switch(inbound_config):
     assert events[0]['kind'] == 'private_message_recall'
 
 
+# 群高级事件开关分别控制各类群事件。
 @pytest.mark.parametrize(
     ('callback_name', 'values', 'kind'),
     (
@@ -212,6 +217,7 @@ def test_group_advanced_switch_controls_each_event(
     assert event.sent == []
 
 
+# 入站快照按最新优先排序，并有数量上限。
 def test_inbound_snapshot_is_newest_first_and_bounded(monkeypatch, inbound_config):
     monkeypatch.setattr(eventInbox, 'EVENT_LIMIT', 3)
     for index in range(5):
@@ -233,6 +239,7 @@ def test_inbound_snapshot_is_newest_first_and_bounded(monkeypatch, inbound_confi
     ]
 
 
+# 非戳一戳事件不会修改群历史或发送消息。
 def test_non_poke_inbound_handlers_never_mutate_group_history_or_send(inbound_config):
     inbound_config.update({
         'event_private_message_enabled': True,
@@ -254,6 +261,7 @@ def test_non_poke_inbound_handlers_never_mutate_group_history_or_send(inbound_co
     assert all(event.sent == [] for event in fake_events)
 
 
+# 群戳机器人会写入结构化历史，但不直接回复。
 def test_group_poke_targeting_bot_writes_structured_history_without_response(
     monkeypatch,
     inbound_config,
@@ -286,6 +294,7 @@ def test_group_poke_targeting_bot_writes_structured_history_without_response(
     assert event.sent == []
 
 
+# 群戳其他人会复用正常回复链路。
 def test_group_poke_targeting_other_reuses_normal_reply_path(monkeypatch, inbound_config):
     inbound_config.update({
         'event_poke_enabled': True,
@@ -328,6 +337,7 @@ def test_group_poke_targeting_other_reuses_normal_reply_path(monkeypatch, inboun
     assert event.sent == []
 
 
+# 群戳其他人是否回复受响应开关控制。
 def test_group_poke_targeting_other_obeys_response_switch(monkeypatch, inbound_config):
     inbound_config['event_poke_enabled'] = True
     monkeypatch.setattr(
@@ -351,6 +361,7 @@ def test_group_poke_targeting_other_obeys_response_switch(monkeypatch, inbound_c
     assert event.sent == []
 
 
+# 群戳机器人也会复用现有回复链路。
 def test_group_poke_targeting_bot_reuses_existing_reply_path(monkeypatch, inbound_config):
     inbound_config.update({
         'event_poke_enabled': True,
@@ -391,6 +402,7 @@ def test_group_poke_targeting_bot_reuses_existing_reply_path(monkeypatch, inboun
     assert event.sent == []
 
 
+# 自己戳自己或私聊戳不会进入群历史。
 def test_self_and_private_pokes_do_not_enter_group_history(inbound_config):
     inbound_config.update({
         'event_poke_enabled': True,
@@ -409,6 +421,7 @@ def test_self_and_private_pokes_do_not_enter_group_history(inbound_config):
     assert private_event.sent == []
 
 
+# 连续戳一戳使用固定两秒的历史窗口。
 def test_consecutive_pokes_use_a_fixed_two_second_history_window(
     monkeypatch,
     inbound_config,
@@ -435,6 +448,7 @@ def test_consecutive_pokes_use_a_fixed_two_second_history_window(
     assert eventInbox.snapshot(BOT_HASH)['event_count'] == 3
 
 
+# 新的历史事件会打断戳一戳去重。
 def test_new_history_event_breaks_poke_deduplication(inbound_config):
     inbound_config['event_poke_enabled'] = True
     event = FakeEvent(
@@ -463,6 +477,7 @@ def test_new_history_event_breaks_poke_deduplication(inbound_config):
     ]
 
 
+# 戳一戳历史不可变，且不参与知识检索。
 def test_poke_history_is_immutable_and_excluded_from_retrieval(inbound_config):
     inbound_config['event_poke_enabled'] = True
     existing = {
@@ -512,6 +527,7 @@ def test_poke_history_is_immutable_and_excluded_from_retrieval(inbound_config):
     ] == ['旧消息']
 
 
+# 清空入站箱会重置戳一戳去重状态。
 def test_event_inbox_clear_resets_poke_deduplication(inbound_config):
     inbound_config['event_poke_enabled'] = True
     event = FakeEvent(
