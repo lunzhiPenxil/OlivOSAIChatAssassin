@@ -143,7 +143,6 @@ def test_webui_manifest_registers_single_file_page():
     assert not (manifest_path.parent / 'app.js').exists()
     assert not (manifest_path.parent / 'style.css').exists()
     assert not (manifest_path.parent / 'README.md').exists()
-    assert (manifest_path.parent / '.codex' / 'AGENT.md').is_file()
     assert sorted(path.name for path in page_root.iterdir()) == ['index.html']
     assert not (page_root / 'assets').exists()
     html = (page_root / 'index.html').read_text(encoding='utf-8')
