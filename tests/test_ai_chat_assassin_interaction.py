@@ -75,6 +75,7 @@ def quiet_interaction_state(monkeypatch):
     interaction.clear_all()
 
 
+# 配置助手只接受已知值，且不设置上限。
 def test_config_helpers_accept_only_known_values_and_no_upper_limit():
     config = make_config(
         interaction_actions=['quote', 'unknown', 'reaction', 'poke'],
@@ -88,6 +89,7 @@ def test_config_helpers_accept_only_known_values_and_no_upper_limit():
     assert interaction.cooldown_seconds(config) == float(10 ** 12)
 
 
+# 表情目录包含扩展的 Lagrange 安全表情。
 def test_reaction_catalog_has_extended_lagrange_safe_faces():
     assert len(interaction.REACTION_CATALOG) >= 16
     assert interaction.REACTION_FACE_IDS['like'] == '76'
@@ -102,6 +104,7 @@ def test_reaction_catalog_has_extended_lagrange_safe_faces():
     )
 
 
+# 非有限冷却值会回退到默认值。
 @pytest.mark.parametrize('value', [float('nan'), float('inf'), float('-inf')])
 def test_non_finite_cooldown_falls_back_to_default(value):
     assert interaction.cooldown_seconds(make_config(interaction_cooldown=value)) == float(
@@ -109,6 +112,7 @@ def test_non_finite_cooldown_falls_back_to_default(value):
     )
 
 
+# 第一个动作无效时不会回退到后续动作。
 def test_select_action_never_falls_back_after_invalid_first_item():
     event = make_event()
     config = make_config()
@@ -125,6 +129,7 @@ def test_select_action_never_falls_back_after_invalid_first_item():
     assert event.calls == []
 
 
+# 动作选择要求表情已启用且值已知。
 def test_select_action_requires_enabled_known_reaction_value():
     event = make_event()
 
@@ -145,6 +150,7 @@ def test_select_action_requires_enabled_known_reaction_value():
     assert unknown['reason'] == 'reaction_not_enabled'
 
 
+# 动作选择执行群冷却，并清理 bot 状态。
 def test_select_action_enforces_group_cooldown_and_clear_bot():
     event = make_event()
     config = make_config(interaction_cooldown=30)
@@ -180,6 +186,7 @@ def test_select_action_enforces_group_cooldown_and_clear_bot():
     assert after_clear['reason'] == 'ok'
 
 
+# 表情回应和戳一戳使用后端解析后的目标。
 def test_reaction_and_poke_use_backend_resolved_targets():
     event = make_event(message_id='10001', user_id='42')
     config = make_config()
@@ -198,6 +205,7 @@ def test_reaction_and_poke_use_backend_resolved_targets():
     assert event.calls[-1] == ('poke', '20001', '42')
 
 
+# 戳一戳别名会解析到历史用户。
 def test_poke_alias_resolves_to_history_user():
     event = make_event(user_id='42')
     targets = {
@@ -221,6 +229,7 @@ def test_poke_alias_resolves_to_history_user():
     assert event.calls[-1] == ('poke', '20001', '202')
 
 
+# 戳一戳别名拒绝无效或未知目标。
 @pytest.mark.parametrize(
     ('value', 'reason'),
     [
@@ -247,6 +256,7 @@ def test_poke_alias_rejects_invalid_or_unknown_targets(value, reason):
     assert event.calls == []
 
 
+# 戳一戳别名拒绝机器人自身。
 def test_poke_alias_rejects_the_bot_itself():
     event = make_event(user_id='42')
 
@@ -263,6 +273,7 @@ def test_poke_alias_rejects_the_bot_itself():
     assert event.calls == []
 
 
+# 平台失败会设置动作级失败冷却。
 def test_platform_failure_sets_action_specific_failure_cooldown():
     event = make_event()
     event.set_msg_emoji_like = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError('offline'))
@@ -284,6 +295,7 @@ def test_platform_failure_sets_action_specific_failure_cooldown():
     assert poke_still_allowed['reason'] == 'ok'
 
 
+# 引用和提及不属于互动动作。
 def test_quote_and_mention_are_not_interaction_actions():
     assert interaction.VALID_ACTIONS == ('reaction', 'poke')
     assert not hasattr(interaction, 'ACTION_QUOTE')
@@ -291,6 +303,7 @@ def test_quote_and_mention_are_not_interaction_actions():
     assert not hasattr(interaction, 'apply_text_action')
 
 
+# 成功日志报告实际分发结果，而不是未知平台状态。
 def test_success_log_reports_dispatch_instead_of_unknown_platform_state(quiet_interaction_state):
     event = make_event()
     selection = interaction.select_action([{'t': 'poke'}], make_config(), event, '20001')
@@ -302,6 +315,7 @@ def test_success_log_reports_dispatch_instead_of_unknown_platform_state(quiet_in
     assert ('log', 'INTERACTION - POKE OK') not in quiet_interaction_state
 
 
+# 动作执行不依赖平台或模型白名单。
 @pytest.mark.parametrize('model', ['shamrock_default', 'milky_default', 'unknown_model'])
 def test_actions_do_not_gate_on_platform_or_model(model):
     config = make_config()
@@ -325,6 +339,7 @@ def test_actions_do_not_gate_on_platform_or_model(model):
     assert poke['reason'] == 'ok'
 
 
+# 动作目标允许不透明的非数字事件 ID。
 def test_action_targets_accept_opaque_non_numeric_event_ids():
     event = make_event(message_id='message:abc', user_id='user:abc')
     config = make_config()
@@ -343,6 +358,7 @@ def test_action_targets_accept_opaque_non_numeric_event_ids():
     assert event.calls[-1] == ('poke', 'group:abc', 'user:abc')
 
 
+# 动作选择只接受当前事件提供的目标。
 def test_action_selection_requires_targets_from_the_current_event():
     config = make_config()
 
@@ -370,6 +386,7 @@ def test_action_selection_requires_targets_from_the_current_event():
     assert missing_group['reason'] == 'target_missing'
 
 
+# 机器人发送者与非列表动作会被拒绝，且不调用接口。
 def test_bot_sender_and_non_list_actions_are_rejected_without_calls():
     event = make_event(sender={'is_bot': True})
     config = make_config()
@@ -386,6 +403,7 @@ def test_bot_sender_and_non_list_actions_are_rejected_without_calls():
     assert event.calls == []
 
 
+# 提示词只包含已启用的动作。
 def test_prompt_rules_only_include_enabled_actions():
     assert interaction.prompt_rules(make_config(interaction_enabled=False)) == ''
     rules = interaction.prompt_rules(

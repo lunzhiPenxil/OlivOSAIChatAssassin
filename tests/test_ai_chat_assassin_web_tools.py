@@ -127,6 +127,7 @@ def fake_post_sequence(monkeypatch, responses):
     return captured
 
 
+# call_ai 会规范化 base_url 并返回内容。
 def test_call_ai_normalizes_base_url_and_returns_content(monkeypatch):
     config = make_config(api_base='https://api.example.test/v1/')
     response = FakeResponse(payload=chat_payload('回答'))
@@ -137,6 +138,7 @@ def test_call_ai_normalizes_base_url_and_returns_content(monkeypatch):
     assert captured['timeout'] == (10.0, 120.0)
 
 
+# call_ai 使用配置中的超时时间。
 def test_call_ai_uses_configured_timeout(monkeypatch):
     config = make_config(api_timeout=45)
     response = FakeResponse(payload=chat_payload('回答'))
@@ -146,6 +148,7 @@ def test_call_ai_uses_configured_timeout(monkeypatch):
     assert captured['timeout'] == (10.0, 45.0)
 
 
+# 空内容会带上 finish_reason 进入可重试失败。
 def test_empty_content_is_retryable_with_finish_reason(monkeypatch):
     response = FakeResponse(payload=chat_payload('', reasoning_content='thought'))
     fake_post(monkeypatch, response=response)
@@ -158,6 +161,7 @@ def test_empty_content_is_retryable_with_finish_reason(monkeypatch):
     assert error.value.finish_reason == 'stop'
 
 
+# 启用推理兜底时，空内容可从 reasoning 中提取 JSON。
 def test_empty_content_uses_reasoning_json_when_enabled(monkeypatch):
     response = FakeResponse(
         payload=chat_payload('', reasoning_content='思考过程\n{"r": ["好的"]}')
@@ -173,6 +177,7 @@ def test_empty_content_uses_reasoning_json_when_enabled(monkeypatch):
     assert result == '思考过程\n{"r": ["好的"]}'
 
 
+# 空内容的推理兜底也会返回纯文本草稿。
 def test_empty_content_reasoning_fallback_returns_plain_draft(monkeypatch):
     response = FakeResponse(payload=chat_payload('', reasoning_content='只有思考没有 json'))
     fake_post(monkeypatch, response=response)
@@ -186,6 +191,7 @@ def test_empty_content_reasoning_fallback_returns_plain_draft(monkeypatch):
     assert result == '只有思考没有 json'
 
 
+# content_filter 结束原因不会重试。
 def test_content_filter_is_not_retried(monkeypatch):
     response = FakeResponse(payload=chat_payload('', finish_reason='content_filter'))
     fake_post(monkeypatch, response=response)
@@ -197,6 +203,7 @@ def test_content_filter_is_not_retried(monkeypatch):
     assert error.value.kind == 'empty_content'
 
 
+# 不完整的结束原因会按参数化场景重试。
 @pytest.mark.parametrize('finish_reason', ['length', 'insufficient_system_resource'])
 def test_incomplete_finish_reasons_are_retryable(monkeypatch, finish_reason):
     response = FakeResponse(
@@ -212,6 +219,7 @@ def test_incomplete_finish_reasons_are_retryable(monkeypatch, finish_reason):
     assert error.value.finish_reason == finish_reason
 
 
+# 限流错误保留 Retry-After。
 def test_rate_limit_keeps_retry_after(monkeypatch):
     response = FakeResponse(
         status_code=429,
@@ -229,6 +237,7 @@ def test_rate_limit_keeps_retry_after(monkeypatch):
     assert error.value.retry_after == 7.0
 
 
+# 鉴权错误不可重试。
 def test_authentication_error_is_not_retryable(monkeypatch):
     response = FakeResponse(status_code=401, text='unauthorized')
     fake_post(monkeypatch, response=response)
@@ -240,6 +249,7 @@ def test_authentication_error_is_not_retryable(monkeypatch):
     assert error.value.kind == 'http'
 
 
+# 用量日志支持 OpenAI 缓存 token 明细。
 def test_log_usage_supports_openai_cached_token_details(quiet_logger):
     webTools.log_usage({
         'prompt_tokens': 100,
@@ -252,6 +262,7 @@ def test_log_usage_supports_openai_cached_token_details(quiet_logger):
     assert 'USAGE - CACHE - 75.00 % (hit=75, miss=25)' in messages
 
 
+# 网络错误可重试。
 def test_network_error_is_retryable(monkeypatch):
     fake_post(monkeypatch, exc=webTools.requests.Timeout('timed out'))
 
@@ -262,6 +273,7 @@ def test_network_error_is_retryable(monkeypatch):
     assert error.value.kind == 'network'
 
 
+# OCR 会规范化 URL 并关闭思考。
 def test_ocr_normalizes_url_and_disables_thinking(monkeypatch):
     config = make_config()
     config['ocr_api']['api_base'] = 'https://ocr.example.test/v1/'
@@ -273,6 +285,7 @@ def test_ocr_normalizes_url_and_disables_thinking(monkeypatch):
     assert captured['payload']['thinking'] == {'type': 'disabled'}
 
 
+# 重试延迟有界，并尊重 Retry-After。
 def test_retry_delay_is_bounded_and_respects_retry_after(monkeypatch):
     monkeypatch.setattr(webTools.random, 'uniform', lambda low, high: 1.0)
 
@@ -297,6 +310,7 @@ class FakeData:
         return self.memory
 
 
+# 空内容后回复重试会关闭思考模式。
 def test_reply_retry_disables_thinking_after_empty_content(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -326,6 +340,7 @@ def test_reply_retry_disables_thinking_after_empty_content(monkeypatch):
     assert len(sleeps) == 1
 
 
+# 回复重试会处理畸形回复 JSON。
 def test_reply_retry_handles_malformed_reply_json(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -347,6 +362,7 @@ def test_reply_retry_handles_malformed_reply_json(monkeypatch):
     assert calls[1]['flag_thinking_override'] is False
 
 
+# 提取器可从包裹文本中恢复 JSON。
 @pytest.mark.parametrize(
     'raw',
     [
@@ -360,28 +376,34 @@ def test_get_json_message_recovers_wrapped_json(raw):
     assert payload == ['好的']
 
 
+# 提取器拒绝纯文本。
 def test_get_json_message_rejects_plain_text():
     text = '[发图片:example.jpg] 带我们玩就买了呗，我这周末有空！'
     assert assassin_msg.get_json_message(text) is None
 
 
+# 提取器拒绝带前缀的畸形 JSON。
 def test_get_json_message_rejects_prefixed_malformed_json():
     assert assassin_msg.get_json_message('结果如下：{"r": [') is None
 
 
+# 提取器拒绝非字符串回复项。
 def test_get_json_message_rejects_non_string_reply_items():
     assert assassin_msg.get_json_message('{"r": ["好的", 1]}') is None
 
 
+# 提取器拒绝形似 JSON 的畸形输出。
 def test_get_json_message_rejects_malformed_json_like_output():
     assert assassin_msg.get_json_message('{"r": [') is None
 
 
+# 提取器拒绝纯文本控制词。
 @pytest.mark.parametrize('raw', ['NEXT', 'SKIP'])
 def test_get_json_message_rejects_plain_text_control_tokens(raw):
     assert assassin_msg.get_json_message(raw) is None
 
 
+# 回复遇到纯文本输出会重试。
 def test_reply_retries_plain_text_output(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -409,6 +431,7 @@ def test_reply_retries_plain_text_output(monkeypatch):
     assert json.loads(calls[1][0][1]['content']) == {'draft': text}
 
 
+# 重试预算耗尽后不会发送纯文本。
 def test_reply_does_not_send_plain_text_after_retry_budget(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=8)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -428,6 +451,7 @@ def test_reply_does_not_send_plain_text_after_retry_budget(monkeypatch):
     assert len(calls) == 3
 
 
+# 修复失败时使用纠正后的生成结果。
 def test_reply_repair_failure_uses_corrected_generation(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=3)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -453,6 +477,7 @@ def test_reply_repair_failure_uses_corrected_generation(monkeypatch):
     assert all(message['role'] != 'system' for message in retry_messages[1:])
 
 
+# 内容为空时会修复推理草稿。
 def test_reply_repairs_reasoning_draft_when_content_is_empty(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=3)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -484,6 +509,7 @@ def test_reply_repairs_reasoning_draft_when_content_is_empty(monkeypatch):
     assert calls[1][1]['flag_thinking_override'] is False
 
 
+# 连续空内容后停止重试。
 def test_reply_stops_after_repeated_empty_content(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=8)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -509,6 +535,7 @@ def test_reply_stops_after_repeated_empty_content(monkeypatch):
     assert calls[1]['flag_thinking_override'] is False
 
 
+# JSON 重试消息扩展首个 system，且不留下尾部 system。
 def test_json_retry_messages_extend_first_system_without_trailing_system():
     messages = [
         {'role': 'system', 'content': '系统提示'},
@@ -524,12 +551,14 @@ def test_json_retry_messages_extend_first_system_without_trailing_system():
     assert messages[0]['content'] == '系统提示'
 
 
+# 多个候选时优先最后一个契约对象。
 def test_get_json_message_prefers_last_contract_object():
     raw = '示例：{"r": ["示例"]}\n最终：{"r": ["最终"]}'
 
     assert assassin_msg.get_json_message(raw) == ['最终']
 
 
+# 回复与动作必须来自同一个 JSON 对象。
 def test_get_json_envelope_reads_reply_and_actions_from_same_object():
     raw = '{"r": ["好的"], "a": [{"t": "reaction", "v": "like"}], "ignored": true}'
 
@@ -540,6 +569,7 @@ def test_get_json_envelope_reads_reply_and_actions_from_same_object():
     assert assassin_msg.get_json_message(raw) == ['好的']
 
 
+# 使用最终选中候选对象的动作。
 def test_get_json_envelope_uses_actions_from_selected_last_candidate():
     raw = (
         '示例：{"r": ["旧"], "a": [{"t": "poke"}]}\n'
@@ -554,6 +584,7 @@ def test_get_json_envelope_uses_actions_from_selected_last_candidate():
     }
 
 
+# 非列表动作会被规范化为空。
 @pytest.mark.parametrize('actions', [None, 'reaction', {'t': 'reaction'}])
 def test_get_json_envelope_normalizes_non_list_actions_to_empty(actions):
     payload = {'r': ['好的']}
@@ -566,6 +597,7 @@ def test_get_json_envelope_normalizes_non_list_actions_to_empty(actions):
     }
 
 
+# 回复提示词定义严格的 JSON 契约。
 def test_reply_prompt_defines_strict_json_contract():
     rules = assassin_msg.REPLY_FORMAT_RULES
 
@@ -577,6 +609,7 @@ def test_reply_prompt_defines_strict_json_contract():
     assert '纯文本、解释或格式不完整的输出会被丢弃并重试' in rules
 
 
+# 主回复历史会把 assistant 消息包装成 JSON。
 def test_main_reply_history_wraps_assistant_messages_as_json():
     history = [
         {
@@ -600,6 +633,7 @@ def test_main_reply_history_wraps_assistant_messages_as_json():
     assert json.loads(messages[1]['content']) == {'r': ['上一条回复']}
 
 
+# 首轮思考历史保留纯文本 assistant 消息。
 def test_first_thinking_history_keeps_plain_assistant_messages():
     history = [
         {
@@ -615,6 +649,7 @@ def test_first_thinking_history_keeps_plain_assistant_messages():
     assert messages[1]['content'] == '上一条回复'
 
 
+# 动态上下文只改变提示词尾部。
 def test_dynamic_context_only_changes_the_prompt_tail():
     history = [
         {
@@ -652,6 +687,7 @@ def test_dynamic_context_only_changes_the_prompt_tail():
     assert first[-2]['content'] != second[-2]['content']
 
 
+# 上下文块紧凑，并省略空记忆区。
 def test_context_block_is_compact_and_omits_empty_memory_sections():
     history = [{
         'time': '2026-10-26T10:00:01+08:00',
@@ -700,6 +736,7 @@ def test_context_block_is_compact_and_omits_empty_memory_sections():
     assert list(context['当前记忆']['全局']) == ['知识搜索', '人物关系']
 
 
+# 所有记忆区为空时省略上下文块。
 def test_context_block_is_omitted_when_all_memory_sections_are_empty():
     history = [{
         'time': '2026-10-26T10:00:01+08:00',
@@ -719,6 +756,7 @@ def test_context_block_is_omitted_when_all_memory_sections_are_empty():
     assert all('<current_context' not in message['content'] for message in messages)
 
 
+# 上下文块位于最新用户消息之前。
 def test_context_block_precedes_the_latest_user_message():
     history = [
         {
@@ -755,6 +793,7 @@ def test_context_block_precedes_the_latest_user_message():
     }
 
 
+# 戳一戳目标去重、有界，并隐藏原始 ID。
 def test_poke_targets_are_deduplicated_bounded_and_hide_raw_ids():
     history = [
         {'role': 'user', 'user_id': '101', 'nickname': '甲', 'message': '一'},
@@ -780,6 +819,7 @@ def test_poke_targets_are_deduplicated_bounded_and_hide_raw_ids():
     }
 
 
+# 回复重试覆盖首轮思考与主请求。
 def test_reply_retry_covers_first_thinking_and_main_request(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, first_thinking=True, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -812,6 +852,7 @@ def test_reply_retry_covers_first_thinking_and_main_request(monkeypatch):
     assert calls[2]['flag_thinking_override'] is False
 
 
+# 遇到不可重试失败时停止回复重试。
 def test_reply_retry_stops_on_non_retryable_failure(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=3)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -848,6 +889,7 @@ def test_reply_retry_stops_on_non_retryable_failure(monkeypatch):
         activity.clear_all()
 
 
+# 可松弛公平锁会因竞争者唤醒重试等待。
 def test_slackable_fair_lock_wakes_retry_wait_for_competitor():
     group_lock = assassin_tools.SlackableFairLock(slack_time=1, cooldown_time=30)
     group_lock.acquire()
@@ -872,6 +914,7 @@ def test_slackable_fair_lock_wakes_retry_wait_for_competitor():
     assert competitor_thread.is_alive() is False
 
 
+# 新消息会取消重试退避。
 def test_retry_backoff_is_canceled_by_new_message(monkeypatch, quiet_logger):
     config = make_config(thinking={'type': 'enabled'}, retry_count=3)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -921,6 +964,7 @@ def test_retry_backoff_is_canceled_by_new_message(monkeypatch, quiet_logger):
         activity.clear_all()
 
 
+# 记忆更新容忍缺失字段。
 def test_memory_update_tolerates_missing_fields(quiet_logger):
     memory = {
         '全局': {'知识缓存': {'old': 'value'}},
@@ -937,6 +981,7 @@ def test_memory_update_tolerates_missing_fields(quiet_logger):
     assert ('warn', 'MEMORY - NO VALID UPDATE') not in quiet_logger
 
 
+# 无有效群标识时保留原群记忆。
 def test_memory_update_preserves_group_memory_without_valid_g():
     memory = {
         '全局': {},
@@ -952,6 +997,7 @@ def test_memory_update_preserves_group_memory_without_valid_g():
     assert memory['全局'] == {}
 
 
+# 合法群记忆会被接受。
 def test_memory_update_accepts_valid_group_memory():
     memory = {'全局': {}, 'group-1': '旧记忆'}
 
@@ -961,6 +1007,7 @@ def test_memory_update_accepts_valid_group_memory():
     assert memory['group-1'] == '新记忆'
 
 
+# 记忆 JSON 畸形时只修复一次，失败则保留旧值。
 def test_memory_malformed_json_one_repair_then_preserve_old_values(monkeypatch, quiet_logger):
     config = make_config()
     memory = {
@@ -999,6 +1046,7 @@ def test_memory_malformed_json_one_repair_then_preserve_old_values(monkeypatch, 
     assert ('warn', 'MEMORY FORMAT ERR - preserve old values') in quiet_logger
 
 
+# 记忆任务使用提交时的历史快照。
 def test_memory_worker_uses_submit_time_history_snapshot(monkeypatch):
     finished = threading.Event()
     captured = {}
@@ -1019,6 +1067,7 @@ def test_memory_worker_uses_submit_time_history_snapshot(monkeypatch):
     assert captured['snapshot'] == [{'role': 'user', 'message': '提交时的消息'}]
 
 
+# 记忆提炼在构建 AI 上下文前过滤戳一戳。
 def test_memory_extraction_filters_poke_before_building_ai_context(monkeypatch):
     config = make_config()
     memory = {'全局': {}, 'group-1': '旧记忆'}
@@ -1055,6 +1104,7 @@ def test_memory_extraction_filters_poke_before_building_ai_context(monkeypatch):
     assert captured['history'] == [history[0], history[2]]
 
 
+# 记忆任务并行完成时会更新活动卡。
 def test_memory_worker_reports_parallel_completion_to_the_activity_card(monkeypatch):
     activity = OlivOSAIChatAssassin.activity
     activity.clear_all()
@@ -1189,6 +1239,7 @@ def prepare_group_message(
     return plugin_event, group_id, replies
 
 
+# 群消息发送前会修复纯文本输出。
 def test_group_message_repairs_plain_text_before_sending(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(monkeypatch)
     plain_text = '这是一段没有 JSON 包装的直接回复'
@@ -1212,6 +1263,7 @@ def test_group_message_repairs_plain_text_before_sending(monkeypatch):
     assert OlivOSAIChatAssassin.data.gMessageHistory[group_id][-1]['message'] == '修复后的回复'
 
 
+# 群消息发送前会修复推理草稿。
 def test_group_message_repairs_reasoning_draft_before_sending(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(monkeypatch)
     draft = '这是被写进思考通道的群聊回复'
@@ -1239,6 +1291,7 @@ def test_group_message_repairs_reasoning_draft_before_sending(monkeypatch):
     assert OlivOSAIChatAssassin.data.gMessageHistory[group_id][-1]['message'] == draft
 
 
+# 上下文之后仍保留当前群消息。
 def test_group_message_keeps_current_group_message_after_context(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(monkeypatch)
     captured = fake_post_sequence(
@@ -1256,6 +1309,7 @@ def test_group_message_keeps_current_group_message_after_context(monkeypatch):
     assert current_message['message_id'] == 'msg-1'
 
 
+# 提示词鼓励自然的群聊参与。
 def test_group_message_prompt_prefers_natural_participation(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(monkeypatch)
     captured = fake_post_sequence(
@@ -1274,6 +1328,7 @@ def test_group_message_prompt_prefers_natural_participation(monkeypatch):
     assert '但是当有人找你时尽量回复' not in system_prompt
 
 
+# 群消息会报告受控阶段与完成结果。
 def test_group_message_reports_controlled_stages_and_completed_result(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(monkeypatch)
     activity = OlivOSAIChatAssassin.activity
@@ -1317,6 +1372,7 @@ def test_group_message_reports_controlled_stages_and_completed_result(monkeypatc
         activity.clear_all()
 
 
+# 群消息会报告每条发送内容与位置。
 def test_group_message_reports_each_outgoing_message_and_send_position(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(monkeypatch)
     activity = OlivOSAIChatAssassin.activity
@@ -1387,6 +1443,7 @@ def interaction_config(**overrides):
     return config
 
 
+# 仅表情动作不写文本历史，也不启动记忆。
 def test_group_message_reaction_only_has_no_text_history_or_memory(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1429,6 +1486,7 @@ def test_group_message_reaction_only_has_no_text_history_or_memory(monkeypatch):
         activity.clear_all()
 
 
+# 动作通过通用事件 API 执行，不做平台门槛判断。
 def test_group_message_action_uses_generic_event_api_without_platform_gate(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1453,6 +1511,7 @@ def test_group_message_action_uses_generic_event_api_without_platform_gate(monke
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 戳一戳别名从当前上下文解析。
 def test_group_message_poke_alias_resolves_from_current_context(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1480,6 +1539,7 @@ def test_group_message_poke_alias_resolves_from_current_context(monkeypatch):
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 空回复且无动作仍视为 SKIP。
 def test_group_message_empty_reply_without_action_remains_skip(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1507,6 +1567,7 @@ def test_group_message_empty_reply_without_action_remains_skip(monkeypatch):
         activity.clear_all()
 
 
+# 仅动作失败只报告一次。
 def test_group_message_action_only_failure_is_reported_once(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1541,6 +1602,7 @@ def test_group_message_action_only_failure_is_reported_once(monkeypatch):
         activity.clear_all()
 
 
+# 第一个动作无效时不会回退到第二个。
 def test_group_message_invalid_first_action_does_not_fallback_to_second(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1568,6 +1630,7 @@ def test_group_message_invalid_first_action_does_not_fallback_to_second(monkeypa
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 动作无效不会阻塞文本发送。
 def test_group_message_invalid_action_does_not_block_text(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1589,6 +1652,7 @@ def test_group_message_invalid_action_does_not_block_text(monkeypatch):
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 文本先于独立动作发送。
 def test_group_message_sends_text_before_independent_action(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1611,6 +1675,7 @@ def test_group_message_sends_text_before_independent_action(monkeypatch):
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 文本失败时仍执行独立动作。
 def test_group_message_text_failure_still_executes_independent_action(monkeypatch):
     plugin_event, _group_id, _replies = prepare_group_message(
         monkeypatch,
@@ -1637,6 +1702,7 @@ def test_group_message_text_failure_still_executes_independent_action(monkeypatc
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 已移除的文本动作会被忽略。
 @pytest.mark.parametrize(
     'action',
     [
@@ -1665,6 +1731,7 @@ def test_group_message_removed_text_actions_are_ignored(monkeypatch, action):
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# JSON 纠正重试不会恢复动作。
 def test_json_correction_retry_never_restores_actions(monkeypatch):
     config = make_config(thinking={'type': 'enabled'}, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -1686,6 +1753,7 @@ def test_json_correction_retry_never_restores_actions(monkeypatch):
     assert len(calls) == 2
 
 
+# 首轮思考 SKIP 时零互动动作。
 def test_first_thinking_skip_has_zero_interaction_actions(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1712,6 +1780,7 @@ def test_first_thinking_skip_has_zero_interaction_actions(monkeypatch):
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 松弛取消时零互动动作。
 def test_slack_cancel_has_zero_interaction_actions(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1749,6 +1818,7 @@ def test_slack_cancel_has_zero_interaction_actions(monkeypatch):
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 重试取消时零互动动作。
 def test_retry_cancel_has_zero_interaction_actions(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -1791,6 +1861,7 @@ def test_retry_cancel_has_zero_interaction_actions(monkeypatch):
         OlivOSAIChatAssassin.interaction.clear_all()
 
 
+# 发送前并行启动记忆提炼，并包含自身回复。
 def test_memory_extraction_starts_before_send_with_assistant_reply(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(monkeypatch)
     fake_post_sequence(
@@ -1828,6 +1899,7 @@ def test_memory_extraction_starts_before_send_with_assistant_reply(monkeypatch):
     assert parallel_states == [('sending', 'running')]
 
 
+# 记忆提交失败不阻塞发送。
 def test_memory_submit_failure_does_not_block_sending(monkeypatch, quiet_logger):
     plugin_event, _group_id, replies = prepare_group_message(monkeypatch)
     fake_post_sequence(
@@ -1851,6 +1923,7 @@ def test_memory_submit_failure_does_not_block_sending(monkeypatch, quiet_logger)
     assert session['memory_task']['state'] == OlivOSAIChatAssassin.activity.MEMORY_STATE_FAILED
 
 
+# 跳过路径保留短期活动卡，且不调用 AI。
 def test_group_message_skipped_path_keeps_short_lived_activity_without_calling_ai(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(monkeypatch)
     activity = OlivOSAIChatAssassin.activity
@@ -1885,6 +1958,7 @@ def test_group_message_skipped_path_keeps_short_lived_activity_without_calling_a
         activity.clear_all()
 
 
+# assistant 历史保留多条回复。
 def test_assistant_history_preserves_multiple_replies(monkeypatch):
     config = make_config()
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -1907,6 +1981,7 @@ def test_assistant_history_preserves_multiple_replies(monkeypatch):
     assert json.loads(messages[1]['content']) == {'r': ['一', '二', '三']}
 
 
+# 空昵称用户消息不会被误判为 assistant。
 def test_user_message_with_empty_nickname_is_not_assistant(monkeypatch):
     config = make_config()
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -1921,11 +1996,13 @@ def test_user_message_with_empty_nickname_is_not_assistant(monkeypatch):
     assert entry['role'] == 'user'
 
 
+# 无 role 的旧历史保持兼容。
 def test_legacy_history_without_role_remains_compatible():
     assert assassin_msg._get_history_role({'nickname': '小明', 'message': 'hi'}) == 'user'
     assert assassin_msg._get_history_role({'nickname': None, 'message': '旧回复'}) == 'assistant'
 
 
+# assistant 历史保留回复目标元数据。
 def test_assistant_history_keeps_reply_target_metadata(monkeypatch):
     config = make_config()
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -1946,6 +2023,7 @@ def test_assistant_history_keeps_reply_target_metadata(monkeypatch):
     assert entry['replies'] == ['回复内容']
 
 
+# 历史清洗保留图片文件名。
 def test_reply_history_wash_keeps_image_file_names():
     assert assassin_msg.reply_history_wash(['[发图片:cat.png]', '[图片：描述]']) == [
         '[发图片:cat.png]',
@@ -1953,6 +2031,7 @@ def test_reply_history_wash_keeps_image_file_names():
     ]
 
 
+# 首轮思考空内容不会进入 JSON 修复。
 def test_first_thinking_empty_content_never_enters_json_repair(monkeypatch):
     config = make_config(first_thinking=True, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -1984,6 +2063,7 @@ def test_first_thinking_empty_content_never_enters_json_repair(monkeypatch):
     assert calls[0]['temperature_override'] == assassin_msg.FIRST_THINKING_TEMPERATURE
 
 
+# 首轮思考严格解析 NEXT/SKIP 决策。
 def test_first_thinking_strict_decision_parsing():
     assert assassin_msg._parse_first_thinking_decision(' NEXT \n') == 'NEXT'
     assert assassin_msg._parse_first_thinking_decision('SKIP') == 'SKIP'
@@ -1991,11 +2071,13 @@ def test_first_thinking_strict_decision_parsing():
     assert assassin_msg._parse_first_thinking_decision('我会 SKIP') is None
 
 
+# 首轮思考拒绝单字符决策。
 @pytest.mark.parametrize('value', ['N', 'S', '1', '0', '是', '？'])
 def test_first_thinking_single_character_is_rejected(value):
     assert assassin_msg._parse_first_thinking_decision(value) is None
 
 
+# 首轮思考非法文本回退到主请求。
 def test_first_thinking_invalid_text_falls_back_to_main_request(monkeypatch):
     config = make_config(first_thinking=True, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -2014,6 +2096,7 @@ def test_first_thinking_invalid_text_falls_back_to_main_request(monkeypatch):
     assert len(calls) == 2
 
 
+# 非法单字符会记录短预览并回退。
 def test_first_thinking_invalid_single_character_logs_preview_and_falls_back(monkeypatch, quiet_logger):
     config = make_config(first_thinking=True, retry_count=2)
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -2033,6 +2116,7 @@ def test_first_thinking_invalid_single_character_logs_preview_and_falls_back(mon
     assert any('FIRST THINK - INVALID [1] preview=' in message for _level, message in quiet_logger)
 
 
+# 上下文预算保留最新消息的时间顺序。
 def test_context_budget_keeps_latest_messages_in_chronological_order():
     history = [
         {
@@ -2055,6 +2139,7 @@ def test_context_budget_keeps_latest_messages_in_chronological_order():
     assert [entry['time'] for entry in filtered] == sorted(entry['time'] for entry in filtered)
 
 
+# 预算为 0 时保留原历史。
 def test_context_budget_zero_preserves_existing_history():
     history = [
         {'nickname': '小明', 'user_id': '1', 'message': '一'},
@@ -2063,6 +2148,7 @@ def test_context_budget_zero_preserves_existing_history():
     assert assassin_msg._apply_history_budget(history, make_config(context_budget_chars=0), False) == history
 
 
+# 长消息截断后仍保持 JSON 合法。
 def test_context_budget_truncates_long_message_without_breaking_json():
     history = [{
         'time': '2026-10-26T10:00:00+08:00',
@@ -2083,6 +2169,7 @@ def test_context_budget_truncates_long_message_without_breaking_json():
     assert len(payload['message']) < len(history[0]['message'])
 
 
+# 上下文预算日志只记录元数据，不记录正文。
 def test_context_budget_logs_metadata_without_message_body(quiet_logger):
     secret = '不得出现在日志里的完整正文'
     history = [{
@@ -2106,6 +2193,7 @@ def test_context_budget_logs_metadata_without_message_body(quiet_logger):
     assert all(secret not in message for message in messages)
 
 
+# 同群两个 bot 的运行时状态互相隔离。
 def test_two_bots_in_same_group_have_separate_runtime_state(monkeypatch):
     config = make_config()
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -2125,6 +2213,7 @@ def test_two_bots_in_same_group_have_separate_runtime_state(monkeypatch):
     assert assassin_msg._history_key('bot-a', 'group-1') != assassin_msg._history_key('bot-b', 'group-1')
 
 
+# 动态队列窗口投影与实际追加一致。
 @pytest.mark.parametrize(
     'keep,max_grow,initial_count,target_index,append_count',
     [
@@ -2155,6 +2244,7 @@ def test_dynamic_queue_window_projection_matches_actual_append(
     assert projected is actual
 
 
+# 动态队列投影拒绝非法状态。
 def test_dynamic_queue_window_projection_rejects_invalid_state():
     history = assassin_tools.DynamicQueue(keep=1, max_grow=4)
     for index in range(4):
@@ -2163,6 +2253,7 @@ def test_dynamic_queue_window_projection_rejects_invalid_state():
     assert history.would_retain(3, 1) is None
 
 
+# 历史窗口守卫只统计匹配且确定到达的消息。
 def test_history_window_guard_counts_only_matching_guaranteed_arrivals():
     guard = assassin_tools.HistoryWindowGuard()
     key = ('bot', 'group')
@@ -2179,6 +2270,7 @@ def test_history_window_guard_counts_only_matching_guaranteed_arrivals():
     assert guard.pending_guaranteed_count(key, ('config-a',)) == 1
 
 
+# 历史窗口守卫按 bot 与群隔离。
 def test_history_window_guard_is_isolated_by_bot_and_group():
     guard = assassin_tools.HistoryWindowGuard()
     key_a = assassin_msg._history_key('bot-a', 'group-1')
@@ -2192,6 +2284,7 @@ def test_history_window_guard_is_isolated_by_bot_and_group():
     assert guard.pending_guaranteed_count(('bot-c', 'group-1'), ('config',)) == 0
 
 
+# 历史准入探测区分确定、拒绝与未知。
 def test_history_admission_probe_separates_guaranteed_rejected_and_unknown(monkeypatch):
     config = make_config(
         enabled_groups=['all'],
@@ -2228,6 +2321,7 @@ def test_history_admission_probe_separates_guaranteed_rejected_and_unknown(monke
     )[0] == assassin_msg.HISTORY_ARRIVAL_REJECTED
 
 
+# 默认历史窗口分块以提升提示词缓存命中。
 def test_default_history_window_is_chunked_for_prompt_cache(monkeypatch):
     config = make_config()
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -2239,6 +2333,7 @@ def test_default_history_window_is_chunked_for_prompt_cache(monkeypatch):
     assert history.max_grow > history.keep
 
 
+# 旧群历史会复制给其它 bot。
 def test_legacy_group_history_is_copied_for_other_bots(monkeypatch):
     config = make_config()
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gData', FakeData(config))
@@ -2270,6 +2365,7 @@ def test_legacy_group_history_is_copied_for_other_bots(monkeypatch):
     assert [entry['message'] for entry in history_b] == ['旧消息', 'B 的新消息']
 
 
+# 提示词包含边界与共享记忆范围。
 def test_group_message_prompts_include_boundary_and_shared_memory_scope(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(monkeypatch)
     config = OlivOSAIChatAssassin.data.gData.getConfig('test-bot')
@@ -2302,6 +2398,7 @@ def test_group_message_prompts_include_boundary_and_shared_memory_scope(monkeypa
     assert main_system.index('# 当前任务') < main_system.index('# 已知信息')
 
 
+# 首轮思考提示词只保留决策关键上下文。
 def test_first_thinking_prompt_keeps_only_decision_critical_context(monkeypatch):
     plugin_event, _group_id, replies = prepare_group_message(
         monkeypatch,
@@ -2344,6 +2441,7 @@ def test_first_thinking_prompt_keeps_only_decision_critical_context(monkeypatch)
     assert len(first_system) < len(main_system)
 
 
+# 群消息历史保留回复边界。
 def test_group_message_history_preserves_reply_boundaries(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(monkeypatch)
     fake_post_sequence(
@@ -2419,6 +2517,7 @@ def window_followup_event(base_event, group_id: str, message: str, index: int):
     )
 
 
+# 检索使用已确认的未来窗口。
 @pytest.mark.parametrize(
     'keep,max_grow,pending_count,expect_cancel',
     [
@@ -2529,6 +2628,7 @@ def test_group_message_retrieval_uses_confirmed_future_window(
         )
 
 
+# 预检索会跳过已被挤出窗口的消息。
 def test_group_message_pre_recall_skips_already_evicted_message(
     monkeypatch,
     quiet_logger,
@@ -2577,6 +2677,7 @@ def test_group_message_pre_recall_skips_already_evicted_message(
     )
 
 
+# 未确认到达的消息不会触发检索取消。
 def test_unconfirmed_arrivals_do_not_trigger_retrieval_cancellation(
     monkeypatch,
     quiet_logger,
@@ -2635,6 +2736,7 @@ def test_unconfirmed_arrivals_do_not_trigger_retrieval_cancellation(
     )
 
 
+# 其它群的消息不会取消本群检索。
 def test_other_group_arrivals_do_not_cancel_local_retrieval(
     monkeypatch,
     quiet_logger,
@@ -2680,6 +2782,7 @@ def test_other_group_arrivals_do_not_cancel_local_retrieval(
     )
 
 
+# 准入配置变化时禁用历史窗口取消。
 def test_history_window_cancel_is_disabled_when_admission_config_changes(monkeypatch):
     plugin_event, group_id, _replies, history, key, guard, signature = (
         install_history_window_case(
@@ -2725,6 +2828,7 @@ def test_history_window_cancel_is_disabled_when_admission_config_changes(monkeyp
             guard.discard(token)
 
 
+# 回忆在节奏控制前执行，取消后跳过 AI。
 def test_recall_runs_before_pacing_and_cancel_skips_ai(monkeypatch):
     plugin_event, group_id, replies = prepare_group_message(monkeypatch)
     OlivOSAIChatAssassin.data.gData.getConfig('test-bot')['history_size_min'] = 1
@@ -2761,6 +2865,7 @@ def test_recall_runs_before_pacing_and_cancel_skips_ai(monkeypatch):
     assert order == ['recall', 'pacing']
 
 
+# 记忆提示词标记卡片数据不可信，并在关闭时隐藏知识。
 def test_memory_prompt_marks_card_data_as_untrusted_and_hides_k_when_disabled():
     enabled_prompt = assassin_msg._build_memory_prompt(record_knowledge=True)
     disabled_prompt = assassin_msg._build_memory_prompt(record_knowledge=False)
@@ -2772,6 +2877,7 @@ def test_memory_prompt_marks_card_data_as_untrusted_and_hides_k_when_disabled():
     assert '"k"' not in disabled_prompt
 
 
+# 知识缓存命中时会过滤匹配列表。
 def test_peak_up_cache_filters_matched_list_on_hit(monkeypatch):
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gPeakUpCache', {})
     first = assassin_tools.peak_up_recommendMatch(
@@ -2796,6 +2902,7 @@ def test_peak_up_cache_filters_matched_list_on_hit(monkeypatch):
     assert second == {'hell': '二'}
 
 
+# 检索取消时不会创建知识缓存。
 def test_peak_up_cache_is_not_created_when_retrieval_is_cancelled(monkeypatch):
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gPeakUpCache', {})
 
@@ -2820,6 +2927,7 @@ def test_peak_up_cache_is_not_created_when_retrieval_is_cancelled(monkeypatch):
     assert OlivOSAIChatAssassin.data.gPeakUpCache == {}
 
 
+# 知识缓存按 bot 与速率隔离。
 def test_peak_up_cache_separates_bots_and_rates(monkeypatch):
     monkeypatch.setattr(OlivOSAIChatAssassin.data, 'gPeakUpCache', {})
     assassin_tools.peak_up_recommendMatch(
@@ -2836,6 +2944,7 @@ def test_peak_up_cache_separates_bots_and_rates(monkeypatch):
     assert len(OlivOSAIChatAssassin.data.gPeakUpCache['bot-a']['知识缓存']) == 2
 
 
+# 知识检索默认排除 assistant 消息。
 def test_knowledge_lookup_excludes_assistant_messages_by_default(monkeypatch):
     config = make_config(knowledge_top_k=0)
     memory = {
@@ -2860,6 +2969,7 @@ def test_knowledge_lookup_excludes_assistant_messages_by_default(monkeypatch):
     assert result == {}
 
 
+# 知识检索结果保留来源标签。
 def test_knowledge_results_keep_source_labels(monkeypatch):
     config = make_config(knowledge_top_k=0)
     memory = {
@@ -2884,6 +2994,7 @@ def test_knowledge_results_keep_source_labels(monkeypatch):
     assert result['知识搜索']['beta'] == '知识搜索内容'
 
 
+# 深度知识检索遵守 top_k。
 def test_deep_knowledge_search_respects_top_k(monkeypatch):
     config = make_config(knowledge_top_k=1, search_knowledge_deepin=2)
     memory = {
@@ -2910,6 +3021,7 @@ def test_deep_knowledge_search_respects_top_k(monkeypatch):
     assert next(iter(result['知识缓存'])) == 'alpha'
 
 
+# 人物关系匹配支持 WebUI 的多种值形态。
 def test_person_relation_matching_supports_webui_value_shapes(monkeypatch):
     config = make_config()
     memory = {

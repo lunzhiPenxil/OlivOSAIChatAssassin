@@ -93,6 +93,7 @@ def use_config(monkeypatch, config):
     monkeypatch.setattr(data, 'gData', FakeConfigManager(config))
 
 
+# 覆盖文件缺失时默认模式为开启。
 def test_default_mode_is_on_when_override_file_is_missing():
     assert data.configDefault['power_control_enabled'] is False
     assert data.configDefault['power_default_mode'] == 'on'
@@ -103,6 +104,7 @@ def test_default_mode_is_on_when_override_file_is_missing():
     }
 
 
+# 默认模式可设为关闭，非法值回退为开启。
 def test_default_mode_can_be_off_and_invalid_values_fall_back_to_on():
     assert power.state(BOT_HASH, GROUP_ID, make_config(power_default_mode='off')) == {
         'mode': 'off',
@@ -114,6 +116,7 @@ def test_default_mode_can_be_off_and_invalid_values_fall_back_to_on():
     }
 
 
+# 关闭控制时完全沉浸，并拒绝群开关写入。
 def test_disabled_control_is_fully_immersive_and_rejects_group_writes(monkeypatch):
     config = make_config(power_control_enabled=False, power_default_mode='off')
     use_config(monkeypatch, config)
@@ -147,6 +150,7 @@ def test_disabled_control_is_fully_immersive_and_rejects_group_writes(monkeypatc
     )
 
 
+# 关闭控制时 power 指令按普通消息进入流程。
 def test_disabled_control_leaves_power_command_in_the_normal_message_flow(monkeypatch):
     config = make_config(power_control_enabled=False, power_default_mode='off')
     use_config(monkeypatch, config)
@@ -177,6 +181,7 @@ def test_disabled_control_leaves_power_command_in_the_normal_message_flow(monkey
     }
 
 
+# 开启控制时群开关会写入覆盖记录。
 def test_group_enabled_writes_an_override_when_control_is_enabled():
     config = make_config(power_control_enabled=True, power_default_mode='on')
 
@@ -193,6 +198,7 @@ def test_group_enabled_writes_an_override_when_control_is_enabled():
     assert power.is_enabled(BOT_HASH, GROUP_ID, config) is True
 
 
+# 覆盖记录按 bot 和群隔离。
 def test_overrides_are_isolated_by_bot_and_group(tmp_path):
     assert power.set_override('bot-a', '1', 'off') == (True, '')
     assert power.set_override('bot-a', '2', 'on') == (True, '')
@@ -207,6 +213,7 @@ def test_overrides_are_isolated_by_bot_and_group(tmp_path):
     assert document['bots']['bot-a']['2'] == 'on'
 
 
+# clear 只移除当前 bot 与群的覆盖。
 def test_clear_only_removes_the_current_bot_and_group_override(tmp_path):
     power.set_override('bot-a', '1', 'off')
     power.set_override('bot-a', '2', 'off')
@@ -219,6 +226,7 @@ def test_clear_only_removes_the_current_bot_and_group_override(tmp_path):
     assert document['bots']['bot-a']['2'] == 'off'
 
 
+# 外部修改会按版本重新加载。
 def test_external_edit_is_reloaded_by_revision(tmp_path):
     path = tmp_path / 'power_overrides.json'
     path.write_text(
@@ -237,6 +245,7 @@ def test_external_edit_is_reloaded_by_revision(tmp_path):
     assert power.state('bot-a', '1', make_config())['mode'] == 'off'
 
 
+# 非法条目被忽略，未知顶层字段被保留。
 def test_invalid_entries_are_ignored_and_unknown_top_level_fields_are_preserved(tmp_path):
     path = tmp_path / 'power_overrides.json'
     path.write_text(
@@ -260,6 +269,7 @@ def test_invalid_entries_are_ignored_and_unknown_top_level_fields_are_preserved(
     assert document['bots']['bot-c']['9'] == 'off'
 
 
+# 写入失败不提交内存缓存状态。
 def test_write_failure_does_not_commit_cached_state(monkeypatch):
     assert power.set_override('bot-a', '1', 'off') == (True, '')
 
@@ -276,6 +286,7 @@ def test_write_failure_does_not_commit_cached_state(monkeypatch):
     assert power.state('bot-a', '1', make_config())['mode'] == 'off'
 
 
+# 指令解析严格，同时允许 @ 自己和大小写差异。
 @pytest.mark.parametrize(
     'message, expected',
     (
@@ -298,6 +309,7 @@ def test_command_parser_is_strict_but_allows_self_mention_and_case(message, expe
     assert power.parse_command(message, 10001) == expected
 
 
+# 指令前缀可配置，空前缀会被拒绝。
 def test_command_prefixes_are_configurable_and_empty_prefix_is_rejected():
     custom = {'command_prefixes': ['!', '!!']}
     assert power.parse_command('!power on', 10001, custom) == 'on'
@@ -309,6 +321,7 @@ def test_command_prefixes_are_configurable_and_empty_prefix_is_rejected():
     assert power.parse_command('power on', 10001, {'command_prefixes': ['']}) is None
 
 
+# 无前缀的 power 指令不会被消费。
 def test_unprefixed_power_command_is_not_consumed(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -329,6 +342,7 @@ def test_unprefixed_power_command_is_not_consumed(monkeypatch):
     assert [entry['message'] for entry in entries] == ['power off']
 
 
+# 指令权限只看身份字段。
 @pytest.mark.parametrize(
     'sender, allowed, reason',
     (
@@ -352,6 +366,7 @@ def test_command_permission_uses_identity_fields_only(sender, allowed, reason):
     assert power.permission(event) == (allowed, reason)
 
 
+# 管理员指令回复后不进入聊天历史。
 def test_admin_command_replies_without_entering_history(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -375,6 +390,7 @@ def test_admin_command_replies_without_entering_history(monkeypatch):
     assert data.gMessageHistory == {}
 
 
+# 平台没有身份组字段时仍允许指令。
 def test_command_is_allowed_when_platform_has_no_role_field(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -393,6 +409,7 @@ def test_command_is_allowed_when_platform_has_no_role_field(monkeypatch):
     assert data.gMessageHistory == {}
 
 
+# status 与 clear 指令报告状态和配置来源。
 def test_status_and_clear_commands_report_state_and_source(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -414,6 +431,7 @@ def test_status_and_clear_commands_report_state_and_source(monkeypatch):
     assert power.state(BOT_HASH, GROUP_ID, config) == {'mode': 'on', 'source': 'default'}
 
 
+# 数据管理器会为旧配置补齐默认模式。
 def test_data_manager_fills_power_default_for_old_config(tmp_path):
     config_dir = tmp_path / 'config'
     memory_dir = tmp_path / 'memory'
@@ -435,6 +453,7 @@ def test_data_manager_fills_power_default_for_old_config(tmp_path):
     assert manager.getConfig(BOT_HASH)['command_prefixes'] == ['.', '。', '/']
 
 
+# power on 会在门槛前恢复被关闭的群。
 def test_power_on_recovers_a_disabled_group_before_the_gate(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -454,6 +473,7 @@ def test_power_on_recovers_a_disabled_group_before_the_gate(monkeypatch):
     assert data.gMessageHistory == {}
 
 
+# power off 会在写历史前拦截普通消息。
 def test_power_off_blocks_regular_messages_before_history(monkeypatch):
     config = make_config(power_default_mode='off')
     use_config(monkeypatch, config)
@@ -476,6 +496,7 @@ def test_power_off_blocks_regular_messages_before_history(monkeypatch):
     assert data.gMessageHistory == {}
 
 
+# 排队等待期间执行 power off 会在写历史前重新检查。
 def test_power_off_during_queue_wait_is_rechecked_before_history(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -504,6 +525,7 @@ def test_power_off_during_queue_wait_is_rechecked_before_history(monkeypatch):
     assert data.gMessageHistory == {}
 
 
+# 非管理员指令按普通消息处理。
 def test_non_admin_command_is_handled_as_a_regular_message(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -525,6 +547,7 @@ def test_non_admin_command_is_handled_as_a_regular_message(monkeypatch):
     assert [entry['message'] for entry in entries] == ['.power off']
 
 
+# 静态禁用群不能通过指令开启。
 def test_disabled_static_group_cannot_be_enabled_by_command(monkeypatch):
     config = make_config(enabled_groups=['other-group'])
     use_config(monkeypatch, config)
@@ -543,6 +566,7 @@ def test_disabled_static_group_cannot_be_enabled_by_command(monkeypatch):
     assert data.gMessageHistory == {}
 
 
+# power off 会阻止群戳一戳写入历史。
 def test_power_off_blocks_group_poke_history(monkeypatch):
     config = make_config(power_default_mode='off')
     use_config(monkeypatch, config)
@@ -559,6 +583,7 @@ def test_power_off_blocks_group_poke_history(monkeypatch):
     assert data.gMessageHistory == {}
 
 
+# 等待戳一戳锁期间执行 power off 会阻止历史写入。
 def test_power_off_while_waiting_for_poke_lock_blocks_history(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -586,6 +611,7 @@ def test_power_off_while_waiting_for_poke_lock_blocks_history(monkeypatch):
     assert entries == []
 
 
+# 模型响应后执行 power off 会丢弃输出。
 def test_power_off_after_model_response_discards_output(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -628,6 +654,7 @@ def test_power_off_after_model_response_discards_output(monkeypatch):
     assert all(entry.get('role') != 'assistant' for entry in entries)
 
 
+# 发送等待期间执行 power off 会丢弃输出。
 def test_power_off_during_send_delay_discards_output(monkeypatch):
     config = make_config()
     use_config(monkeypatch, config)
@@ -675,6 +702,7 @@ def test_power_off_during_send_delay_discards_output(monkeypatch):
     assert all(entry.get('role') != 'assistant' for entry in entries)
 
 
+# 关闭时跳过记忆提炼。
 def test_memory_extraction_skips_when_power_is_off(monkeypatch):
     config = make_config(power_default_mode='off')
     use_config(monkeypatch, config)

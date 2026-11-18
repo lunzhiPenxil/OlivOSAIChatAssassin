@@ -92,6 +92,7 @@ def navigation_path(tmp_path, monkeypatch):
     return path
 
 
+# 同一 WebUI 会话的导航快照可以往返保存和恢复。
 def test_navigation_round_trips_for_same_webui_session(navigation_path):
     snapshot = navigation_snapshot(active_tab='overview')
     snapshot['overview'] = {
@@ -109,6 +110,7 @@ def test_navigation_round_trips_for_same_webui_session(navigation_path):
     assert loaded['data']['navigation'] == snapshot
 
 
+# 不同 WebUI 会话的导航状态互相隔离。
 def test_navigation_is_isolated_between_webui_sessions(navigation_path):
     first = navigation_snapshot(client_updated_at=10)
     second = navigation_snapshot(client_updated_at=20, scope='global')
@@ -133,6 +135,7 @@ def test_navigation_is_isolated_between_webui_sessions(navigation_path):
     assert third_result['data']['navigation'] is None
 
 
+# 导航只保存会话摘要和白名单字段。
 def test_navigation_stores_only_session_digest_and_whitelisted_fields(navigation_path):
     snapshot = navigation_snapshot(client_updated_at=11)
     snapshot['search'] = '不会落盘的搜索词'
@@ -154,6 +157,7 @@ def test_navigation_stores_only_session_digest_and_whitelisted_fields(navigation
     assert 'secret' not in stored['memory']
 
 
+# 旧版本客户端快照会被拒绝。
 def test_navigation_rejects_older_client_snapshot(navigation_path):
     newest = navigation_snapshot(client_updated_at=50, active_tab='settings')
     older = navigation_snapshot(client_updated_at=49, active_tab='about')
@@ -170,6 +174,7 @@ def test_navigation_rejects_older_client_snapshot(navigation_path):
     assert loaded['data']['navigation']['active_tab'] == 'settings'
 
 
+# 无效导航快照会被拒绝。
 @pytest.mark.parametrize(
     'mutate',
     (
@@ -191,6 +196,7 @@ def test_navigation_rejects_invalid_snapshots(navigation_path, mutate):
     assert not navigation_path.exists()
 
 
+# 导航文件损坏时回退为空状态。
 @pytest.mark.parametrize(
     'document',
     (
@@ -207,6 +213,7 @@ def test_navigation_corrupt_file_falls_back_to_empty(navigation_path, document):
     assert response['data']['navigation'] is None
 
 
+# 导航存储会清理过期会话并限制会话数。
 def test_navigation_store_prunes_expired_and_caps_sessions(navigation_path, monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(webUI.time, 'time', lambda: clock[0])
@@ -226,6 +233,7 @@ def test_navigation_store_prunes_expired_and_caps_sessions(navigation_path, monk
     assert hashlib.sha256(b'expired-session').hexdigest()[:32] not in document['sessions']
 
 
+# 导航保存失败保持静默。
 def test_navigation_save_failure_is_silent(navigation_path, monkeypatch):
     def fail_write(_path, _data):
         raise OSError('disk unavailable')
@@ -240,6 +248,7 @@ def test_navigation_save_failure_is_silent(navigation_path, monkeypatch):
     assert not navigation_path.exists()
 
 
+# 没有 WebUI 会话的导航更新会被忽略。
 def test_navigation_without_webui_session_is_ignored(navigation_path):
     saved = call_bridge(
         webUI.EVENT_SAVE_NAVIGATION,
@@ -255,6 +264,7 @@ def test_navigation_without_webui_session_is_ignored(navigation_path):
     assert not navigation_path.exists()
 
 
+# 导航快照深拷贝不会引用内部存储。
 def test_navigation_snapshot_deep_copy_does_not_alias_store(navigation_path):
     snapshot = navigation_snapshot(client_updated_at=7, scope='global')
     assert call_bridge(webUI.EVENT_SAVE_NAVIGATION, api_payload(snapshot=snapshot))['ok'] is True
@@ -265,6 +275,7 @@ def test_navigation_snapshot_deep_copy_does_not_alias_store(navigation_path):
     assert call_bridge(webUI.EVENT_GET_NAVIGATION, api_payload())['data']['navigation'] == snapshot
 
 
+# 多个导航存储实例共享写锁。
 def test_navigation_store_instances_share_write_lock(navigation_path, monkeypatch):
     original_write = load.DataManager._write_json_atomic
 
@@ -294,6 +305,7 @@ def test_navigation_store_instances_share_write_lock(navigation_path, monkeypatc
         assert key in document['sessions']
 
 
+# 前端先加载导航快照再初始化，恢复时不触发保存。
 def test_navigation_frontend_loads_snapshot_before_bootstrap_and_restores_without_save():
     initial = frontend_function('loadInitialState', 'loadBootstrap')
     assert initial.index('await loadNavigationSnapshot();') < initial.index('await loadBootstrap();')
@@ -304,6 +316,7 @@ def test_navigation_frontend_loads_snapshot_before_bootstrap_and_restores_withou
     assert 'state.navigationRestoring || !state.navigationReady || !state.ready' in scheduler
 
 
+# 前端快照只保留导航状态。
 def test_navigation_frontend_snapshot_keeps_only_navigation_state():
     snapshot = frontend_function('buildNavigationSnapshot', 'scheduleNavigationSave')
     for key in ('bot_hash', 'active_tab', 'overview', 'memory', 'group_index_offset'):
@@ -312,6 +325,7 @@ def test_navigation_frontend_snapshot_keeps_only_navigation_state():
         assert forbidden not in snapshot
 
 
+# 前端会持久化标签、全屏、页码、记忆分类和 bot。
 def test_navigation_frontend_persists_tab_fullscreen_pages_memory_and_bot():
     expected_calls = (
         ('selectBot', 'loadBotData'),
@@ -332,6 +346,7 @@ def test_navigation_frontend_persists_tab_fullscreen_pages_memory_and_bot():
     assert 'closeInboundFullscreen(false, {persist: false});' in reset_inbound
 
 
+# 前端记忆回退和群页码会被正确钳制。
 def test_navigation_frontend_memory_fallback_and_group_page_clamping():
     restore = frontend_function('restoreMemoryNavigation', 'restoreNavigationSnapshot')
     assert 'if (loaded) {' in restore
@@ -344,6 +359,7 @@ def test_navigation_frontend_memory_fallback_and_group_page_clamping():
     assert 'Math.min(requested - (requested % MEMORY_PAGE_SIZE), maxOffset)' in clamp
 
 
+# 前端恢复 bot 与全屏状态时不会产生新的保存。
 def test_navigation_frontend_restores_bot_and_fullscreen_without_new_saves():
     bootstrap = frontend_function('loadBootstrap', 'renderBotOptions')
     assert 'navigationTargetBotHash()' in bootstrap
@@ -356,6 +372,7 @@ def test_navigation_frontend_restores_bot_and_fullscreen_without_new_saves():
     assert 'focus: false' in restore
 
 
+# WebUI 只保留一个前端入口文件。
 def test_navigation_webui_keeps_a_single_frontend_entry():
     assert sorted(path.name for path in (PLUGIN_ROOT / 'webui').iterdir()) == ['index.html']
     assert not (PLUGIN_ROOT / 'index.html').exists()
