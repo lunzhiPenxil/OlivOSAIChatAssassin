@@ -1,4 +1,4 @@
-"""Independent test bootstrap for the OlivOSAIChatAssassin plugin."""
+"""Bootstrap for the OlivOS plugin tests."""
 
 import importlib.util
 import os
@@ -24,7 +24,6 @@ def _resolve_olivos_source():
         REPO_ROOT / '.ci' / 'OlivOS',
         REPO_ROOT.parent / 'OlivOS-dev',
         REPO_ROOT.parent / 'OlivOS',
-        REPO_ROOT.parent.parent / 'run' / 'OlivOS-dev',
     ])
     for candidate in candidates:
         if (candidate / 'OlivOS' / '__init__.py').is_file():
@@ -52,15 +51,11 @@ def pytest_configure(config):
 
 def pytest_sessionstart(session):
     global BOOTSTRAP_DIRECTORY
-    # 导入 OlivOS 会按当前工作目录创建空的 lib/、plugin/ 等运行目录。
-    # 在收集测试模块前切到临时目录，避免这些副作用落进插件仓库。
     BOOTSTRAP_DIRECTORY = tempfile.TemporaryDirectory(prefix='olivos-assassin-tests-')
     os.chdir(BOOTSTRAP_DIRECTORY.name)
 
 
 def pytest_collection_finish(session):
-    # 插件模块与 OlivOS 已在临时目录中完成导入；回到仓库根目录，
-    # 让 pytest-cov / JUnit 的相对输出路径落在 test-results/ 而不是临时目录。
     os.chdir(ORIGINAL_CWD)
 
 
@@ -73,12 +68,5 @@ def pytest_sessionfinish(session, exitstatus):
 @pytest.fixture(autouse=True)
 def isolated_installation(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    paths = [str(REPO_ROOT), str(TESTS_ROOT)]
-    if OLIVOS_SOURCE is not None:
-        paths.append(str(OLIVOS_SOURCE))
-    current = os.environ.get('PYTHONPATH')
-    if current:
-        paths.append(current)
-    monkeypatch.setenv('PYTHONPATH', os.pathsep.join(paths))
     for name in ('OLIVOS_WEBUI_HOST', 'OLIVOS_WEBUI_PORT'):
         monkeypatch.delenv(name, raising=False)
