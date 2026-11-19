@@ -69,20 +69,28 @@ def test_validate_config_patch_rejects_invalid_extra_values():
     assert raised.value.fields == {'custom_value': '必须是可序列化的 JSON 值'}
 
 
+# 内置配置字段的类型、范围或枚举错误会带字段定位返回。
 @pytest.mark.parametrize(
     ('patch', 'field'),
     [
+        # 最大 token 数必须大于 0。
         ({'max_tokens': 0}, 'max_tokens'),
+        # 温度必须是有限数值。
         ({'temperature': float('nan')}, 'temperature'),
+        # 推理强度只能取受支持的枚举值。
         ({'reasoning_effort': 'low'}, 'reasoning_effort'),
+        # 首次思考开关必须是布尔值。
         ({'first_thinking': 'yes'}, 'first_thinking'),
+        # 启用群列表中的每个群号都必须是非空字符串。
         ({'enabled_groups': ['ok', '']}, 'enabled_groups.1'),
+        # 动态历史窗口开关必须是布尔值。
         ({'history_dynamic': 'yes'}, 'history_dynamic'),
+        # 提及回复开关必须是布尔值。
         ({'mention_reply': 1}, 'mention_reply'),
+        # 指令前缀必须是非空字符串列表。
         ({'command_prefixes': 'not-a-list'}, 'command_prefixes'),
     ],
 )
-# 内置配置字段的类型、范围或枚举错误会带字段定位返回。
 def test_validate_config_patch_rejects_invalid_known_fields(patch, field):
     with pytest.raises(webUI.WebUIError) as raised:
         webUI._validate_config_patch(patch)
@@ -155,7 +163,12 @@ def test_validate_thinking_patch_rejects_invalid_fields():
 
 
 # 记忆条目要求非空列表且数量有限。
-@pytest.mark.parametrize('entries', [[], 'bad'])
+@pytest.mark.parametrize('entries', [
+    # 空列表没有任何可保存的条目。
+    [],
+    # 非列表输入会被拒绝。
+    'bad',
+])
 def test_validate_memory_entries_rejects_empty_or_non_list(entries):
     with pytest.raises(webUI.WebUIError) as raised:
         webUI._validate_memory_entries(entries)
@@ -281,18 +294,24 @@ def test_validate_image_cache_entries_returns_clean_pairs():
     assert result == [('a.png', {'content': '内容', 'intent': '意图', 'type': '照片'})]
 
 
+# 图片 MIME 类型按文件签名识别。
 @pytest.mark.parametrize(
     ('data', 'mime'),
     [
+        # JPEG 按 SOI 标记识别。
         (b'\xff\xd8\xffdata', 'image/jpeg'),
+        # PNG 按固定八字节签名识别。
         (b'\x89PNG\r\n\x1a\ndata', 'image/png'),
+        # GIF 按 GIF89a 标记识别。
         (b'GIF89adata', 'image/gif'),
+        # WebP 按 RIFF 容器中的 WEBP 标记识别。
         (b'RIFFxxxxWEBPdata', 'image/webp'),
+        # BMP 按 BM 标记识别。
         (b'BMdata', 'image/bmp'),
+        # 未知签名不会误判为图片。
         (b'not-an-image', None),
     ],
 )
-# 图片 MIME 类型按文件签名识别。
 def test_image_mime_type_detects_supported_signatures(data, mime):
     assert webUI._image_mime_type(data) == mime
 

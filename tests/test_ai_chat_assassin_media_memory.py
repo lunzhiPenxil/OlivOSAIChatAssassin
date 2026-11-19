@@ -528,7 +528,12 @@ def test_memory_update_can_skip_knowledge_updates():
 
 
 # 非对象的知识或侧写字段会被忽略。
-@pytest.mark.parametrize('payload_key', ['k', 'u'])
+@pytest.mark.parametrize('payload_key', [
+    # 知识缓存字段。
+    'k',
+    # 用户侧写字段。
+    'u',
+])
 def test_memory_update_ignores_non_object_sections(payload_key):
     memory = {'全局': {}}
 
