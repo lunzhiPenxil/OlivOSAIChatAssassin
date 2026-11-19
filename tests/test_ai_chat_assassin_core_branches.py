@@ -339,14 +339,16 @@ def test_reply_prompt_includes_poke_only_example(monkeypatch):
     assert '"t": "poke"' in captured[0]
 
 
+# 仅动作回复根据执行结果落为完成或失败。
 @pytest.mark.parametrize(
     ('execute_result', 'expected_state', 'expected_error'),
     [
+        # 动作执行成功时以仅动作回复完成。
         ({'ok': True}, OlivOSAIChatAssassin.activity.STATE_FINISHED, 'interaction_only'),
+        # 动作执行失败时记录 interaction_failed。
         ({'ok': False}, OlivOSAIChatAssassin.activity.STATE_FAILED, 'interaction_failed'),
     ],
 )
-# 仅动作回复根据执行结果落为完成或失败。
 def test_reply_to_group_interaction_only_result(monkeypatch, execute_result, expected_state, expected_error):
     install_config(monkeypatch, make_config(
         interaction_enabled=True,
